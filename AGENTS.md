@@ -7,42 +7,48 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current milestone: HTML source fidelity
+## Current milestone: usable PDF reading
 
-Bootstrap PR #2 was squash-merged only after its authorized head and green build
-were confirmed. Issue #1 is closed. Work on `fix/html-source-fidelity`, linked to
-issue #3. Open a draft PR early, push coherent checkpoints, and mark ready only
-after the small workflow works. Do not merge this new PR without authorization.
-Do not force-push or discard local changes or runtime data.
+Work on `feat/pdf-reading`, issue #5. PR #4 was merged only at the authorized
+7558b25529e9130697a72d144624784d9579f715 with its build green; issue #3 closed.
+Open a linked draft PR early, push coherent checkpoints, mark ready after the
+bounded PDF workflow works. Do not merge this new PR without authorization.
+Preserve local changes and runtime data. Do not force-push.
 
-Use current stable Rust and the committed lockfile:
+Use the existing pinned Xberg adapter, no replacement PDF parser or models.
+Start integration with:
+
+```sh
+cargo build --locked -p webtool-cli -p webtool-server --features webtool-server/documents
+```
+
+After integration works, enable documents in the server default and verify:
 
 ```sh
 cargo build --locked -p webtool-cli -p webtool-server
 ```
 
-Focus on default HTML extraction and directly affected rendering. Preserve
-selected content order, nested code whitespace/language, original table cell
-boundaries/header flags/spans, and honest derived locators for ambiguous matches.
-Do not restore excluded navigation or duplicate container and descendant text.
-Keep original artifacts and old saved documents readable. Bump the HTML parser
-revision when extraction changes. Do not replace the extractor or add fallbacks.
+Keep the CLI independent of the engine and the one cached Ubuntu CI build.
+No search-provider upgrades, browser, OCR, model downloads, Office verification
+claims, unrelated refactoring, or Markdown rewrite. Only targeted dependency
+changes required for the pinned adapter; commit the real lockfile if changed.
 
-Verify one tiny authored HTML fixture through default extraction (no selector),
-inspect JSON and plain CLI output, and compare its exported original. Read one
-public documentation page with code and a table using fresh extraction and
-compare against its retained original. Rerun only failed steps. No cargo test,
-new test framework or expanded fixture corpus, broad lint, benchmarks, optional
-features, browser, PDF/OCR, media, or unrelated refactoring in this milestone.
+Preserve original bytes, reported pages, readable unmodified upstream page text,
+metadata, warnings, and upstream output. Empty page objects are not success.
+Do not label every empty page a scan; report unavailable OCR when appropriate.
+Keep tables available through extract and label supplemental tables in reading.
+Bump the parser revision for normalization changes. Preserve old saved documents.
 
-Preserve metadata-search-engine-rs =0.3.1: 0.3.2 creates a dependency cycle through
-search-tui. Preserve the existing cached Ubuntu CI build and lockfile; CI must
-not generate the lockfile or format source. Full tests and optional checks remain
-manual. See docs/STATUS.md for verified results and reproducible commands.
+Verify one small public text PDF through URL read and local ingestion of the same
+bytes under runtime/. Inspect ordinary output/JSON page locations, find a known
+phrase, and compare original export with input. Read one existing saved HTML
+once. Restart only this project's server without deleting data. No cargo test,
+broad lint, benchmarks, format matrix, new test framework, or repeated smoke
+campaigns. Rerun only failed steps; compilation is not extraction accuracy.
+Update README.md and docs/STATUS.md with actual supported behavior and limits.
 
-Keep target/, data/, runtime/, caches, model weights, downloaded binaries, and
-credentials out of Git. Preserve supplied license notices and source bytes.
-MANIFEST.sha256 describes the imported archive, not later edits.
+Keep target/, data/, runtime/, caches, weights, downloaded binaries, and secrets
+out of Git. Preserve licenses. MANIFEST.sha256 describes the imported archive.
 
 ## Workspace
 
@@ -61,7 +67,7 @@ The Python scripts are development checks, not application components.
 
 The optional integrations target published APIs inspected during implementation.
 Their transitive features were not resolved in this environment.
-These boundaries need separate work, not milestone 2 checks:
+These boundaries need separate work, not this milestone’s checks:
 
 - `rs_trafilatura::Options` and `ExtractResult` against version `0.2.2`.
 - `metadata-search-engine-rs` engine constructors and `SearchResult` against `0.3.1`.
@@ -122,7 +128,7 @@ Search supports ordinary web results only.
 Image, video, news, date, language, and domain-filter interfaces remain incomplete.
 There are no semantic rerankers or automatic LLM calls.
 
-## After this milestone
+## Deferred source fidelity
 
 Wait for coordinating direction before expanding scope. The public-page smoke
 still shows flattened inline superscripts; table captions, full list hierarchy,
