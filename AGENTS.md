@@ -57,11 +57,11 @@ The CLI must not depend on the engine package.
 Clients must not open the server's database file.
 The Python scripts are development checks, not application components.
 
-## First compiler checks
+## Deferred optional integration boundaries
 
 The optional integrations target published APIs inspected during implementation.
 Their transitive features were not resolved in this environment.
-Check these boundaries first:
+These boundaries need separate work, not milestone 2 checks:
 
 - `rs_trafilatura::Options` and `ExtractResult` against version `0.2.2`.
 - `metadata-search-engine-rs` engine constructors and `SearchResult` against `0.3.1`.
@@ -89,7 +89,11 @@ Do not import upstream CLI, server, cache, authentication, or unrelated agent fe
 
 ## Known implementation gaps
 
-The default HTTP and HTML flow needs real-world extraction testing.
+Default extraction passed the bounded nested-code/merged-table smoke and one live
+Rust Book chapter. This is not general extraction-quality validation.
+source-blocks/2 walks only selected containers; split prose runs stay derived.
+Unique original pre/table matches recover code text/language and table cells.
+Do not substitute an entire original list or quote to recover descendants.
 Non-UTF-8 decoding is absent.
 Markdown parsing implements a limited block reader, not full CommonMark.
 HTML table nesting, list hierarchy, inline link placement, and mathematical fidelity need stronger fixtures.
@@ -118,20 +122,12 @@ Search supports ordinary web results only.
 Image, video, news, date, language, and domain-filter interfaces remain incomplete.
 There are no semantic rerankers or automatic LLM calls.
 
-## Improve next
+## After this milestone
 
-After the runnable milestone, prioritize source fidelity over new integrations.
-Add representative website, repository, caption, and PDF fixtures.
-Measure both cold and warm latency, total process memory, and correct-content retention.
-Record missing content and parser failures alongside timings.
-
-Then choose one browser transport and reuse it across concurrent jobs.
-Reuse search-provider HTTP clients rather than creating them per query.
-Add conditional HTTP validation and bounded streaming responses.
-Avoid making those changes before establishing correctness tests.
-
-Academic collections, citation formatting, media analysis, and explicit LLM jobs can follow.
-Keep derived model output separate from source text and retain source references.
+Wait for coordinating direction before expanding scope. The public-page smoke
+still shows flattened inline superscripts; table captions, full list hierarchy,
+and ambiguous mappings need separate source-fidelity work. Do not turn this
+milestone into a Markdown rewrite or optional-integration validation campaign.
 
 ## Boundaries not to expand
 

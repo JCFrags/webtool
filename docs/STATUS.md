@@ -3,7 +3,128 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
-## Runnable bootstrap results
+## Milestone 2: selected HTML source fidelity
+
+Verified September 10, 2026 UTC. Checkout `/home/mainpc/Projects/webtool`, branch
+`fix/html-source-fidelity`; issue #3 and PR #4. Bootstrap PR #2 was squash-merged
+with `--match-head-commit a2db698e9761e9c1b0e1bb8869d858bf8d9a6cca` after checking
+its unchanged head and successful build. Main advanced to
+`24225fe` and issue #1 closed. No runtime data was removed. PR #4 is not merged.
+
+### Changed behavior
+
+- HTML parser revision is `rs-trafilatura/0.2.2+source-blocks/2` (explicit CSS
+  uses `explicit-css+source-blocks/2`). Old stored document schemas are unchanged.
+- Walk selected list/quote containers in order, emitting prose runs around
+  nested blocks instead of flattening them or repeating descendant text.
+- Only unique original-element matches restore preformatted text and language
+  classes (`language-` or `lang-` on pre/code), or table cell boundaries, header
+  flags, rowspan, and colspan. Table row/cell traversal excludes nested rows.
+- Never replace an entire selected container with its original subtree. This
+  avoids restoring descendants removed by content selection. Ambiguous matches
+  and partial container prose retain derived locators and visible warnings.
+- Existing plain rendering already preserves code whitespace; it needed no
+  change. Plain tables remain tab-separated values, not visual merged-cell
+  layouts. JSON retains spans/header flags; Markdown's existing HTML table
+  representation supports spans. No document schema or storage changes.
+- Search pin, extractor dependency, Cargo.lock, and CI are unchanged.
+
+### Actual checks
+
+| Check | Outcome |
+|---|---|
+| Normal locked debug CLI/server build | Passed; existing warnings only |
+| Authored default-extraction HTML ingest, no selector | Passed: 10 blocks in order |
+| Nested code inside li and blockquote | Exact tabs/spaces/newlines; Rust and Python language labels restored |
+| Merged table | Rows have 2, 2, 3 cells; Mode rowspan=2, Limits colspan=2; header flags retained |
+| Selection and duplication | No navigation in blocks/plain output; each surrounding phrase and code sample appears once |
+| Locators | Both code blocks and table have verified HTML locators; four split prose runs honestly derived |
+| Plain CLI output | Inspected code indentation and table values; no alternate-screen UI |
+| Original fixture export | All 1085 bytes identical by cmp |
+| Fresh public Rust Book read | 16 code blocks, two tables, all with verified HTML locators |
+| Retained public original comparison | All 16 pre texts match exactly in order; both complete cell matrices/flags/spans match; SHA-256 matches artifact |
+| Existing bootstrap saved document | Still readable after server restart |
+
+The public URL was https://doc.rust-lang.org/book/ch03-02-data-types.html, read
+with `--refresh` and no selector. The original was 44,687 bytes. Tables were 7×3
+and 6×2. Ordinary output was inspected and contains every exact code string.
+Ten other blocks have derived source locators; this warning remains visible.
+No tests, broad lint, benchmarks, optional builds, or additional public pages ran.
+A temporary Python HTMLParser comparison inspected the retained pre/table data;
+it is not a new test framework or application dependency.
+
+No blocker remains for this milestone. This is not full HTML fidelity: inline
+superscripts in the public chapter still flatten into ordinary text; table
+captions, nested table representation, and complete list hierarchy remain outside
+this bounded fix. A selected code/table without a unique original match keeps the
+cleaned content and a derived locator; no original match is invented.
+
+### Exact local reproduction
+
+The updated server remains running at http://127.0.0.1:8420 using the existing
+`data/`. Logs and PID remain in `runtime/webtoold.log` and `runtime/webtoold.pid`.
+Startup after stopping the existing server, if needed:
+
+```sh
+cd /home/mainpc/Projects/webtool
+cargo build --locked -p webtool-cli -p webtool-server
+./target/debug/webtoold --config config.example.toml
+```
+
+In another terminal, create the single temporary example (not a fixture corpus):
+
+```sh
+cd /home/mainpc/Projects/webtool
+mkdir -p runtime
+cat >runtime/html-fidelity.html <<'HTML'
+<!doctype html>
+<html lang="en"><head><title>Technical extraction smoke</title></head><body>
+<nav><p>EXCLUDED NAVIGATION</p><pre><code>navigation_only();</code></pre></nav>
+<main><article><h1>Technical extraction smoke</h1>
+<p>This guide documents exact code and table structure for a small shared research reader. The examples preserve indentation, newlines, and source values without executing code.</p>
+<ul><li>Before list code.<pre><code class="language-rust">  fn main() {
+	println!("Exact nested code");
+  }
+</code></pre>After list code.</li></ul>
+<blockquote>Before quote code.<pre class="language-python"><code>  if ready:
+    print("Exact quote code")
+</code></pre>After quote code.</blockquote>
+<table><thead><tr><th rowspan="2">Mode</th><th colspan="2">Limits</th></tr><tr><th>Min</th><th>Max</th></tr></thead><tbody><tr><th>safe</th><td>0</td><td>17</td></tr></tbody></table>
+<p>The table describes safe mode with a minimum of zero and maximum of seventeen. Header cells and merged cells are part of the source, not generated summaries.</p>
+</article></main></body></html>
+HTML
+export PATH="$PWD/target/debug:$PATH"
+export WEBTOOL_SERVER=http://127.0.0.1:8420
+# Ingest always parses; it is not a cached URL read.
+webtool --format json ingest runtime/html-fidelity.html >runtime/html-fidelity.json
+DOC_ID=$(python3 -c 'import json;print(json.load(open("runtime/html-fidelity.json"))["id"])')
+python3 -m json.tool runtime/html-fidelity.json
+webtool read "$DOC_ID"
+webtool export "$DOC_ID" --kind original --output runtime/html-fidelity-original.html --force
+cmp runtime/html-fidelity.html runtime/html-fidelity-original.html
+webtool --format json read https://doc.rust-lang.org/book/ch03-02-data-types.html --refresh >runtime/rust-data-types.json
+PUBLIC_ID=$(python3 -c 'import json;print(json.load(open("runtime/rust-data-types.json"))["id"])')
+webtool read "$PUBLIC_ID"
+webtool export "$PUBLIC_ID" --kind original --output runtime/rust-data-types-original.html --force
+# Inspect retained source pre/table elements alongside parsed JSON:
+webtool --format json extract "$PUBLIC_ID" css --expression 'pre,table'
+webtool --format json extract "$PUBLIC_ID" code
+webtool --format json extract "$PUBLIC_ID" tables
+```
+
+`--force` above only replaces the named temporary exports. All example files and
+local result JSON stay under ignored runtime/. Fixture document from this run:
+`de34d85d7ef36f8965d19375046332382a6fb5651489490d1c5ec69c0f1b53aa`.
+Public document:
+`04f9b1ba3433f1c3203cacc1bbb7d51ff0213686dfb1112cfe6e416c85eadded`.
+New extraction revision participates in the saved document ID; existing IDs
+continue to read the stored result. URL reads need `--refresh` to avoid old cache.
+
+## Historical runnable bootstrap results
+
+The following records milestone 1, before its authorized merge. Current branch,
+server revision, and workflow are recorded above.
+
 
 - Rust 1.98.0 / Cargo 1.98.0 on Fedora 44; debug build.
 - `cargo build --locked -p webtool-cli -p webtool-server`: passed with
@@ -64,7 +185,7 @@ Library and export already exist after this run. Use a new library/output name
 for a later run, or explicit `--force` only when replacing the export is intended.
 To stop, verify the PID in runtime/webtoold.pid belongs to this webtoold and send
 SIGTERM. Rollback means stopping this process and using a prior feature commit;
-do not delete data or reset main. No merge has been authorized.
+do not delete data or reset main. At bootstrap handoff no merge had been authorized; PR #2 has since been merged as recorded above.
 
 ### Remaining blockers and next task
 
@@ -73,7 +194,7 @@ OCR models/native runtimes, fastCRW, Lightpanda, Chromium, and yt-dlp are not
 validated or configured; doctor reports them unavailable. They are not implied
 working by a successful default build. No provider cycling was needed.
 
-Highest-value next task: validate default HTML source fidelity on a representative
+Bootstrap next task (now completed by milestone 2 above): validate default HTML source fidelity on a representative
 public documentation page containing code and tables, against retained originals.
 
 ## Historical archive checks
