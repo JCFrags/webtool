@@ -68,7 +68,7 @@ impl Engine {
         if caption_url.is_some() { media::validate_language(&request.language)?; }
         let key=hex::encode(Sha256::digest(serde_json::to_vec(&json!({"url":caption_url.as_deref().unwrap_or(url.as_str()),"renderer":request.renderer,
             "language":request.language,"media_parser":media::PARSER,"source_resolver":sources::VERSION,"selector":request.selector,"version":EXTRACTION_VERSION,"document_config":self.config.document_config,
-            "browser_capture":fetch::BROWSER_CAPTURE_VERSION,"lightpanda_path":self.config.lightpanda_path,"browser_wait_ms":self.config.browser_wait_ms,"crw":self.config.crw_renderer}))?));
+            "html_parser":readers::html::PARSER,"browser_capture":fetch::BROWSER_CAPTURE_VERSION,"lightpanda_path":self.config.lightpanda_path,"browser_wait_ms":self.config.browser_wait_ms,"crw":self.config.crw_renderer}))?));
         let lock={
             let mut locks=self.locks.lock().await;
             locks.retain(|_,v|v.strong_count()>0);
