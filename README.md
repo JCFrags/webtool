@@ -12,7 +12,8 @@ phrase finding, and byte-identical original export. Default HTML nested code and
 tables also passed the preceding bounded milestone. This is not a full V1 release.
 
 One short YouTube video also passed English caption read/find/export through yt-dlp.
-OCR, Office formats, browsers, and Docker remain unverified. No model
+Lightpanda 0.3.6 passed local JavaScript and public quote-page capture.
+OCR, Office formats, Chromium, fastCRW, and Docker remain unverified. No model
 downloads or full Rust tests were run. See [STATUS.md](docs/STATUS.md) for exact
 commands, evidence, and limits. Historical archive logs are not current results.
 
@@ -272,22 +273,40 @@ The supplied minimal Docker image is not an OCR deployment recipe.
 
 ### Browser helpers
 
-Set installed executable paths in `config.example.toml`.
+The verified helper is the official Lightpanda **0.3.6** Linux x86_64 release.
+The existing binary matched its published SHA-256; no installation was needed.
+Set its path in the ignored `runtime/media-config.toml`, preserving yt-dlp settings:
 
 ```toml
-lightpanda_path = "/usr/local/bin/lightpanda"
-chromium_path = "/usr/bin/chromium"
+lightpanda_path = "/home/mainpc/.local/bin/lightpanda"
+browser_wait_ms = 2000 # existing key: edit it, do not add a duplicate
 ```
 
 ```sh
-webtool read https://example.com --renderer lightpanda
-webtool read https://example.com --renderer chromium
+./target/debug/webtoold --config runtime/media-config.toml
+webtool read https://quotes.toscrape.com/js/ --renderer lightpanda --refresh
 ```
 
-Helper DOM dumps do not reliably expose navigation status or redirect URLs.
-The application records this limitation instead of assigning a fabricated status.
-A fixed wait budget does not prove that late-loading content is complete.
-Browsers currently launch per request rather than through a persistent browser pool.
+Do not start a second server. See docs/STATUS.md for setup and the local fixture.
+The adapter disables telemetry and uses `fetch --dump html --json`, requesting
+`--wait-until done` followed by `--wait-script "document.readyState === 'complete'"`.
+The wait budget bounds those conditions, not a guarantee of application completeness.
+Persistent background activity can time out. No other browser is tried automatically.
+
+The JSON envelope supplies actual HTTP status and final URL when available. Missing
+status remains null; missing final URL keeps the requested URL with a warning.
+Only decoded DOM content is retained as `rendered_dom`, not the JSON envelope or
+original HTTP bytes. Read warnings, original-export messages, and the download
+filename identify the DOM snapshot. HTML selectors refer to that retained snapshot;
+ambiguous text fragments remain derived. DOM `<base>` links are resolved without
+rewriting retained bytes. Helper stderr remains separate and visible as warnings.
+
+One helper process per request uses existing concurrency, stdout/stderr byte caps,
+deadlines and process-group cleanup. The stdout limit includes JSON overhead, and
+subresource responses also use the configured byte cap. Capture behavior and HTML
+parser revision participate in cache identity. Changing a binary in place requires
+`--refresh`. This is not general JavaScript/browser compatibility validation.
+Chromium remains unverified, with its existing uncertain navigation/timed capture.
 
 The `crw-browser` feature adds an experimental native fastCRW adapter.
 It requires explicit `crw_renderer` configuration and `--renderer crw`.

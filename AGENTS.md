@@ -80,7 +80,9 @@ Do not import upstream CLI, server, cache, authentication, or unrelated agent fe
 
 Default extraction passed the bounded nested-code/merged-table smoke and one live
 Rust Book chapter. This is not general extraction-quality validation.
-source-blocks/2 walks only selected containers; split prose runs stay derived.
+source-blocks/3 walks only selected containers and preserves their direct text;
+split prose runs stay derived. The public JavaScript quote page exposed dropped
+selected div/span text; the fix does not restore original container subtrees.
 Unique original pre/table matches recover code text/language and table cells.
 Do not substitute an entire original list or quote to recover descendants.
 Non-UTF-8 decoding is absent.
@@ -98,10 +100,19 @@ One two-page native-text PDF is verified; Office, scans, and real PDF tables are
 not. Empty extraction fails; empty pages in partial documents produce warnings.
 OCR, layout, and equation recognition require actual model fixtures and accuracy tests.
 
-The browser helper starts a process per request.
-It does not report reliable navigation status, redirects, or verified readiness.
-The local Chromium smoke test timed out, including a later blank-page probe.
-Do not interpret the installed executable as an operational browser integration.
+Lightpanda 0.3.6 is verified with the official release digest. Its path is in
+runtime/media-config.toml, alongside unchanged yt-dlp settings. Telemetry is disabled.
+Capture version lightpanda-json-dom/2 uses fetch JSON content/http_status/url and
+explicit done plus readyState-complete waits. 0.3.6 can exit zero after a fatal
+fetch/wait diagnostic; inspect stderr and the envelope, not exit status alone.
+Current upstream CLI docs differ from 0.3.6 help (including wait defaults and
+--fail-on-http-error); do not assume newer flags work on this binary.
+DOM originals and selectors are snapshot-relative, never original HTTP responses.
+Null/unknown navigation remains explicit. Local JS code/table/base-link/export and
+public quote extraction passed; public fragments remain derived. Readiness is not
+application completeness. Helpers remain process-per-request with bounded resources.
+Chromium's historical timeout is unresolved; fastCRW is still unverified. Do not
+change browser binaries/config in place and assume cached results describe them.
 
 The crawl frontier is not persisted.
 Running jobs become interrupted after restart, while queued jobs are rescheduled.
