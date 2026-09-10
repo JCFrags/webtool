@@ -7,39 +7,42 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Bootstrap workflow
+## Current milestone: HTML source fidelity
 
-Work on `feat/bootstrap-running-cli`; mirror checkpoints to `JCFrags/webtool`.
-Issue #1 tracks the runnable milestone and PR #2 targets main.
-Do not force-push, create develop, or merge without the coordinating agent's instruction.
-Mark the PR ready only after the default build and saved-document workflow work.
+Bootstrap PR #2 was squash-merged only after its authorized head and green build
+were confirmed. Issue #1 is closed. Work on `fix/html-source-fidelity`, linked to
+issue #3. Open a draft PR early, push coherent checkpoints, and mark ready only
+after the small workflow works. Do not merge this new PR without authorization.
+Do not force-push or discard local changes or runtime data.
 
-Use current stable Rust and commit the real Cargo.lock. Iterate with:
+Use current stable Rust and the committed lockfile:
 
 ```sh
 cargo build --locked -p webtool-cli -p webtool-server
 ```
 
-Keep default search and HTML extraction enabled. Version 0.3.2 of
-metadata-search-engine-rs has a dependency cycle through search-tui;
-0.3.1 resolves without that TUI dependency. Do not upgrade it blindly.
+Focus on default HTML extraction and directly affected rendering. Preserve
+selected content order, nested code whitespace/language, original table cell
+boundaries/header flags/spans, and honest derived locators for ambiguous matches.
+Do not restore excluded navigation or duplicate container and descendant text.
+Keep original artifacts and old saved documents readable. Bump the HTML parser
+revision when extraction changes. Do not replace the extractor or add fallbacks.
 
-CI is one cached Ubuntu build on pull_request and workflow_dispatch.
-CI must not generate the lockfile or format source. Full tests and optional
-integration checks remain manual, outside bootstrap. Keep existing tests;
-do not add tests, run workspace tests, all-features checks, lint campaigns,
-benchmarks, or coverage during this milestone.
+Verify one tiny authored HTML fixture through default extraction (no selector),
+inspect JSON and plain CLI output, and compare its exported original. Read one
+public documentation page with code and a table using fresh extraction and
+compare against its retained original. Rerun only failed steps. No cargo test,
+new test framework or expanded fixture corpus, broad lint, benchmarks, optional
+features, browser, PDF/OCR, media, or unrelated refactoring in this milestone.
 
-After compilation run only the small smoke sequence: doctor, create library,
-ingest tests/fixtures/source.md, read and find "Exact code", export original
-and compare bytes, default live HTML read, and one live web search. Rerun only
-failed steps while fixing blockers. Report provider failures honestly; do not
-cycle providers to conceal an unavailable search. See docs/STATUS.md for actual
-results and local commands. Do not claim completion from compilation alone.
+Preserve metadata-search-engine-rs =0.3.1: 0.3.2 creates a dependency cycle through
+search-tui. Preserve the existing cached Ubuntu CI build and lockfile; CI must
+not generate the lockfile or format source. Full tests and optional checks remain
+manual. See docs/STATUS.md for verified results and reproducible commands.
 
-Keep target/, runtime data, caches, model weights, downloaded binaries, and
-credentials out of Git. Preserve supplied license notices and original bytes.
-The supplied MANIFEST.sha256 describes the imported archive, not later edits.
+Keep target/, data/, runtime/, caches, model weights, downloaded binaries, and
+credentials out of Git. Preserve supplied license notices and source bytes.
+MANIFEST.sha256 describes the imported archive, not later edits.
 
 ## Workspace
 
