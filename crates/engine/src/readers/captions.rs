@@ -15,7 +15,7 @@ pub fn timestamp(s:&str)->Result<u64>{
 }
 pub fn parse(text:&str,name:&str)->Result<Parsed>{
     let normalized=text.trim_start_matches('\u{feff}').replace("\r\n","\n");
-    let mut p=Parsed::new(name,"native-captions/1");
+    let mut p=Parsed::new(name,"native-captions/2");
     for section in normalized.split("\n\n"){
         let lines:Vec<&str>=section.lines().collect();
         if lines.first().is_some_and(|l|l.starts_with("NOTE")||l.starts_with("STYLE")||l.starts_with("REGION")){continue;}
@@ -24,7 +24,9 @@ pub fn parse(text:&str,name:&str)->Result<Parsed>{
                 if let Some((start,end))=lines.first().and_then(|s|s.split_once(',')){
                     let a=timestamp(start)?;let b=timestamp(end)?;
                     if b<a{bail!("caption ends before it starts");}
-                    p.push(Content::Caption{text:lines[1..].join("\n")},Locator::Timestamp{start_ms:a,end_ms:b});
+                    let cue=lines[1..].join("\n");
+                    if cue.trim().is_empty(){bail!("caption cue has no text");}
+                    p.push(Content::Caption{text:cue},Locator::Timestamp{start_ms:a,end_ms:b});
                 }
             }
             continue;
@@ -34,6 +36,7 @@ pub fn parse(text:&str,name:&str)->Result<Parsed>{
         let a=timestamp(start)?;let b=timestamp(end)?;
         if b<a{bail!("caption ends before it starts");}
         let source=lines[index+1..].join("\n");
+        if source.trim().is_empty(){bail!("caption cue has no text");}
         // Preserve inline speaker tags and positioning markup, rather than silently deleting them.
         let value=html_escape::decode_html_entities(&source).into_owned();
         p.push(Content::Caption{text:value},Locator::Timestamp{start_ms:a,end_ms:b});

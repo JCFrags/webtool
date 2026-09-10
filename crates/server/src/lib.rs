@@ -37,7 +37,13 @@ impl From<anyhow::Error> for ApiError{fn from(e:anyhow::Error)->Self{Self(e)}}
 impl IntoResponse for ApiError{
     fn into_response(self)->Response{
         let message=format!("{:#}",self.0);
-        let (status,code)=if message.contains("not found"){(StatusCode::NOT_FOUND,"not_found")}
+        let (status,code)=if message.contains("media_helper_missing") {(StatusCode::UNPROCESSABLE_ENTITY,"media_helper_missing")}
+            else if message.contains("media_source_blocked") {(StatusCode::BAD_GATEWAY,"media_source_blocked")}
+            else if message.contains("media_captions_unavailable") {(StatusCode::UNPROCESSABLE_ENTITY,"media_captions_unavailable")}
+            else if message.contains("media_captions_malformed") {(StatusCode::UNPROCESSABLE_ENTITY,"media_captions_malformed")}
+            else if message.contains("media_helper_timeout") {(StatusCode::GATEWAY_TIMEOUT,"media_helper_timeout")}
+            else if message.contains("media_helper_failed") || message.contains("media_track_download_failed") {(StatusCode::BAD_GATEWAY,"media_helper_failed")}
+            else if message.contains("not found"){(StatusCode::NOT_FOUND,"not_found")}
             else if message.contains("exceeds")||message.contains("exceeded")&&message.contains("bytes"){(StatusCode::PAYLOAD_TOO_LARGE,"size_limit")}
             else if message.contains("timeout")||message.contains("deadline"){(StatusCode::GATEWAY_TIMEOUT,"timeout")}
             else if message.contains("source returned HTTP ")||message.contains("fetch source"){(StatusCode::BAD_GATEWAY,"upstream_error")}
