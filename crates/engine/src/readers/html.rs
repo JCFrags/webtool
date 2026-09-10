@@ -137,6 +137,14 @@ pub fn links(source:&str,url:&str)->Vec<Link>{
     }).collect()
 }
 
+/// Only browser captures use their DOM base; retained bytes remain unchanged.
+pub fn rendered_base(bytes:&[u8],url:&str)->String{
+    let Ok(source)=std::str::from_utf8(bytes) else {return url.into()};
+    let doc=Html::parse_document(source);let base=Url::parse(url).ok();
+    doc.select(&Selector::parse("base[href]").expect("constant selector")).next()
+        .and_then(|e|absolute(base.as_ref(),e.value().attr("href")?)).unwrap_or_else(||url.into())
+}
+
 pub fn parse(bytes:&[u8],url:&str,explicit:Option<&str>)->Result<Parsed>{
     let source=std::str::from_utf8(bytes).map_err(|_|anyhow!("HTML is not UTF-8. Encoding conversion is not implemented in this build."))?;
     let original=Html::parse_document(source);

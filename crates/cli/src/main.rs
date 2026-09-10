@@ -240,6 +240,9 @@ async fn run(cli:Cli)->Result<()>{
             if matches!(format,Output::Text|Output::Markdown){stdout(&format!("{}\n",render::terminal_safe(v["text"].as_str().context("citation response has no text")?)))}else{output(&v,format)}},
         Command::Export{document:source,kind,table,output:path,force}=>{
             let d=client.resolve(&source).await?;
+            if matches!(kind,ExportKind::Original) && d.source.original.role=="rendered_dom" {
+                eprintln!("Export source: retained rendered_dom snapshot, not the original HTTP response.");
+            }
             let bytes=match kind{
                 ExportKind::Markdown=>render::markdown(&d).into_bytes(),ExportKind::Json=>serde_json::to_vec_pretty(&d)?,
                 ExportKind::TableCsv=>export_table(&d,table)?,

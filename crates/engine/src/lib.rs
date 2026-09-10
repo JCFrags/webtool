@@ -68,7 +68,7 @@ impl Engine {
         if caption_url.is_some() { media::validate_language(&request.language)?; }
         let key=hex::encode(Sha256::digest(serde_json::to_vec(&json!({"url":caption_url.as_deref().unwrap_or(url.as_str()),"renderer":request.renderer,
             "language":request.language,"media_parser":media::PARSER,"source_resolver":sources::VERSION,"selector":request.selector,"version":EXTRACTION_VERSION,"document_config":self.config.document_config,
-            "browser_wait_ms":self.config.browser_wait_ms,"crw":self.config.crw_renderer}))?));
+            "browser_capture":fetch::BROWSER_CAPTURE_VERSION,"lightpanda_path":self.config.lightpanda_path,"browser_wait_ms":self.config.browser_wait_ms,"crw":self.config.crw_renderer}))?));
         let lock={
             let mut locks=self.locks.lock().await;
             locks.retain(|_,v|v.strong_count()>0);
@@ -107,7 +107,7 @@ impl Engine {
                 (fetched,None)
             }
         };
-        let filename=github.as_ref().map(|g|g.filename.clone()).unwrap_or_else(||fetched.resolved.clone());
+        let filename=github.as_ref().map(|g|g.filename.clone()).unwrap_or_else(||if matches!(request.renderer,Renderer::Lightpanda) { readers::html::rendered_base(&fetched.bytes,&fetched.resolved) } else { fetched.resolved.clone() });
         let mime=readers::detect(&filename,fetched.content_type.as_deref(),&fetched.bytes);
         let original=self.store.put_bytes(&fetched.bytes,&mime,&fetched.role).await?;
         let source=Source {requested:request.url,resolved:fetched.resolved.clone(),retrieved_at:Utc::now().to_rfc3339(),
@@ -116,6 +116,12 @@ impl Engine {
         let mut parsed=if let Some(details)=github.as_ref().filter(|g|g.directory) {
             sources::directory(&fetched.bytes,details)?
         } else { self.parse(fetched.bytes,filename,mime,request.selector).await? };
+        if matches!(request.renderer,Renderer::Lightpanda) {
+            if parsed.blocks.is_empty(){bail!("browser_empty_output: captured DOM has no readable blocks");}
+            parsed.metadata["browser"]=json!({"renderer":"lightpanda","capture":fetch::BROWSER_CAPTURE_VERSION,
+                "artifact":"rendered_dom","locations":"retained DOM snapshot","wait_until":"done",
+                "wait_script":"document.readyState === 'complete'","wait_ms":self.config.browser_wait_ms});
+        }
         if let Some(details)=github { parsed.metadata["github"]=details.metadata; }
         if let Some(links)=readme_links {
             parsed.links.extend(links);
