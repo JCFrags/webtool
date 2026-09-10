@@ -20,11 +20,12 @@ browser_no_sandbox = false
 # chromium_path = "/usr/bin/chromium"
 # ytdlp_path = "/usr/local/bin/yt-dlp"
 
-# Optional Xberg configuration. Requires --features documents.
-# Upstream config is experimental and must be checked against the pinned version.
+# Optional Xberg overrides. Document support is included in the normal server.
+# Only native PDF text is verified. OCR and Office formats are not verified.
 # [document_config]
 # use_cache = false
-# output_format = "markdown"
+# output_format = "plain"
+# enable_quality_processing = false
 # [document_config.pages]
 # extract_pages = true
 

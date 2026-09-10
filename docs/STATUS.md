@@ -3,6 +3,120 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Milestone 3: usable PDF reading
+
+Verified September 10, 2026 UTC. Checkout `/home/mainpc/Projects/webtool`, branch
+`feat/pdf-reading`; issue #5, PR #6 (not merged). PR #4 was squash-merged with
+`--match-head-commit 7558b25529e9130697a72d144624784d9579f715` after checking its
+head and successful build. Local main fast-forwarded to `de4ad69`, and issue #3
+closed. Existing runtime data was preserved.
+
+### Build and delivered behavior
+
+Both commands passed with existing unused-import warnings only:
+
+```sh
+cargo build --locked -p webtool-cli -p webtool-server --features webtool-server/documents
+cargo build --locked -p webtool-cli -p webtool-server
+```
+
+The pinned Xberg 1.1.1 adapter compiled without dependency fixes. No dependency
+versions or Cargo.lock changed; the lockfile already selected xberg-native-pdf
+1.1.4. Documents are now a default server feature. The CLI remains independent
+of the engine. The single CI command is unchanged and now includes documents.
+
+Document parser revision: `xberg/1.1.1+source-blocks/2`.
+Page text uses existing Paragraph blocks, with no trimming or Markdown rewrite.
+Defaults request plain output and disable upstream quality rewriting. Missing
+page numbers remain derived; reported page numbers are retained without boxes.
+Supplemental table blocks remain extractable and are explicitly labeled in plain
+and Markdown output, rather than silently repeating page text. Cell header roles
+and merged spans are not inferred from Xberg's simple matrix. Metadata retains
+full upstream documents and output-envelope errors/summary/additional results.
+
+Empty/whitespace-only page objects are skipped with visible diagnostics; they do
+not count as successful extraction. No text and no nonempty table cells is an
+error. OCR absence is explicit, without inferring that every empty page is a
+scan. Partial page-count and upstream warnings are retained. A failed extraction
+still leaves retained original bytes under the existing artifact behavior, but
+has no successful saved-document handle or saved normalized upstream metadata.
+These empty/scan paths were inspected in source, not exercised with more PDFs.
+
+### Actual bounded proof
+
+One public PDF only:
+https://sample-files.com/downloads/documents/pdf/fillable-form.pdf
+
+| Check | Result |
+|---|---|
+| Fresh URL read | HTTP 200, application/pdf, 54,059 bytes |
+| Pages | Two Paragraph blocks, reported pages 1 and 2, bbox null |
+| Ordinary output | Readable form labels; no whole-page code fences |
+| Native text accuracy check | Existing pdftotext independently confirmed page titles/positions; its reference output was inspected |
+| Find | “Personal Information” found in b2, page 2 |
+| Local ingest of URL-retained original | Same two blocks and exact upstream page strings |
+| Original local export | cmp byte-identical to retained input |
+| Artifact hash | Both documents match SHA-256 8413d3f961113a06b9ebedd0a3e9963517379cd62d3600f5067d497e3dcfa269 |
+| Upstream metadata | Title, author, dates, page dimensions/count, native method, ocr_used=false retained |
+| Tables extract | Empty array, matching upstream (this PDF supplied no structured tables) |
+| Existing HTML | Previous Rust Book saved document read once successfully |
+| doctor | documents enabled; OCR unavailable/not compiled |
+
+Both PDF outputs retained `document_structure_partial` warnings. No hidden
+upstream errors appeared. The old HTML kept its existing derived-location warning.
+`pdftotext` was already installed and used only for this reference check; it is
+not an application dependency or replacement extraction engine.
+No cargo test, broad lint, benchmarks, OCR, model downloads, extra feature matrix,
+or new test framework was used. No smoke steps needed a retry.
+
+No concrete blocker remains. This is bounded native-text PDF support, not an
+accuracy guarantee for arbitrary PDFs. Real table detection, scanned/empty PDF
+runtime behavior, complex layouts, form values, encrypted inputs, Office, and
+other formats remain unverified. No Office support claim follows from compilation.
+
+### Local server and exact reproduction
+
+The updated server is left running at http://127.0.0.1:8420 with the existing data/.
+Only this project's old PID was terminated after verifying its executable path.
+PID/log: runtime/webtoold.pid and runtime/webtoold.log. No data was deleted.
+
+Startup (do not start a second copy while it is running):
+
+```sh
+cd /home/mainpc/Projects/webtool
+./target/debug/webtoold --config config.example.toml
+```
+
+The commands below reuse ignored runtime/ and explicitly replace named temporary
+exports. The URL read uses refresh; local ingest always parses.
+
+```sh
+cd /home/mainpc/Projects/webtool
+export PATH="$PWD/target/debug:$PATH"
+export WEBTOOL_SERVER=http://127.0.0.1:8420
+mkdir -p runtime
+webtool doctor
+webtool --format json read https://sample-files.com/downloads/documents/pdf/fillable-form.pdf --refresh >runtime/pdf-url.json
+URL_ID=$(python3 -c 'import json;print(json.load(open("runtime/pdf-url.json"))["id"])')
+webtool read "$URL_ID"
+webtool find "$URL_ID" 'Personal Information'
+webtool export "$URL_ID" --kind original --output runtime/fillable-form.pdf --force
+webtool --format json ingest runtime/fillable-form.pdf >runtime/pdf-local.json
+LOCAL_ID=$(python3 -c 'import json;print(json.load(open("runtime/pdf-local.json"))["id"])')
+webtool read "$LOCAL_ID"
+python3 -m json.tool runtime/pdf-local.json
+webtool export "$LOCAL_ID" --kind original --output runtime/fillable-form-export.pdf --force
+cmp runtime/fillable-form.pdf runtime/fillable-form-export.pdf
+webtool --format json extract "$LOCAL_ID" tables
+webtool read 04f9b1ba3433f1c3203cacc1bbb7d51ff0213686dfb1112cfe6e416c85eadded
+```
+
+Saved URL ID: `bdca71b0310fdf092265cb50d0f2c2cedb6cfe596ad943547a80864c38cc4996`.
+Saved local ID: `64ef0a3524cc691e76a2d08d6c8028e44eaac1aa08ca128e753235f48d88fe7b`.
+
+The sections below are historical milestones; their former feature/merge state
+is superseded by this section.
+
 ## Milestone 2: selected HTML source fidelity
 
 Verified September 10, 2026 UTC. Checkout `/home/mainpc/Projects/webtool`, branch

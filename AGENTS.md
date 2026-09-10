@@ -22,7 +22,8 @@ Start integration with:
 cargo build --locked -p webtool-cli -p webtool-server --features webtool-server/documents
 ```
 
-After integration works, enable documents in the server default and verify:
+Documents are now enabled in the server default. The pinned-feature build and
+normal build both passed without dependency/lockfile changes. Continue with:
 
 ```sh
 cargo build --locked -p webtool-cli -p webtool-server
@@ -65,16 +66,10 @@ The Python scripts are development checks, not application components.
 
 ## Deferred optional integration boundaries
 
-The optional integrations target published APIs inspected during implementation.
-Their transitive features were not resolved in this environment.
-These boundaries need separate work, not this milestone’s checks:
-
-- `rs_trafilatura::Options` and `ExtractResult` against version `0.2.2`.
-- `metadata-search-engine-rs` engine constructors and `SearchResult` against `0.3.1`.
-- Xberg's `extract`, `ExtractInput`, `PageConfig`, and serialization against `1.1.1`.
-- fastCRW's renderer constructor, deadline, fetch method, and result fields against `0.34.0`.
-- Axum handler futures for `Send` requirements, including optional document extraction.
-- Native linkage, duplicate SQLite libraries, and the selected ONNX runtime's platform requirements.
+Xberg 1.1.1's existing APIs compiled with the committed lockfile; no dependency
+change was needed. Default search and HTML integrations remain unchanged.
+OCR/ONNX model readiness and fastCRW APIs still require separate work. Do not
+upgrade the search dependency from =0.3.1 (0.3.2 creates a search-tui cycle).
 
 The fastCRW adapter is experimental and does not own the crawler yet.
 The current crawler is application-owned, not a completed fastCRW fork.
@@ -104,10 +99,15 @@ Non-UTF-8 decoding is absent.
 Markdown parsing implements a limited block reader, not full CommonMark.
 HTML table nesting, list hierarchy, inline link placement, and mathematical fidelity need stronger fixtures.
 
-The Xberg adapter normalizes page text and simple table matrices.
-It retains the full upstream result in metadata.
+The Xberg adapter preserves upstream page text as paragraphs and keeps table
+matrices accessible via extract. Parser revision is source-blocks/2. Default
+output is plain, quality rewriting is disabled, and OCR is disabled when absent.
+Metadata retains the first upstream document and the full output envelope.
 It does not expose downloadable figures or fine-grained document elements.
-Table supplements may repeat values already present in page text.
+Table supplements may repeat page text and are explicitly labeled in rendering.
+Do not remove the supplemental_table_blocks metadata used for these labels.
+One two-page native-text PDF is verified; Office, scans, and real PDF tables are
+not. Empty extraction fails; empty pages in partial documents produce warnings.
 OCR, layout, and equation recognition require actual model fixtures and accuracy tests.
 
 The browser helper starts a process per request.

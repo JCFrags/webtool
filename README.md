@@ -6,15 +6,14 @@ There is no TUI, alternate screen, browser-control interface, or default LLM wor
 
 ## Delivery status
 
-The default Rust CLI and server now build and run locally. The saved-document
-round trip preserved all 87 original bytes. Default HTML extraction read
-https://example.com, and one live search returned five links from Brave and
-DuckDuckGo. This is the first runnable milestone, not a complete V1 release.
+The normal server now includes native PDF text reading through pinned Xberg.
+A two-page public PDF passed URL read, local ingestion, page-location checks,
+phrase finding, and byte-identical original export. Default HTML nested code and
+tables also passed the preceding bounded milestone. This is not a full V1 release.
 
-Optional documents, OCR, browsers, captions, and Docker remain unverified.
-Full Rust tests were not run during bootstrap. See [STATUS.md](docs/STATUS.md)
-for exact commands, results, and remaining limits. The older local-validation
-logs describe the imported snapshot, not the current executable.
+OCR, Office formats, browsers, captions, and Docker remain unverified. No model
+downloads or full Rust tests were run. See [STATUS.md](docs/STATUS.md) for exact
+commands, evidence, and limits. Historical archive logs are not current results.
 
 ## What is implemented in source
 
@@ -30,7 +29,7 @@ logs describe the imported snapshot, not the current executable.
 | Imports | Files and stdin uploaded from the client, including native text, structured data, feed, caption, and notebook readers |
 | Crawling | Persistent bounded jobs, basic robots rules, same-origin traversal, cancellation, restart status |
 | Browser helpers | Explicit Lightpanda or Chromium DOM capture, plus an experimental fastCRW integration |
-| Documents | Optional Xberg integration with page text, source page numbers, sheet names, and supplemental table blocks |
+| Documents | Default Xberg native PDF text with reported pages and labeled supplemental tables; Office formats unverified |
 | Media | Optional yt-dlp metadata and existing-caption retrieval, without video download |
 | Bibliography | DOI metadata retrieval as BibTeX, RIS, or CSL JSON |
 | Exports | Markdown, JSON, retained originals, and selected tables as CSV |
@@ -47,7 +46,7 @@ Run these commands from this repository's root.
 cargo build --locked -p webtool-cli -p webtool-server
 ```
 
-Cargo.lock is committed. Use debug builds during bootstrap. Full tests and
+Cargo.lock is committed. Use debug builds during these bounded milestones. Full tests and
 optional integration checks remain manual, not prerequisites for this milestone.
 
 Start the server in one terminal.
@@ -142,10 +141,10 @@ There is no automatic semantic reranker, image-search command, or date-filter im
 | Jupyter notebooks | Version 4 cells and saved text outputs, no code execution |
 | XML | Original XML, with a limited JATS prose reader |
 | HTML | Selected content, code, tables, image references, and original-element matching when unambiguous |
-| Xberg feature | PDF, Office, spreadsheet, image, ebook, and email inputs routed to the pinned engine, pending integration tests |
+| Xberg (default server) | Native PDF text verified on one two-page input. Office, spreadsheet, image, ebook, and email formats are not verified |
 
 Non-UTF-8 HTML and text are rejected rather than silently corrupted.
-Standalone image reading requires the document feature and an appropriate recognition configuration.
+Image-only scans cannot be read without OCR, which is unavailable in the normal build.
 Figure extraction and downloadable figure assets are not complete.
 No formula recalculation, notebook execution, video transcription, or document editing is performed.
 
@@ -194,19 +193,38 @@ Queued jobs are rescheduled, and previously saved documents remain available.
 The crawler does not yet persist its frontier for exact continuation.
 Map reads one page or sitemap and does not recursively expand sitemap indexes.
 
-## Optional integrations
+## PDF reading (normal server)
 
-### Documents
+No feature flag or model installation is needed for native PDF text:
 
 ```sh
-cargo build --release -p webtool-server --features documents
+cargo build --locked -p webtool-cli -p webtool-server
+./target/debug/webtoold --config config.example.toml
+# In another terminal:
+./target/debug/webtool read https://sample-files.com/downloads/documents/pdf/fillable-form.pdf --refresh
+./target/debug/webtool ingest ./local.pdf
 ```
 
-The Xberg adapter retains its full output in `metadata.upstream`.
-Normalized page references are used only when the engine supplies page numbers.
-Combined generated text receives a `derived` locator, never invented source lines.
-Tables supplement page text and may repeat its table content.
-Fine-grained document geometry and figure export remain incomplete.
+`doctor` reports compiled document support separately from unavailable OCR.
+The server retains original bytes, reported page numbers, document metadata,
+and the full upstream result/envelope. Page content is readable paragraph text,
+not a programming-code block; its supplied whitespace is retained. PDF title,
+author, dates, page count, and format metadata remain available through extract.
+
+Structured tables remain available via `extract ID tables`. Ordinary and Markdown
+reading explicitly label supplemental tables because they may repeat page text.
+Xberg cell matrices do not establish original header roles or merged-cell spans;
+no such geometry is inferred. Complete upstream table details remain in metadata.
+Empty/whitespace-only page objects do not count as successful content. A fully
+empty extraction fails with an OCR-availability explanation, not a blank-document
+success. A missing-text page is not automatically classified as a scan. Partial
+page and upstream warnings remain visible.
+
+Only a small native-text PDF was verified. Scans, complex layouts, tables from
+real PDFs, Office formats, and form-field interpretation need separate validation.
+No PDF form values are edited and no OCR/model runtime is installed by default.
+
+## Optional integrations (not verified)
 
 ### OCR
 
