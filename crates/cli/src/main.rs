@@ -5,11 +5,12 @@ use clap::{Parser,Subcommand,ValueEnum};
 use serde::{de::DeserializeOwned,Serialize};
 use serde_json::{json,Value};
 use webtool_protocol::*;
+mod settings;
 
 #[derive(Parser)]
 #[command(name="webtool",version,about="Search, read, extract, and save sources through a shared server",after_help="No TUI. Results go to stdout. Warnings and progress go to stderr. Use --format json for scripts.")]
 struct Cli{
-    #[arg(long,global=true,env="WEBTOOL_SERVER",default_value="http://127.0.0.1:8420")]server:String,
+    #[arg(long,global=true)]server:Option<String>,
     #[arg(long,global=true,value_enum,default_value="text")]format:Output,
     #[arg(long,global=true,default_value_t=120)]timeout:u64,
     #[command(subcommand)]command:Command,
@@ -23,6 +24,10 @@ impl From<Kind> for ExtractKind{fn from(v:Kind)->Self{match v{Kind::Tables=>Self
 
 #[derive(Subcommand)]
 enum Command{
+    /// Validate and save an endpoint locally. Does not contact the server.
+    Connect{server_url:String},
+    /// Inspect local client configuration without contacting the server.
+    Config{#[command(subcommand)]action:ConfigCommand},
     /// Check server reachability and report compiled or configured capabilities.
     Doctor,
     /// Search the web, or a saved library. Use --library '*' for all saved documents.
@@ -62,6 +67,7 @@ enum Command{
     /// Read URLs from a UTF-8 file or stdin. Emit one result per line with --format jsonl.
     Batch{file:PathBuf,#[arg(long)]library:Option<String>},
 }
+#[derive(Subcommand)]enum ConfigCommand{Show}
 #[derive(Subcommand)]enum LibraryCommand{
     List,
     Create{name:String,#[arg(long,default_value="")]description:String},
@@ -71,13 +77,13 @@ enum Command{
 struct Client{base:String,http:reqwest::Client}
 impl Client{
     fn new(server:&str,timeout:u64)->Result<Self>{
-        let url=url::Url::parse(server).context("invalid --server URL")?;
-        if !matches!(url.scheme(),"http"|"https"){bail!("--server must use HTTP or HTTPS");}
+        settings::validate_endpoint(server)?;
         if timeout==0{bail!("--timeout must be positive");}
         Ok(Self{base:server.trim_end_matches('/').into(),http:reqwest::Client::builder().connect_timeout(Duration::from_secs(10)).timeout(Duration::from_secs(timeout)).build()?})
     }
-    async fn get<T:DeserializeOwned>(&self,path:&str)->Result<T>{Self::decode(self.http.get(format!("{}{path}",self.base)).send().await.context("connect to webtoold")?).await}
-    async fn post<B:Serialize,T:DeserializeOwned>(&self,path:&str,body:&B)->Result<T>{Self::decode(self.http.post(format!("{}{path}",self.base)).json(body).send().await.context("send request to webtoold")?).await}
+    fn connection_error(&self)->String{format!("cannot reach webtoold at {}. Check webtool config show, the host server and network; use webtool connect URL or --server URL to change the endpoint. No server was started",self.base)}
+    async fn get<T:DeserializeOwned>(&self,path:&str)->Result<T>{Self::decode(self.http.get(format!("{}{path}",self.base)).send().await.with_context(||self.connection_error())?).await}
+    async fn post<B:Serialize,T:DeserializeOwned>(&self,path:&str,body:&B)->Result<T>{Self::decode(self.http.post(format!("{}{path}",self.base)).json(body).send().await.with_context(||self.connection_error())?).await}
     async fn decode<T:DeserializeOwned>(response:reqwest::Response)->Result<T>{
         let status=response.status();let bytes=response.bytes().await?;
         if !status.is_success(){
@@ -146,15 +152,26 @@ fn export_table(document:&Document,index:usize)->Result<Vec<u8>> {
 }
 
 async fn run(cli:Cli)->Result<()>{
-    let client=Client::new(&cli.server,cli.timeout)?;let format=cli.format;
+    let format=cli.format;
+    let config_path=settings::path()?;
+    if let Command::Connect{server_url}=&cli.command{
+        let server=settings::save(&config_path,server_url)?;
+        return if matches!(format,Output::Text|Output::Markdown){stdout(&format!("Saved endpoint: {server}\nConfiguration: {}\nNo connection attempted. --server and WEBTOOL_SERVER override this setting.\n",config_path.display()))}else{output(&json!({"server":server,"config_path":config_path,"connection_attempted":false}),format)};
+    }
+    let (server,source)=settings::effective(cli.server.as_deref(),&config_path)?;
+    if matches!(cli.command,Command::Config{..}){
+        return if matches!(format,Output::Text|Output::Markdown){stdout(&format!("Endpoint: {server}\nConfiguration: {}\nSource: {source}\n",config_path.display()))}else{output(&json!({"server":server,"config_path":config_path,"source":source}),format)};
+    }
+    let client=Client::new(&server,cli.timeout)?;
     match cli.command{
+        Command::Connect{..}|Command::Config{..}=>unreachable!(),
         Command::Doctor=>{
             let h:Health=client.get("/v1/health").await?;
             if matches!(format,Output::Text|Output::Markdown){
-                stdout(&format!("webtoold {} | API {}\n",h.version,h.api_version))?;
+                stdout(&format!("Endpoint: {} ({source})\nwebtoold {} | API {} | build {}\n",client.base,h.version,h.api_version,h.build_commit.as_deref().unwrap_or("unknown")))?;
                 for c in h.capabilities{stdout(&format!("{}: {}\n  {}\n",c.name,if c.available{"enabled"}else{"unavailable"},render::terminal_safe(&c.detail)))?;}
                 Ok(())
-            }else{output(&h,format)}
+            }else{let mut value=serde_json::to_value(&h)?;value["build_commit"]=json!(h.build_commit.as_deref().unwrap_or("unknown"));value["endpoint"]=json!(client.base);value["endpoint_source"]=json!(source);output(&value,format)}
         },
         Command::Search{query,limit,library}=>{
             let result:SearchResponse=client.post("/v1/search",&SearchRequest{query:query.join(" "),limit,library}).await?;
@@ -193,7 +210,7 @@ async fn run(cli:Cli)->Result<()>{
             let name=name.or_else(||file.file_name().and_then(|s|s.to_str()).filter(|s|*s!="-").map(str::to_owned)).unwrap_or_else(||"stdin.txt".into());
             let mut form=reqwest::multipart::Form::new().part("file",reqwest::multipart::Part::bytes(bytes).file_name(name));
             if let Some(v)=library{form=form.text("library",v);}if let Some(v)=actor{form=form.text("actor",v);}if let Some(v)=selector{form=form.text("selector",v);}
-            let response=client.http.post(format!("{}/v1/ingest",client.base)).multipart(form).send().await?;
+            let response=client.http.post(format!("{}/v1/ingest",client.base)).multipart(form).send().await.with_context(||client.connection_error())?;
             let d:Document=Client::decode(response).await?;document(&d,format)
         },
         Command::Find{source,query,regex,ignore_case,limit}=>{
@@ -247,7 +264,7 @@ async fn run(cli:Cli)->Result<()>{
             let bytes=match kind{
                 ExportKind::Markdown=>render::markdown(&d).into_bytes(),ExportKind::Json=>serde_json::to_vec_pretty(&d)?,
                 ExportKind::TableCsv=>export_table(&d,table)?,
-                ExportKind::Original=>client.http.get(format!("{}/v1/documents/{}/original",client.base,d.id)).send().await?.error_for_status()?.bytes().await?.to_vec(),
+                ExportKind::Original=>client.http.get(format!("{}/v1/documents/{}/original",client.base,d.id)).send().await.with_context(||client.connection_error())?.error_for_status()?.bytes().await?.to_vec(),
             };
             if force{eprintln!("Warning: --force permits replacing {}.",path.display());}
             let mut file=std::fs::OpenOptions::new().write(true).create(force).truncate(force).create_new(!force).open(&path)

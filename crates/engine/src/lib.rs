@@ -45,7 +45,7 @@ impl Engine {
             name:name.into(),available:path.as_ref().is_some_and(|p|p.is_file()),
             detail:if path.is_some(){"Configured executable path. Run an actual request to verify compatibility.".into()}else{"Not configured on this server.".into()},
         };
-        Health {version:env!("CARGO_PKG_VERSION").into(),api_version:API_VERSION.into(),capabilities:vec![
+        Health {version:env!("CARGO_PKG_VERSION").into(),api_version:API_VERSION.into(),build_commit:None,capabilities:vec![
             Capability{name:"html".into(),available:cfg!(feature="web-extraction"),detail:"Native extraction and explicit CSS selection. No quality benchmark has been run.".into()},
             Capability{name:"search".into(),available:cfg!(feature="web-search"),detail:format!("Configured providers: {}. Availability is not verified by this endpoint.",self.config.search_engines.join(", "))},
             Capability{name:"documents".into(),available:cfg!(feature="documents"),detail:"Compiled Xberg document support for native PDF text and structured tables. This is not OCR or a guarantee of format accuracy.".into()},
