@@ -130,6 +130,42 @@ Search snippets are provider output, not verified excerpts from destination page
 Brave and DuckDuckGo returned links in one bootstrap smoke query; broader availability and relevance remain untested.
 There is no automatic semantic reranker, image-search command, or date-filter implementation yet.
 
+## arXiv papers and saved citations (not yet live-verified)
+
+Auto reading recognizes arxiv.org `/abs/` and `/pdf/` URLs, modern/legacy IDs,
+explicit `vN`, and optional `.pdf`. It queries the official Atom API, validates
+identity/version, then retrieves only the pinned PDF through the existing Xberg
+reader. Explicit HTTP, CSS, and browser choices are not overridden.
+
+**Current blocker:** the official API returned HTTP 500 twice for
+`cond-mat/0207270v1`. No PDF or saved-paper citation workflow was verified.
+These are the intended commands to retry when that upstream failure clears:
+
+```sh
+webtool read https://arxiv.org/abs/cond-mat/0207270v1 --library papers --refresh
+webtool cite DOCUMENT_ID --as bibtex
+webtool cite DOCUMENT_ID --as csl
+```
+
+The PDF remains the original export. Metadata includes ordered literal authors,
+abstract, categories, submitted/updated dates, available DOI/journal reference,
+requested and resolved identity, plus the retained API-response artifact and
+provenance. Metadata/abstract alone is never accepted as full text. An unavailable
+requested version is not replaced with latest. Citation generation from a saved
+ID is offline; existing DOI BibTeX/RIS/CSL behavior remains. Saved arXiv citations
+identify the preprint and version, not an associated journal publication. Names
+are not split into surnames. Citation dates use the returned version's updated
+date when parseable; missing fields are omitted. Bibliographic escaping is literal,
+not a TeX/math interpretation layer.
+
+HTTP reads to arXiv hosts share one process-wide connection gate and a three-second
+delay after each response/error. This covers all users of this server; coordinate
+any other machines/processes separately. Normal Auto paper reads cache for one day;
+`--refresh` bypasses that document cache. No automatic retries or fallback provider.
+Follow the [arXiv API terms](https://info.arxiv.org/help/api/tou.html): metadata is
+CC0, but e-print redistribution requires a suitable license or copyright-holder
+permission. Availability through this tool does not grant redistribution rights.
+
 ## GitHub repositories, files, and directories
 
 Default `read` uses GitHub APIs for public repository roots and blob/tree URLs.

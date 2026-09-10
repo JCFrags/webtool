@@ -3,6 +3,103 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Milestone 8: arXiv papers and citations (blocked live proof)
+
+September 10, 2026. Branch feat/arxiv-paper-reading, issue #15, draft PR #16.
+PR #14 squash-merged at e811d9b6fe9a413265e79e712648f0bb93017a87 after confirming
+unchanged head and green build, with --match-head-commit. Main fast-forwarded to
+5196e66; issue #13 confirmed closed. No data/config/helpers discarded.
+
+### Implementation and limits
+
+- Existing HTTP, roxmltree, Xberg and artifact/document storage; no dependencies,
+  parser engine, service, browser, fallback chain or LLM added.
+- Auto-only abs/pdf modern/legacy/version recognition, optional .pdf suffix.
+  Official API id_list lookup must return exactly one matching, versioned identity.
+  An explicit requested version cannot silently become latest. PDF redirect identity
+  must remain pinned and content must have a PDF signature before Xberg parsing.
+- Original export is the actual PDF. Parsed metadata retains requested ID, returned
+  version, title, ordered author names, abstract, categories/primary category,
+  published/updated dates and optional DOI/journal reference. The Atom response is
+  a separate arxiv_metadata artifact with URL, timestamp and actual HTTP status.
+  Failed/empty metadata or full-text extraction cannot produce a saved paper.
+- Resolver cache version arxiv-paper/1; ordinary Auto paper reads use a one-day
+  cache, refresh explicitly bypasses it. Old documents remain readable.
+- Native API/PDF and other fetch::http reads to arXiv hosts share a process-wide
+  mutex through body completion, with three seconds after completion/error before
+  another request. This is more conservative than three-second start spacing and
+  is shared across users/Engine clones. External tools/machines are not coordinated
+  by that process gate. Ordinary browser choices remain explicit and separate.
+- Saved-ID cite reads only retained metadata, without HTTP. BibTeX protects literal
+  author names and escapes TeX delimiters; CSL uses literal names in original order.
+  Both carry the versioned preprint URL/identifier. Dates use parsed updated-version
+  metadata; absent/invalid optional fields are not invented. DOI/journal references
+  remain in metadata rather than changing the citation into a journal publication.
+  Saved-paper RIS is unsupported; existing DOI negotiation is unchanged.
+
+Guidance read:
+https://info.arxiv.org/help/api/user-manual.html and
+https://info.arxiv.org/help/api/tou.html. The manual documents version-specific
+id_list and published versus updated dates. Terms require a single connection and
+no more than one legacy API request per three seconds across controlled machines.
+Metadata is CC0. E-print storage/use and redistribution have distinct terms; do not
+serve redistributed PDFs without the required license/permission.
+
+### Actual result, not a full-text success
+
+Normal `cargo build --locked -p webtool-cli -p webtool-server` passed with existing
+unused-import warnings. Only this server was restarted, checking port 8420 first,
+with unchanged runtime/media-config.toml and all helpers. Source checkpoint pushed.
+
+Selected the manual's explicit-version example:
+https://arxiv.org/abs/cond-mat/0207270v1, "Understanding Paramagnetic Spin Correlations
+in the Spin-Liquid Pyrochlore Tb2Ti2O7". Its public abstract page was readable via
+WebX, but that is not the product's full-text proof.
+
+Created library papers, then issued the Auto read with --refresh. The official
+API request was:
+`https://export.arxiv.org/api/query?id_list=cond-mat%2F0207270v1&max_results=1`.
+It returned actual upstream HTTP 500, surfaced by webtool as server HTTP 502 with
+arxiv_api_failed. One retry of the same failed read also returned HTTP 500.
+Diagnostics are in runtime/arxiv-paper.stderr and arxiv-paper-retry.stderr.
+
+No PDF was downloaded, no paper document ID was created, and no body phrase,
+page locations, original comparison, BibTeX or CSL export was verified. No alternate
+paper/provider, abstract-only success, synthetic metadata proof, suite, corpus,
+style campaign, benchmarks or unrelated regression runs were substituted.
+PR #16 remains draft. Concrete blocker: official API HTTP 500. Modern IDs,
+unversioned resolution, error branches and citation syntax were inspected in
+source, not an additional live campaign. Do not call this milestone complete from
+its build alone.
+
+### Retry when upstream recovers
+
+Server remains http://127.0.0.1:8420. Startup (do not start a second copy):
+
+```sh
+cd /home/mainpc/Projects/webtool
+./target/debug/webtoold --config runtime/media-config.toml
+```
+
+Use existing library papers. Continue only after a successful read:
+
+```sh
+cd /home/mainpc/Projects/webtool
+export PATH="$PWD/target/debug:$PATH"
+webtool --format json read https://arxiv.org/abs/cond-mat/0207270v1 --library papers --refresh >runtime/arxiv-paper.json
+DOC_ID=$(python3 -c 'import json;print(json.load(open("runtime/arxiv-paper.json"))["id"])')
+webtool read "$DOC_ID"
+# Inspect body text and choose a phrase absent from the abstract before find.
+webtool export "$DOC_ID" --kind original --output runtime/arxiv-original.pdf
+HASH=$(python3 -c 'import json;print(json.load(open("runtime/arxiv-paper.json"))["source"]["original"]["sha256"])')
+cmp "data/objects/$HASH" runtime/arxiv-original.pdf
+webtool cite "$DOC_ID" --as bibtex >runtime/arxiv-paper.bib
+webtool cite "$DOC_ID" --as csl >runtime/arxiv-paper.csl.json
+```
+
+Inspect the returned metadata against its retained Atom bytes, reported pages,
+body phrase and citation author/version fields before marking ready.
+
 ## Milestone 7: incremental crawl libraries
 
 Verified September 10, 2026. Branch feat/crawl-library-workflow, issue #13, PR #14.

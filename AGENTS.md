@@ -142,7 +142,17 @@ Git trees; do not follow symlinks/submodules or replace native errors with HTML.
 Directories retain API JSON, derived locations, and explicit scope/truncation
 warnings. README link supplements are limited, not a full CommonMark parser.
 Issues, PRs, releases, and complete-repository ingestion remain unimplemented.
-There is no dedicated arXiv version-resolution or scholarly-discovery module.
+The arxiv module now implements official Atom identity/version checks, pinned PDF
+reading, retained API artifact provenance and offline BibTeX/CSL from saved paper
+metadata. It is not live-verified: cond-mat/0207270v1 API requests returned HTTP 500
+twice, before PDF retrieval. PR #16 must remain draft until paper-to-citation proof
+works. Retry only that failed workflow; do not substitute metadata/another provider.
+HTTP requests to arXiv hosts share a static gate through fetch::http (single
+request plus three-second post-completion spacing). Coordinate external processes
+separately. Auto paper cache is one day unless refreshed. Cite uses ordered literal
+names, updated-version dates if valid, and versioned preprint URLs. No journal
+substitution or surname inference. Keep original PDFs separate from metadata
+artifacts, and observe e-print redistribution permissions. No scholarly search.
 
 Search supports ordinary web results only.
 Image, video, news, date, language, and domain-filter interfaces remain incomplete.
