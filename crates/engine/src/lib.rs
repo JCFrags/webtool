@@ -47,8 +47,8 @@ impl Engine {
         Health {version:env!("CARGO_PKG_VERSION").into(),api_version:API_VERSION.into(),capabilities:vec![
             Capability{name:"html".into(),available:cfg!(feature="web-extraction"),detail:"Native extraction and explicit CSS selection. No quality benchmark has been run.".into()},
             Capability{name:"search".into(),available:cfg!(feature="web-search"),detail:format!("Configured providers: {}. Availability is not verified by this endpoint.",self.config.search_engines.join(", "))},
-            Capability{name:"documents".into(),available:cfg!(feature="documents"),detail:"Xberg page text and tables. Fine-grained element mapping and figure export are unfinished.".into()},
-            Capability{name:"ocr".into(),available:cfg!(feature="ocr"),detail:"Requires configured model assets. A compiled feature does not establish model readiness.".into()},
+            Capability{name:"documents".into(),available:cfg!(feature="documents"),detail:"Compiled Xberg document support for native PDF text and structured tables. This is not OCR or a guarantee of format accuracy.".into()},
+            Capability{name:"ocr".into(),available:cfg!(feature="ocr"),detail:if cfg!(feature="ocr"){"OCR feature compiled; configured backend/model readiness is not verified.".into()}else{"OCR is not compiled. Image-only scans require OCR; native PDF text does not.".into()}},
             Capability{name:"crw_browser".into(),available:cfg!(feature="crw-browser")&&self.config.crw_renderer.is_some(),detail:"Experimental fastCRW adapter.".into()},
             helper("lightpanda",&self.config.lightpanda_path),helper("chromium",&self.config.chromium_path),helper("yt_dlp",&self.config.ytdlp_path),
         ]}

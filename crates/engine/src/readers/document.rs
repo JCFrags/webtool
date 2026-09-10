@@ -1,4 +1,4 @@
-//! One optional document engine. Normalization never invents page coordinates.
+//! One document engine. Normalization never invents page coordinates.
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use webtool_protocol::{Cell, Content, Locator, Warning};
@@ -17,18 +17,29 @@ pub async fn parse(bytes: &[u8], name: &str, config: &Config) -> Result<Parsed> 
                     extract_pages: true,
                     ..Default::default()
                 }),
-                output_format: xberg::OutputFormat::Markdown,
+                output_format: xberg::OutputFormat::Plain,
+                enable_quality_processing: false,
                 ..Default::default()
             }
         };
         // The application owns caching. Avoid an independent extractor cache.
         cfg.use_cache = false;
+        #[cfg(not(feature = "ocr"))]
+        {
+            if cfg.ocr.is_some() || cfg.force_ocr || cfg.force_ocr_pages.as_ref().is_some_and(|p|!p.is_empty()) {
+                bail!("OCR is unavailable in this server build; document_config requires OCR");
+            }
+            cfg.disable_ocr = true;
+        }
         let mime = super::detect(name, None, bytes);
         let input = xberg::ExtractInput::from_bytes(bytes.to_vec(), mime.as_str(), Some(name.into()));
         let output = xberg::extract(input, &cfg).await?;
         let errors = serde_json::to_value(&output.errors)?;
-        let result = output.results.first().context("document engine returned no results")?;
-        let mut parsed = normalize(serde_json::to_value(result)?, name)?;
+        let result = output.results.first().with_context(|| format!("document engine returned no results: {errors}"))?;
+        let mut parsed = normalize(serde_json::to_value(result)?, name)
+            .with_context(|| format!("normalize Xberg output; engine errors: {errors}"))?;
+        // Keep every result and envelope diagnostic, not only the first normalized result.
+        parsed.metadata["upstream_output"] = serde_json::to_value(&output)?;
         if errors.as_array().is_some_and(|items| !items.is_empty()) {
             parsed.warnings.push(Warning::new("document_engine_errors", errors.to_string()));
         }
@@ -48,24 +59,33 @@ pub async fn parse(bytes: &[u8], name: &str, config: &Config) -> Result<Parsed> 
 fn normalize(payload: Value, name: &str) -> Result<Parsed> {
     let mime = payload.get("mime_type").and_then(Value::as_str).unwrap_or("");
     let title = payload.pointer("/metadata/title").and_then(Value::as_str).unwrap_or(name);
-    let mut parsed = Parsed::new(title, "xberg/1.1.1+source-blocks/1");
+    let mut parsed = Parsed::new(title, "xberg/1.1.1+source-blocks/2");
     let mut had_pages = false;
     if let Some(pages) = payload.get("pages").and_then(Value::as_array) {
         for page in pages {
-            let Some(text) = page.get("content").and_then(Value::as_str) else { continue; };
+            let text = page.get("content").and_then(Value::as_str).unwrap_or("");
             let number = positive_number(page.get("page_number"));
+            if text.trim().is_empty() {
+                let location = number.map(|n|format!("Page {n}")).unwrap_or_else(||"An unnumbered page".into());
+                let status = if page.get("is_blank").and_then(Value::as_bool)==Some(true) {
+                    "The engine marks it blank."
+                } else { "This does not establish that it is blank or scanned." };
+                parsed.warnings.push(Warning::new("document_page_no_text", format!("{location} has no extracted text. {status} {}", ocr_limit())));
+                continue;
+            }
             let locator = source_location(mime, number, page.get("sheet_name").and_then(Value::as_str), parsed.blocks.len());
-            parsed.push(Content::Code { language: Some("markdown".into()), text: text.into() }, locator);
+            parsed.push(Content::Paragraph { text: text.into() }, locator);
             had_pages = true;
         }
     }
     if !had_pages {
         let text = payload.get("content").and_then(Value::as_str).unwrap_or("");
-        if !text.is_empty() {
-            parsed.push(Content::Code { language: Some("markdown".into()), text: text.into() }, Locator::Derived { index: 1 });
+        if !text.trim().is_empty() {
+            parsed.push(Content::Paragraph { text: text.into() }, Locator::Derived { index: 1 });
             parsed.warnings.push(Warning::new("document_location_unavailable", "The document engine supplied combined content without source pages. Generated line numbers are not source locations."));
         }
     }
+    let mut supplemental_tables = Vec::new();
     if let Some(tables) = payload.get("tables").and_then(Value::as_array) {
         for table in tables {
             let Some(raw_rows) = table.get("cells").and_then(Value::as_array) else { continue; };
@@ -79,10 +99,12 @@ fn normalize(payload: Value, name: &str) -> Result<Parsed> {
                 }
                 rows.push(row);
             }
+            if !rows.iter().flatten().any(|cell| !cell.text.trim().is_empty()) { continue; }
             let locator = source_location(mime, positive_number(table.get("page_number")), None, parsed.blocks.len());
             parsed.push(Content::Table { rows }, locator);
+            supplemental_tables.push(format!("b{}", parsed.blocks.len()));
         }
-        if !tables.is_empty() {
+        if !supplemental_tables.is_empty() {
             parsed.warnings.push(Warning::new("document_tables_supplement", "Structured tables supplement the engine's text and may repeat table text. Cell spans and header roles are not inferred."));
         }
     }
@@ -92,11 +114,23 @@ fn normalize(payload: Value, name: &str) -> Result<Parsed> {
         }
     }
     if parsed.blocks.is_empty() {
-        bail!("document contains no extracted content; scanned content may require the OCR feature and models");
+        let warnings = parsed.warnings.iter().map(|w|w.message.as_str()).collect::<Vec<_>>().join("; ");
+        bail!("document contains no extracted text or nonempty table cells. Empty page objects are not readable content. {} Blank pages, scans, or extraction failures are possible; the cause is not established. {warnings}", ocr_limit());
     }
     parsed.warnings.push(Warning::new("document_structure_partial", "Page text and tables are normalized. Full upstream structures remain in metadata. Figure export and fine-grained document element mapping are not implemented."));
-    parsed.metadata = json!({"upstream": payload});
+    if let Some(total) = positive_number(payload.pointer("/metadata/pages/total_count")) {
+        if let Some(pages) = payload.get("pages").and_then(Value::as_array) {
+            if pages.len() < total {
+                parsed.warnings.push(Warning::new("document_pages_partial", format!("The engine reports {total} pages but returned {} page objects. See upstream metadata for extraction scope and warnings.", pages.len())));
+            }
+        }
+    }
+    parsed.metadata = json!({"upstream": payload, "supplemental_table_blocks": supplemental_tables});
     Ok(parsed)
+}
+fn ocr_limit() -> &'static str {
+    if cfg!(feature="ocr") { "OCR support is compiled, but backend and model readiness are not verified." }
+    else { "OCR is unavailable in this server build; image-only scans cannot be read." }
 }
 fn positive_number(value: Option<&Value>) -> Option<usize> {
     value.and_then(Value::as_u64).and_then(|n| usize::try_from(n).ok()).filter(|n| *n > 0)

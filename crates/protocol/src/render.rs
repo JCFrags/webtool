@@ -18,9 +18,17 @@ fn time(ms:u64)->String{format!("{:02}:{:02}:{:02}.{:03}",ms/3600000,(ms/60000)%
 fn html(s:&str)->String{s.replace('&',"&amp;").replace('<',"&lt;").replace('>',"&gt;")}
 fn md_cell(s:&str)->String{s.replace('\\',"\\\\").replace('|',"\\|").replace('\n',"<br>")}
 
+fn supplemental_table(d:&Document, id:&str)->bool {
+    d.metadata.get("supplemental_table_blocks").and_then(|v|v.as_array())
+        .is_some_and(|items|items.iter().any(|v|v.as_str()==Some(id)))
+}
+
 pub fn markdown(d:&Document)->String{
     let mut out=format!("# {}\n\nSource: {}\nRetrieved: {}\nDocument: {}\n\n",d.title,d.source.resolved,d.source.retrieved_at,d.id);
     for block in &d.blocks{
+        if matches!(block.content,Content::Table{..}) && supplemental_table(d,&block.id) {
+            out.push_str("Supplemental structured table (may repeat page text):\n\n");
+        }
         match &block.content{
             Content::Heading{level,text}=>out.push_str(&format!("{} {text}\n\n","#".repeat((*level).clamp(1,6) as usize))),
             Content::Paragraph{text}=>out.push_str(&format!("{text}\n\n")),
@@ -65,6 +73,9 @@ pub fn terminal_safe(s:&str)->String{
 pub fn plain(d:&Document)->String{
     let mut out=format!("{}\n{}\nSaved {}\nID {}\n\n",d.title,d.source.resolved,d.source.retrieved_at,d.id);
     for b in &d.blocks{
+        if matches!(b.content,Content::Table{..}) && supplemental_table(d,&b.id) {
+            out.push_str("Supplemental structured table (may repeat page text):\n");
+        }
         if matches!(b.locator,Locator::Page{..}|Locator::Slide{..}|Locator::Sheet{..}) {
             out.push_str(&format!("[{} | {}]\n",b.id,location(&b.locator)));
         }
