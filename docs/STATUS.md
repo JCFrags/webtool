@@ -3,6 +3,154 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Milestone 7: incremental crawl libraries
+
+Verified September 10, 2026. Branch feat/crawl-library-workflow, issue #13, PR #14.
+PR #12 was squash-merged only at 8f447a8ed69eacc76e0e262b03e5d1307b557de9 with
+unchanged head, green build and --match-head-commit. Main fast-forwarded to
+93d5403; issue #11 confirmed closed. Runtime config, helpers and stored data kept.
+
+### Delivered and verified
+
+- Replaced whole-batch collect with incremental next() consumption. Each completed
+  usable document attaches to its library and persists job progress before waiting
+  for another result. Same-depth batches retain breadth-first semantics. No new
+  scheduler, parser, dependencies, browser crawling or resumable frontier.
+- Fresh HTTP reads enforce same-origin and robots restrictions on redirect hops,
+  rather than reusing an ordinary-read cache entry with different redirect policy.
+  Query order/repeated keys remain unchanged; fragments are deduplicated away.
+- Failed completed attempts consume budget and increment failed separately from
+  extraction warnings. visited counts completed attempts, excluding pending or
+  cancelled reads. Zero usable documents after attempted reads is Failed. Job wait
+  prints final JSON then exits nonzero for Failed/Interrupted. Saved documents
+  survive cancellation/restart; running jobs still recover as Interrupted.
+- Normal locked debug build passed. One local site, one crawl, max-pages=3 and
+  max-depth=1. The slow child waited 15 seconds. Before it responded, the fast
+  child was attached and job state persisted as Running, visited=2, saved=2,
+  failed=0. Saved read, doctor, and library search all worked during that interval.
+  Evidence timestamp was 14.951 seconds before the delayed response completed.
+- Final job: Partial, visited=3, three saved IDs, failed=0, error=null. Warnings
+  explicitly separate bounded scope, robots exclusion, depth limit and document
+  extraction warnings. All three IDs appear in library crawl-proof. Library search
+  found "Cobalt meadow library beacon" both during and after crawling.
+- Request log: exactly one each for /robots.txt, /, /fast?b=2&a=1&a=3, and /slow.
+  No duplicate requests despite repeated/fragment links; no /blocked or /beyond
+  requests. Query order and repeated a parameters stayed intact.
+- Post-proof source inspection found that early exclusion checks must also count
+  toward the existing 10,000-URL discovery bound. Corrected admission order and
+  rebuilt normally. The passed crawl was not rerun. No suite, framework, benchmarks,
+  public campaign, or unrelated regression runs. Final server runs this correction.
+- Temporary fixture server stopped after proof. Only this project's server was
+  restarted, with listener checks and the preserved runtime/media-config.toml.
+  PDF, GitHub, captions, Lightpanda, lockfile, pins and single CI build unchanged.
+
+Job: `71debce3-5c1f-4dcc-85d6-2d6b69e0ed8f`.
+Saved IDs (root, fast, delayed):
+
+- `28997c0bdcc05670f9bfde4651fd33d80102478fff6fa9eaab589b1753a0e1fe`
+- `c597bf9f71bf6156ea6878626a374d97e1cebccd00645e400314840422aa4800`
+- `626153858e5486a9c6783b1bdfc9d4bf8e3c589b960478cff397be07e71b0701`
+
+Evidence: runtime/crawl-incremental.json, crawl-final.json, crawl-items.json,
+crawl-search.json, crawl-fast.txt, crawl-progress.stderr and crawl-requests.jsonl.
+No concrete blocker. All-failed, redirect denial, explicit cancellation and restart
+branches were source-inspected, not exercised in an additional campaign. Robots
+support remains partial. Frontiers are not persisted. New failed fields default
+to zero for historical payloads, not a retroactive count. Batch admission still
+waits for siblings; publication no longer does. Attachment and job-update writes
+are separate: a crash between them can leave a library item absent from job IDs.
+
+### Commands and local fixture
+
+Server remains http://127.0.0.1:8420. Do not start a second copy:
+
+```sh
+cd /home/mainpc/Projects/webtool
+./target/debug/webtoold --config runtime/media-config.toml
+```
+
+The fixture below is temporary, not a test framework. Run from the checkout.
+It refuses to overwrite an existing request log. Before a repeat, move the old
+runtime/crawl-requests.jsonl to a new evidence filename and use a fresh library.
+
+```sh
+cat >runtime/crawl-site.py <<'PYTHON'
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from pathlib import Path
+import json, time
+
+LOG = Path('runtime/crawl-requests.jsonl')
+LOG.touch(exist_ok=False)
+
+def record(path, phase):
+    with LOG.open('a') as f:
+        f.write(json.dumps({'path': path, 'phase': phase, 'time': time.time()}) + '\n')
+
+class Site(BaseHTTPRequestHandler):
+    def do_GET(self):
+        record(self.path, 'received')
+        status = 200
+        if self.path == '/robots.txt':
+            body = 'User-agent: *\nDisallow: /blocked\n'
+            mime = 'text/plain'
+        else:
+            mime = 'text/html'
+            links = ''
+            if self.path == '/':
+                title = 'Crawl root article'
+                phrase = 'This page links to two readable child articles.'
+                links = '<a href="/fast?b=2&amp;a=1&amp;a=3">Fast</a> <a href="/fast?b=2&amp;a=1&amp;a=3#repeat">Repeat fast</a> <a href="/slow">Slow</a> <a href="/slow#repeat">Repeat slow</a> <a href="/blocked">Excluded</a> <a href="/blocked">Excluded again</a>'
+            elif self.path == '/fast?b=2&a=1&a=3':
+                title = 'Fast child article'
+                phrase = 'Cobalt meadow library beacon is the distinctive phrase for this completed child.'
+                links = '<a href="/beyond">Beyond depth one</a> <a href="/">Root again</a>'
+            elif self.path == '/slow':
+                time.sleep(15)
+                title = 'Delayed child article'
+                phrase = 'The delayed child arrives after the fast child is already available in the library.'
+                links = '<a href="/beyond">Beyond depth one</a>'
+            else:
+                status = 404
+                title, phrase = 'Unexpected request', 'This path should not be fetched.'
+            body = f'<!doctype html><html><head><title>{title}</title></head><body><main><article><h1>{title}</h1><p>{phrase}</p><p>This small technical article provides readable source content for the bounded crawl. The server keeps exact response bytes, converts the selected article, and publishes each accepted document to a shared library. A slow sibling must not delay access to a completed article.</p>{links}</article></main></body></html>'
+        data = body.encode()
+        self.send_response(status)
+        self.send_header('Content-Type', mime + '; charset=utf-8')
+        self.send_header('Content-Length', str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+        record(self.path, 'responded')
+    def log_message(self, *args):
+        pass
+
+ThreadingHTTPServer(('127.0.0.1', 8769), Site).serve_forever()
+PYTHON
+python3 runtime/crawl-site.py
+```
+
+In another terminal (the verified library crawl-proof already exists):
+
+```sh
+cd /home/mainpc/Projects/webtool
+export PATH="$PWD/target/debug:$PATH"
+export WEBTOOL_SERVER=http://127.0.0.1:8420
+# Create this only for a fresh reproduction:
+# webtool library create crawl-proof --description 'Incremental three-page crawl'
+webtool --format json crawl http://127.0.0.1:8769/ --library crawl-proof --max-pages 3 --max-depth 1 >runtime/crawl-submitted.json
+JOB=$(python3 -c 'import json;print(json.load(open("runtime/crawl-submitted.json"))["id"])')
+# While /slow remains pending, list the fast child and read its saved ID:
+webtool library items crawl-proof
+webtool read FAST_DOCUMENT_ID
+webtool doctor
+webtool jobs "$JOB" --wait
+webtool library items crawl-proof
+webtool search 'Cobalt meadow library beacon' --library crawl-proof
+cat runtime/crawl-requests.jsonl
+```
+
+Stop only the fixture with Ctrl-C after completion. Keep webtoold running.
+The historical milestones below retain their original proof results.
+
 ## Milestone 6: Lightpanda JavaScript reading
 
 Verified September 10, 2026. Branch feat/lightpanda-reading, issue #11, PR #12.

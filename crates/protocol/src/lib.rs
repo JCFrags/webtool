@@ -211,6 +211,8 @@ pub struct Job {
     pub id: String, pub state: JobState, pub request: CrawlRequest,
     pub created_at: String, pub updated_at: String,
     pub document_ids: Vec<String>, pub visited: usize,
+    /// Completed unsuccessful page attempts. Old saved jobs default to zero.
+    #[serde(default)] pub failed: usize,
     pub warnings: Vec<Warning>, pub error: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]

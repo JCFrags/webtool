@@ -7,22 +7,25 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current milestone: Lightpanda JavaScript reading
+## Current milestone: crawl into shared libraries
 
-Work on feat/lightpanda-reading, issue #11. PR #10 merged at authorized
-31ed31e2fb451dae70c615ea7d8437f8ac281a30 with green build and match-head guard.
-Use the existing bounded helper and HTML extractor, explicit Lightpanda only.
-Keep auto/HTTP, GitHub, PDF, captions, pins, CI and stored documents unchanged.
-Capture JavaScript DOM as rendered_dom, never original HTTP bytes. Retain honest
-navigation metadata, readiness conditions/limits, diagnostics, and source locations.
-Verify installed help against upstream docs; telemetry stays disabled.
+Work on feat/crawl-library-workflow, issue #13. PR #12 was merged at authorized
+8f447a8ed69eacc76e0e262b03e5d1307b557de9 with green build and match-head guard;
+issue #11 closed. Stream bounded crawl results as they complete. Attach documents
+and persist progress before waiting for slow siblings. Preserve depth, URL query
+semantics, same-origin/redirect/robots restrictions, page budgets (including failed
+attempts), cancellation, and interrupted-on-restart behavior. No resumable frontier.
+Use existing HTTP/extraction/SQLite/workers. Keep CLI progress on stderr, data on
+stdout. Report saved IDs, visited attempts, failures and bounded scope honestly.
 Build normally with cargo build --locked -p webtool-cli -p webtool-server.
-Restart only this server with preserved runtime/media-config.toml; no second listener.
-Verify one local JS page and one public JS page with refresh. Inspect code/marker,
-HTTP versus DOM bytes, saved find and exact DOM export. No suites/framework,
-benchmarks, browser comparisons, or unrelated regression reruns. Retry failed steps
-only. No pool, Chromium/fastCRW, browser actions, screenshots, OCR, or README-link
-cleanup. Document actual results; mark ready only after JS works. Do not merge.
+Use one local site and one three-page/depth-one crawl. While its delayed response
+is pending, verify a completed child is attached/readable, then inspect final counts,
+library search and request log for duplicates/robots exclusions. Temporary files in
+runtime/. Rerun only failures. No suites/framework, benchmarks, public crawl,
+browser crawl, sitemap work, parser cleanup, scheduler, or dependencies changes.
+Preserve all helpers, config/data, PDF/GitHub/captions/Lightpanda, pins and CI. Restart
+only this server with runtime/media-config.toml; never a second listener on 8420.
+Update docs and mark ready after proof. Do not merge this milestone PR.
 
 ## Confirmed local caption setup
 
@@ -113,6 +116,19 @@ public quote extraction passed; public fragments remain derived. Readiness is no
 application completeness. Helpers remain process-per-request with bounded resources.
 Chromium's historical timeout is unresolved; fastCRW is still unverified. Do not
 change browser binaries/config in place and assume cached results describe them.
+
+Crawl results are consumed with buffer_unordered and next(), never collected as
+an entire batch before publishing. Attach each usable document and persist its
+job update before waiting again. Keep same-depth batches, bounded candidate
+admission (including excluded URLs), query semantics, and fresh HTTP reads so
+ordinary-read caches cannot bypass redirect scope/robots checks. Failed attempts
+consume budget. visited counts completed attempts; failed is separate from
+extraction warnings. Zero usable results after attempted reads is Failed, not
+successful Partial. Old job payloads without failed deserialize with zero; no
+historical recount is implied. Cancellation retains saved library documents.
+One three-page/depth-one local crawl verified attachment/read/search and doctor
+while a 15-second sibling was pending, final IDs/counts and no duplicate/excluded
+fetches. No failure/cancellation/restart campaign was run.
 
 The crawl frontier is not persisted.
 Running jobs become interrupted after restart, while queued jobs are rescheduled.

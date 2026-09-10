@@ -99,7 +99,7 @@ impl Client{
         let mut previous=String::new();
         loop{
             let job:Job=self.get(&format!("/v1/jobs/{id}")).await?;
-            let message=format!("{id}: {:?}, {} visited, {} saved",job.state,job.visited,job.document_ids.len());
+            let message=format!("{id}: {:?}, {} visited attempts, {} saved, {} failed (limits: {} pages, depth {})",job.state,job.visited,job.document_ids.len(),job.failed,job.request.max_pages,job.request.max_depth);
             if message!=previous{eprintln!("{message}");previous=message;}
             if job.state.terminal(){return Ok(job);}
             tokio::select!{
@@ -232,7 +232,8 @@ async fn run(cli:Cli)->Result<()>{
         Command::Jobs{id,wait,cancel}=>{
             if let Some(id)=id{
                 if cancel{let v:Value=client.post(&format!("/v1/jobs/{id}/cancel"),&json!({})).await?;return output(&v,format);}
-                let j:Job=if wait{client.wait(&id).await?}else{client.get(&format!("/v1/jobs/{id}")).await?};output(&j,format)
+                let j:Job=if wait{client.wait(&id).await?}else{client.get(&format!("/v1/jobs/{id}")).await?};output(&j,format)?;
+                if wait && matches!(j.state,JobState::Failed|JobState::Interrupted){bail!("crawl did not complete successfully");}Ok(())
             }else{let j:Vec<Job>=client.get("/v1/jobs").await?;output(&j,format)}
         },
         Command::Media{url,language,library}=>{let d:Document=client.post("/v1/media",&json!({"url":url,"language":language,"library":library})).await?;document(&d,format)},
