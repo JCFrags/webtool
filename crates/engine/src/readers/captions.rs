@@ -3,7 +3,7 @@ use webtool_protocol::*;
 use super::Parsed;
 
 pub fn timestamp(s:&str)->Result<u64>{
-    let s=s.trim().replace(',','.');let parts:Vec<&str>=s.split(':').collect();
+    let s=s.trim().replace(',',".");let parts:Vec<&str>=s.split(':').collect();
     if parts.len()!=2&&parts.len()!=3{bail!("invalid caption timestamp: {s}");}
     let (hours,minutes,seconds)=if parts.len()==3{(parts[0].parse::<u64>()?,parts[1].parse::<u64>()?,parts[2])}
         else{(0,parts[0].parse::<u64>()?,parts[1])};

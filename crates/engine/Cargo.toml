@@ -41,7 +41,8 @@ tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
 rs-trafilatura = { version = "=0.2.2", optional = true }
-metadata-search-engine-rs = { version = "=0.3.2", optional = true }
+# 0.3.2+ pulls search-tui back into this library, creating a dependency cycle.
+metadata-search-engine-rs = { version = "=0.3.1", optional = true }
 xberg = { version = "=1.1.1", default-features = false, features = ["tokio-runtime", "pdf", "office", "excel", "xml", "email"], optional = true }
 crw-core = { version = "=0.34.0", default-features = false, features = ["cdp"], optional = true }
 crw-renderer = { version = "=0.34.0", default-features = false, features = ["cdp"], optional = true }
