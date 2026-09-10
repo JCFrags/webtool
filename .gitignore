@@ -1,0 +1,16 @@
+/target/
+/data/
+*.sqlite3*
+.env
+__pycache__/
+*.pyc
+/cache/
+/.cache/
+/models/
+/weights/
+/bin/
+/runtime/
+.env.*
+!.env.example
+*.pem
+*.key

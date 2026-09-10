@@ -1,0 +1,32 @@
+# The server is shared by a trusted group. Libraries have no private visibility.
+bind = "127.0.0.1:8420"
+data_dir = "data"
+max_bytes = 26214400
+network_concurrency = 12
+parse_concurrency = 2
+job_concurrency = 2
+crawl_concurrency = 4
+browser_concurrency = 2
+request_timeout_seconds = 30
+helper_timeout_seconds = 90
+cache_seconds = 3600
+user_agent = "webtool/0.1 (+shared research reader)"
+search_engines = ["duckduckgo", "brave"]
+browser_wait_ms = 2000
+browser_no_sandbox = false
+
+# Set only the helpers installed on the server. Clients do not install these.
+# lightpanda_path = "/usr/local/bin/lightpanda"
+# chromium_path = "/usr/bin/chromium"
+# ytdlp_path = "/usr/local/bin/yt-dlp"
+
+# Optional Xberg configuration. Requires --features documents.
+# Upstream config is experimental and must be checked against the pinned version.
+# [document_config]
+# use_cache = false
+# output_format = "markdown"
+# [document_config.pages]
+# extract_pages = true
+
+# fastCRW configuration is intentionally absent.
+# The --features crw-browser integration is experimental, not a default fallback.
