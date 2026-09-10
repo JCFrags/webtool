@@ -3,85 +3,88 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
-## Milestone 8: arXiv papers and citations (blocked live proof)
+## Milestone 8: arXiv abstract HTML and saved-paper citations
 
-September 10, 2026. Branch feat/arxiv-paper-reading, issue #15, draft PR #16.
-PR #14 squash-merged at e811d9b6fe9a413265e79e712648f0bb93017a87 after confirming
-unchanged head and green build, with --match-head-commit. Main fast-forwarded to
-5196e66; issue #13 confirmed closed. No data/config/helpers discarded.
+Verified September 10, 2026 on feat/arxiv-paper-reading, issue #15, PR #16.
+Continued from 4514e349ca283657ea5606ddef78de92f01638ab without another branch,
+issue or merge. The user superseded API-first resolution. Earlier official API
+requests returned HTTP 500 twice from this host. Those results did not establish
+a global outage; no API request was repeated in this continuation.
 
-### Implementation and limits
+### Source and identity
 
-- Existing HTTP, roxmltree, Xberg and artifact/document storage; no dependencies,
-  parser engine, service, browser, fallback chain or LLM added.
-- Auto-only abs/pdf modern/legacy/version recognition, optional .pdf suffix.
-  Official API id_list lookup must return exactly one matching, versioned identity.
-  An explicit requested version cannot silently become latest. PDF redirect identity
-  must remain pinned and content must have a PDF signature before Xberg parsing.
-- Original export is the actual PDF. Parsed metadata retains requested ID, returned
-  version, title, ordered author names, abstract, categories/primary category,
-  published/updated dates and optional DOI/journal reference. The Atom response is
-  a separate arxiv_metadata artifact with URL, timestamp and actual HTTP status.
-  Failed/empty metadata or full-text extraction cannot produce a saved paper.
-- Resolver cache version arxiv-paper/1; ordinary Auto paper reads use a one-day
-  cache, refresh explicitly bypasses it. Old documents remain readable.
-- Native API/PDF and other fetch::http reads to arXiv hosts share a process-wide
-  mutex through body completion, with three seconds after completion/error before
-  another request. This is more conservative than three-second start spacing and
-  is shared across users/Engine clones. External tools/machines are not coordinated
-  by that process gate. Ordinary browser choices remain explicit and separate.
-- Saved-ID cite reads only retained metadata, without HTTP. BibTeX protects literal
-  author names and escapes TeX delimiters; CSL uses literal names in original order.
-  Both carry the versioned preprint URL/identifier. Dates use parsed updated-version
-  metadata; absent/invalid optional fields are not invented. DOI/journal references
-  remain in metadata rather than changing the citation into a journal publication.
-  Saved-paper RIS is unsupported; existing DOI negotiation is unchanged.
+One direct local diagnostic request to
+https://arxiv.org/abs/cond-mat/0207270v1 returned HTTP 200 with 40,735 HTML bytes.
+Raw response, headers and status are retained as runtime/arxiv-abs-local.html,
+arxiv-abs-local.headers and arxiv-abs-local.status. The source page selected v1,
+while its canonical URL/PDF citation tag were unversioned and its dateline mentioned
+latest v3. Selection was established from the article's arxividv "for this version"
+row and the unlinked [v1] history marker, not v1's mere occurrence in history.
 
-Guidance read:
-https://info.arxiv.org/help/api/user-manual.html and
-https://info.arxiv.org/help/api/tou.html. The manual documents version-specific
-id_list and published versus updated dates. Terms require a single connection and
-no more than one legacy API request per three seconds across controlled machines.
-Metadata is CC0. E-print storage/use and redistribution have distinct terms; do not
-serve redistributed PDFs without the required license/permission.
+The reading path now uses only official abstract-page HTML with the existing HTTP
+client and scraper. No Atom lookup, browser, proxy, alternate provider or metadata
+extraction engine. It checks selected-version/history agreement, requested/final
+identity, citation IDs/PDF link, canonical identity, breadcrumbs and full-text
+links. Contradictions or absent selection evidence fail. Unversioned canonical
+links do not establish a version. Unversioned requests resolve from verified
+selection before PDF download; explicit versions are never changed to latest.
 
-### Actual result, not a full-text success
+Resolver cache identity: arxiv-abstract-html/2. Shared process-wide pacing, existing
+Xberg/storage and offline saved-ID citation branch remain. Metadata provenance now
+records source_url, status, retrieved_at, metadata_origin and a text/html artifact.
+Legacy stored paper metadata remains deserializable; citation origin labels are
+not hardcoded as API metadata. PDF bytes remain the original document export.
 
-Normal `cargo build --locked -p webtool-cli -p webtool-server` passed with existing
-unused-import warnings. Only this server was restarted, checking port 8420 first,
-with unchanged runtime/media-config.toml and all helpers. Source checkpoint pushed.
+### Actual workflow
 
-Selected the manual's explicit-version example:
-https://arxiv.org/abs/cond-mat/0207270v1, "Understanding Paramagnetic Spin Correlations
-in the Spin-Liquid Pyrochlore Tb2Ti2O7". Its public abstract page was readable via
-WebX, but that is not the product's full-text proof.
+- Normal locked debug build passed after correcting one local variable-name
+  compiler error. No dependency/pin/CI/parser changes or suites. Only this project's
+  server restarted with runtime/media-config.toml and a port-8420 listener check;
+  helpers and stored data were preserved.
+- Auto read the SAME cond-mat/0207270v1 URL into existing library papers. Both HTML
+  and pinned PDF returned actual HTTP 200. PDF: 186,660 bytes, four reported pages
+  and one supplemental table. Plain full text and page locators were inspected.
+- Saved ID: `eb1093898329143122e016461a3ab3e1ca6bc0aab584f1229e1b25da454a16bc`.
+  Resolved URL: https://arxiv.org/pdf/cond-mat/0207270v1.
+- The page-1 body/figure-caption phrase "magnetic moments occupy" was found at its
+  page locator and confirmed absent from retained abstract metadata.
+- Exported original PDF matched the retained downloaded artifact byte-for-byte.
+  SHA-256: 9648e76d23f607423cc32c7f0cfa7af97223fb57f824644ff4820803ce0543f5.
+- Product metadata HTML matched the initial local response byte-for-byte, 40,735
+  bytes, SHA-256 50a07c9c508bcfaba415d6ae9c9a2d8c0799fb1ef09b69d4183cefabe73e73f7.
+- Title: Understanding Paramagnetic Spin Correlations in the Spin-Liquid Pyrochlore
+  Tb2Ti2O7. Ordered literal display authors: Ying-Jer Kao, Matthew Enjalran,
+  Michel J.P. Gingras. Original citation meta author strings are retained separately;
+  names are not rearranged or split into family/given components.
+- Selected submission timestamp: 2002-07-10T17:10:30+00:00. The later v3 date
+  (2003-03-02) remains only in raw source/dateline metadata. The PDF also prints
+  a typeset date in 2019; that was not used to infer a bibliographic date.
+- Categories: cond-mat.dis-nn and cond-mat.stat-mech. The page supplies arXiv DOI
+  10.48550/arXiv.cond-mat/0207270; it is retained separately as arxiv_doi. No journal
+  DOI/reference was present, so those fields were omitted.
+- Saved-ID BibTeX and CSL exports inspected: title, ordered literal names, v1 eprint
+  and stable abstract URL agree with metadata. BibTeX year=2002; CSL issued date is
+  [2002,7,10]. The saved-ID branch reads only storage and the citation formatter;
+  it performs no HTTP request. No journal substitution or inferred publisher.
+- Xberg warnings for supplemental tables and partial structure stayed visible.
+  Mathematical notation remains intact in metadata/source bytes; extracted PDF
+  subscripts, columns and mathematical layout are not reconstructed.
 
-Created library papers, then issued the Auto read with --refresh. The official
-API request was:
-`https://export.arxiv.org/api/query?id_list=cond-mat%2F0207270v1&max_results=1`.
-It returned actual upstream HTTP 500, surfaced by webtool as server HTTP 502 with
-arxiv_api_failed. One retry of the same failed read also returned HTTP 500.
-Diagnostics are in runtime/arxiv-paper.stderr and arxiv-paper-retry.stderr.
+No remaining concrete blocker. Only this paper/version was exercised. Other ID
+forms and contradictory/missing metadata branches were source-inspected, not a
+synthetic fixture or extra corpus. The parser deliberately depends on selected
+version markup and fails if that contract changes. No fallback is attempted.
 
-No PDF was downloaded, no paper document ID was created, and no body phrase,
-page locations, original comparison, BibTeX or CSL export was verified. No alternate
-paper/provider, abstract-only success, synthetic metadata proof, suite, corpus,
-style campaign, benchmarks or unrelated regression runs were substituted.
-PR #16 remains draft. Concrete blocker: official API HTTP 500. Modern IDs,
-unversioned resolution, error branches and citation syntax were inspected in
-source, not an additional live campaign. Do not call this milestone complete from
-its build alone.
+### Working commands
 
-### Retry when upstream recovers
-
-Server remains http://127.0.0.1:8420. Startup (do not start a second copy):
+Server remains http://127.0.0.1:8420. Startup, only when no other copy is listening:
 
 ```sh
 cd /home/mainpc/Projects/webtool
 ./target/debug/webtoold --config runtime/media-config.toml
 ```
 
-Use existing library papers. Continue only after a successful read:
+The papers library and outputs already exist. Successful steps were not repeated:
 
 ```sh
 cd /home/mainpc/Projects/webtool
@@ -89,16 +92,18 @@ export PATH="$PWD/target/debug:$PATH"
 webtool --format json read https://arxiv.org/abs/cond-mat/0207270v1 --library papers --refresh >runtime/arxiv-paper.json
 DOC_ID=$(python3 -c 'import json;print(json.load(open("runtime/arxiv-paper.json"))["id"])')
 webtool read "$DOC_ID"
-# Inspect body text and choose a phrase absent from the abstract before find.
-webtool export "$DOC_ID" --kind original --output runtime/arxiv-original.pdf
+webtool find "$DOC_ID" 'magnetic moments occupy'
+webtool export "$DOC_ID" --kind original --output runtime/arxiv-original.pdf --force
 HASH=$(python3 -c 'import json;print(json.load(open("runtime/arxiv-paper.json"))["source"]["original"]["sha256"])')
 cmp "data/objects/$HASH" runtime/arxiv-original.pdf
 webtool cite "$DOC_ID" --as bibtex >runtime/arxiv-paper.bib
 webtool cite "$DOC_ID" --as csl >runtime/arxiv-paper.csl.json
 ```
 
-Inspect the returned metadata against its retained Atom bytes, reported pages,
-body phrase and citation author/version fields before marking ready.
+Use the saved ID directly to inspect existing evidence without network retrieval.
+No content access implies permission to redistribute PDFs; observe the paper's
+license. The previous API-first instructions are superseded, not an active retry
+plan. Historical completed milestones follow below.
 
 ## Milestone 7: incremental crawl libraries
 

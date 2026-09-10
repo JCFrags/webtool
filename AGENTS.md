@@ -12,8 +12,10 @@ Do not introduce a TUI, permission hierarchy, quality profiles, or distributed j
 Work on feat/arxiv-paper-reading, issue #15. PR #14 merged at authorized
 e811d9b6fe9a413265e79e712648f0bb93017a87 with green build and match-head guard;
 issue #13 closed. Auto abs/pdf routing only, modern/legacy IDs and explicit versions.
-Resolve and validate official API identity before fetching the pinned PDF. Use
-existing HTTP/XML/Xberg/storage. Keep PDF original and metadata response artifact.
+Resolve metadata only from official abstract-page HTML with existing HTTP/scraper.
+Validate the selected version before fetching its pinned PDF through Xberg. Do not
+retry Atom first or introduce a provider chain. Keep HTML metadata artifact and
+PDF original separate.
 Follow official request spacing/concurrency across the server. Never substitute
 latest versions, abstracts, other providers, or HTML for failed full text.
 Generate saved-ID BibTeX/CSL offline from retained metadata, literal ordered names,
@@ -142,17 +144,23 @@ Git trees; do not follow symlinks/submodules or replace native errors with HTML.
 Directories retain API JSON, derived locations, and explicit scope/truncation
 warnings. README link supplements are limited, not a full CommonMark parser.
 Issues, PRs, releases, and complete-repository ingestion remain unimplemented.
-The arxiv module now implements official Atom identity/version checks, pinned PDF
-reading, retained API artifact provenance and offline BibTeX/CSL from saved paper
-metadata. It is not live-verified: cond-mat/0207270v1 API requests returned HTTP 500
-twice, before PDF retrieval. PR #16 must remain draft until paper-to-citation proof
-works. Retry only that failed workflow; do not substitute metadata/another provider.
-HTTP requests to arXiv hosts share a static gate through fetch::http (single
-request plus three-second post-completion spacing). Coordinate external processes
-separately. Auto paper cache is one day unless refreshed. Cite uses ordered literal
-names, updated-version dates if valid, and versioned preprint URLs. No journal
-substitution or surname inference. Keep original PDFs separate from metadata
-artifacts, and observe e-print redistribution permissions. No scholarly search.
+The arxiv module uses official abstract-page HTML only, resolver
+arxiv-abstract-html/2. The same cond-mat/0207270v1 paper passed four-page PDF reading,
+body find, original-byte comparison and offline saved-ID BibTeX/CSL. A local probe
+returned HTTP 200 and its retained HTML matched the product's metadata artifact.
+Earlier API HTTP 500 results were local observations, not a global-outage diagnosis.
+No API requests were retried during this continuation.
+Require the "for this version" row and sole unlinked history marker to agree;
+check other identity/version links, not mere occurrence in history. Canonical
+links may be unversioned. Use the selected history timestamp for citations, not
+the latest revision/date or a typeset date inside the PDF. Literal display authors
+and citation meta authors are retained without surname inference. Journal DOI and
+arXiv DOI remain distinct. Preserve mathematical notation in retained metadata.
+Keep text/html arxiv_metadata provenance and PDF original separate. Citation
+metadata-origin claims come from the stored record, including legacy records.
+Shared HTTP gate/pacing and one-day cache remain. Layout changes, contradictory
+identity or missing selection evidence fail explicitly. Other identifier/version
+forms were source-inspected, not an extra paper corpus. No scholarly search.
 
 Search supports ordinary web results only.
 Image, video, news, date, language, and domain-filter interfaces remain incomplete.
