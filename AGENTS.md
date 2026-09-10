@@ -7,34 +7,34 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current milestone: installable client and shared-server setup
+## Current milestone: readable everyday CLI output
 
-Work on feat/install-connect, issue #17, PR #18. PR #16 squash-merged with its
-requested head 93c3870f7ad9e13af76211c66a46c1ea27fb6611 and green CI through the
-match-head guard. Main merge is 1d5924b; issue #15 closed.
+Work on feat/readable-cli-output, issue #19, PR #20. PR #18 squash-merged at
+requested head 7feae35e12dab16c808a638b7c1b4559baa5bf29 with green CI and the
+match-head guard. Main merge: d75ab5f. Issue #17 closed.
 
-Keep CLI-only settings separate from the engine. `connect` is local and offline;
-`config show` explains endpoint precedence: --server, WEBTOOL_SERVER, saved TOML,
-localhost default. Preserve unrelated TOML values and atomic replacement. Clients
-never open server storage or install helpers. The installer supports --client-only,
-uses locked release builds and refuses unrelated executable names. Preserve its
-checksum receipts. No sudo, shell-profile edits, service manager, downloads of
-helpers/models, published release/tag or automatic updater.
+Presentation only: crates/cli/src/presentation.rs and protocol plain rendering.
+Keep explicit JSON/JSONL schemas/framing, Markdown exports, stored data and parser
+behavior unchanged. Use readable listings/confirmations/jobs and selected extracts.
+Never wrap/prefix code lines, truncate IDs/URLs or infer source headers/locations.
+Small rectangular ASCII tables fit an 88-column grid; all other tables use labeled
+cells preserving spans, empty/multiline values and source header flags. Preserve
+supplemental labels and warnings/progress on stderr. Escape terminal controls in
+human views only. No framework, colors, pager, prompts, TUI or new dependencies.
 
-Keep relative server paths cwd-relative, never silently config-relative. Installed
-startup must use explicit absolute config/data paths, with the existing database
-and helper settings. Print effective bind/data and build identity. Doctor's added
-build field is backward-compatible. Do not start a second server or manage other
-projects. This project is unrelated to Pi/Glance/Chrono and Terminal Agent Browser
-release coordination; direct those requests to their owning worker.
+Build CLI only with cargo build --locked -p webtool-cli. Verify one existing
+library listing, the terminal Partial job, and the saved Rust Book chapter's
+code/tables. Compare JSON content and check one pipe into head. Do not create a
+new Complete job just to replace the existing terminal Partial evidence.
+No suites, fixtures, public requests, benchmarks, broad lint or command matrix.
+Install once with scripts/install-local.sh --client-only. Preserve receipts and
+leave the installed server/process/config/helpers/database untouched. Do not
+rebuild the server to change its reported commit. Existing single CI build stays.
 
-Use debug builds during editing, then one locked release build through installation.
-Prove two independent temporary client configs outside the checkout share one
-server/library through upload, saved read and identical original export. This is
-not another physical machine's LAN proof. No suites, benchmarks, source-refetch
-campaign, installation matrix, parser changes, dependency upgrades or CI changes.
-Preserve all existing data/readers/helpers. Rerun failed steps only. Update README,
-AGENTS and STATUS, leave one server running, mark ready after proof, never merge.
+Update README, AGENTS and STATUS with evidence and a short before/after example.
+Mark ready after proof; do not merge or publish. This project remains unrelated
+to Pi/Glance/Chrono and Terminal Agent Browser release coordination; direct those
+requests to their owning worker.
 
 ## Confirmed local caption setup
 
