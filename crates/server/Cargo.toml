@@ -7,7 +7,7 @@ license.workspace = true
 name = "webtoold"
 path = "src/main.rs"
 [features]
-default = []
+default = ["documents"]
 documents = ["webtool-engine/documents"]
 ocr = ["webtool-engine/ocr"]
 crw-browser = ["webtool-engine/crw-browser"]
