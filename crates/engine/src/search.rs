@@ -40,7 +40,7 @@ pub async fn search(request:SearchRequest,config:&Config)->Result<SearchResponse
         }
         let now=Instant::now();let q=request.query.clone();let limit=request.limit;
         let timeout=config.request_timeout_seconds;
-        let answers=stream::iter(engines).map(|engine|{
+        let pending=engines.into_iter().map(|engine|{
             let q=q.clone();async move{
                 let name=engine.name().to_string();
                 let result=tokio::time::timeout(Duration::from_secs(timeout),engine.search(&q,limit)).await;
@@ -49,7 +49,8 @@ pub async fn search(request:SearchRequest,config:&Config)->Result<SearchResponse
                     Ok(Err(e))=>Err(e.to_string()),Err(_)=>Err("provider timeout".into()),
                 };(name,result)
             }
-        }).buffer_unordered(4).collect::<Vec<_>>().await;
+        }).collect::<Vec<_>>();
+        let answers=stream::iter(pending).buffer_unordered(4).collect::<Vec<_>>().await;
         let mut rows=Vec::new();let mut warnings=Vec::new();
         for (name,result) in answers{
             match result{

@@ -7,29 +7,39 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Delivery truth
+## Bootstrap workflow
 
-The source has not been compiled.
-No Rust compiler was available, and toolchain downloads failed.
-There is no verified lockfile, executable, container build, or live-provider test result.
+Work on `feat/bootstrap-running-cli`; mirror checkpoints to `JCFrags/webtool`.
+Issue #1 tracks the runnable milestone and PR #2 targets main.
+Do not force-push, create develop, or merge without the coordinating agent's instruction.
+Mark the PR ready only after the default build and saved-document workflow work.
 
-The actual SQLite schema and package checks passed 33 tests through Python SQLite.
-A separate Chromium helper check timed out.
-Those results do not validate the Rust implementation.
-Read `docs/STATUS.md` and `docs/local-validation.json` before changing status claims.
+Use current stable Rust and commit the real Cargo.lock. Iterate with:
 
-## Start here
+```sh
+cargo build --locked -p webtool-cli -p webtool-server
+```
 
-1. Install a current Rust toolchain and resolve dependencies.
-2. Generate a real `Cargo.lock` and commit it after review.
-3. Run `cargo fmt --all`.
-4. Run `cargo test --workspace` and fix compiler errors before adding features.
-5. Compile the `documents` and `crw-browser` integrations separately.
-6. Run `scripts/smoke_cli.py` against locally built binaries.
-7. Add live tests and report exact upstream versions and outcomes.
+Keep default search and HTML extraction enabled. Version 0.3.2 of
+metadata-search-engine-rs has a dependency cycle through search-tui;
+0.3.1 resolves without that TUI dependency. Do not upgrade it blindly.
 
-Do not claim that dependency API inspection established build compatibility.
-Keep failures visible in the handoff and release notes.
+CI is one cached Ubuntu build on pull_request and workflow_dispatch.
+CI must not generate the lockfile or format source. Full tests and optional
+integration checks remain manual, outside bootstrap. Keep existing tests;
+do not add tests, run workspace tests, all-features checks, lint campaigns,
+benchmarks, or coverage during this milestone.
+
+After compilation run only the small smoke sequence: doctor, create library,
+ingest tests/fixtures/source.md, read and find "Exact code", export original
+and compare bytes, default live HTML read, and one live web search. Rerun only
+failed steps while fixing blockers. Report provider failures honestly; do not
+cycle providers to conceal an unavailable search. See docs/STATUS.md for actual
+results and local commands. Do not claim completion from compilation alone.
+
+Keep target/, runtime data, caches, model weights, downloaded binaries, and
+credentials out of Git. Preserve supplied license notices and original bytes.
+The supplied MANIFEST.sha256 describes the imported archive, not later edits.
 
 ## Workspace
 
@@ -51,7 +61,7 @@ Their transitive features were not resolved in this environment.
 Check these boundaries first:
 
 - `rs_trafilatura::Options` and `ExtractResult` against version `0.2.2`.
-- `metadata-search-engine-rs` engine constructors and `SearchResult` against `0.3.2`.
+- `metadata-search-engine-rs` engine constructors and `SearchResult` against `0.3.1`.
 - Xberg's `extract`, `ExtractInput`, `PageConfig`, and serialization against `1.1.1`.
 - fastCRW's renderer constructor, deadline, fetch method, and result fields against `0.34.0`.
 - Axum handler futures for `Send` requirements, including optional document extraction.
@@ -107,7 +117,7 @@ There are no semantic rerankers or automatic LLM calls.
 
 ## Improve next
 
-After compilation and baseline tests, prioritize source fidelity over new integrations.
+After the runnable milestone, prioritize source fidelity over new integrations.
 Add representative website, repository, caption, and PDF fixtures.
 Measure both cold and warm latency, total process memory, and correct-content retention.
 Record missing content and parser failures alongside timings.
