@@ -24,6 +24,7 @@ pub fn client(config:&Config)->Result<reqwest::Client>{
 }
 pub async fn http(client:&reqwest::Client,url:&str,max:usize)->Result<Fetched>{
     let url=validated_url(url)?;
+    let _arxiv=if crate::arxiv::host(&url){Some(crate::arxiv::slot().await)}else{None};
     let response=client.get(url).send().await.context("fetch source")?;
     let status=response.status().as_u16();
     if !response.status().is_success(){bail!("source returned HTTP {status}");}

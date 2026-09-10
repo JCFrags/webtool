@@ -130,6 +130,51 @@ Search snippets are provider output, not verified excerpts from destination page
 Brave and DuckDuckGo returned links in one bootstrap smoke query; broader availability and relevance remain untested.
 There is no automatic semantic reranker, image-search command, or date-filter implementation yet.
 
+## arXiv papers and saved citations
+
+Auto reading recognizes arxiv.org `/abs/` and `/pdf/` URLs, modern/legacy IDs,
+explicit `vN`, and optional `.pdf`. The official abstract page is the single
+metadata source; no Atom lookup or provider chain runs first. Citation meta tags
+and article-specific elements supply metadata, not generic article extraction.
+Explicit HTTP, CSS, and browser choices are not overridden.
+
+```sh
+webtool read https://arxiv.org/abs/cond-mat/0207270v1 --library papers --refresh
+webtool cite DOCUMENT_ID --as bibtex
+webtool cite DOCUMENT_ID --as csl
+```
+
+Verified with that paper: four full-text PDF pages, a body phrase absent from the
+abstract, identical original PDF export, and saved-ID BibTeX/CSL. The selected v1
+submission date is July 10, 2002, not the later revision date shown on the page.
+The PDF remains the document original. A separate `arxiv_metadata` HTML artifact
+retains source URL, status, timestamp, and origin. Abstract-only success is not
+allowed. Existing Xberg structure/math limitations remain visible.
+
+Identity checks require the article's "for this version" row and the selected,
+unlinked submission-history marker to agree. Versioned download links, metadata
+IDs, breadcrumbs and canonical identity must not contradict them. An unversioned
+canonical link alone is not version evidence. Changed or ambiguous markup fails
+rather than selecting latest. Unversioned requests retain the original request and
+resolve to an explicitly verified version before PDF retrieval.
+
+Metadata retains title/math notation, ordered literal authors, abstract, categories,
+source dates and available identifiers. Display author names remain unsplit; citation
+meta-tag names are also retained. The selected history timestamp supplies citation
+dates. Journal DOI and arXiv DOI are separate; unavailable fields are omitted.
+Saved-ID citations are offline preprint references, not substituted journal articles.
+BibTeX uses literal-name braces and syntax escaping; CSL uses literal names. Existing
+DOI negotiation remains compatible, including RIS. Saved-paper RIS is unsupported.
+
+Resolver identity is `arxiv-abstract-html/2`. HTTP reads to arXiv hosts share a
+process-wide connection gate and three seconds after completion before the next
+request. Coordinate external processes separately. Normal Auto paper reads cache
+for one day; `--refresh` bypasses that document cache. No automatic retry/fallback.
+Earlier API requests returned HTTP 500 from this host; that was not evidence of a
+global outage. This path no longer calls the API. See docs/STATUS.md for evidence.
+Metadata availability does not grant PDF redistribution rights; follow the paper's
+license and [arXiv terms](https://info.arxiv.org/help/api/tou.html).
+
 ## GitHub repositories, files, and directories
 
 Default `read` uses GitHub APIs for public repository roots and blob/tree URLs.

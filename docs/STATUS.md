@@ -3,6 +3,108 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Milestone 8: arXiv abstract HTML and saved-paper citations
+
+Verified September 10, 2026 on feat/arxiv-paper-reading, issue #15, PR #16.
+Continued from 4514e349ca283657ea5606ddef78de92f01638ab without another branch,
+issue or merge. The user superseded API-first resolution. Earlier official API
+requests returned HTTP 500 twice from this host. Those results did not establish
+a global outage; no API request was repeated in this continuation.
+
+### Source and identity
+
+One direct local diagnostic request to
+https://arxiv.org/abs/cond-mat/0207270v1 returned HTTP 200 with 40,735 HTML bytes.
+Raw response, headers and status are retained as runtime/arxiv-abs-local.html,
+arxiv-abs-local.headers and arxiv-abs-local.status. The source page selected v1,
+while its canonical URL/PDF citation tag were unversioned and its dateline mentioned
+latest v3. Selection was established from the article's arxividv "for this version"
+row and the unlinked [v1] history marker, not v1's mere occurrence in history.
+
+The reading path now uses only official abstract-page HTML with the existing HTTP
+client and scraper. No Atom lookup, browser, proxy, alternate provider or metadata
+extraction engine. It checks selected-version/history agreement, requested/final
+identity, citation IDs/PDF link, canonical identity, breadcrumbs and full-text
+links. Contradictions or absent selection evidence fail. Unversioned canonical
+links do not establish a version. Unversioned requests resolve from verified
+selection before PDF download; explicit versions are never changed to latest.
+
+Resolver cache identity: arxiv-abstract-html/2. Shared process-wide pacing, existing
+Xberg/storage and offline saved-ID citation branch remain. Metadata provenance now
+records source_url, status, retrieved_at, metadata_origin and a text/html artifact.
+Legacy stored paper metadata remains deserializable; citation origin labels are
+not hardcoded as API metadata. PDF bytes remain the original document export.
+
+### Actual workflow
+
+- Normal locked debug build passed after correcting one local variable-name
+  compiler error. No dependency/pin/CI/parser changes or suites. Only this project's
+  server restarted with runtime/media-config.toml and a port-8420 listener check;
+  helpers and stored data were preserved.
+- Auto read the SAME cond-mat/0207270v1 URL into existing library papers. Both HTML
+  and pinned PDF returned actual HTTP 200. PDF: 186,660 bytes, four reported pages
+  and one supplemental table. Plain full text and page locators were inspected.
+- Saved ID: `eb1093898329143122e016461a3ab3e1ca6bc0aab584f1229e1b25da454a16bc`.
+  Resolved URL: https://arxiv.org/pdf/cond-mat/0207270v1.
+- The page-1 body/figure-caption phrase "magnetic moments occupy" was found at its
+  page locator and confirmed absent from retained abstract metadata.
+- Exported original PDF matched the retained downloaded artifact byte-for-byte.
+  SHA-256: 9648e76d23f607423cc32c7f0cfa7af97223fb57f824644ff4820803ce0543f5.
+- Product metadata HTML matched the initial local response byte-for-byte, 40,735
+  bytes, SHA-256 50a07c9c508bcfaba415d6ae9c9a2d8c0799fb1ef09b69d4183cefabe73e73f7.
+- Title: Understanding Paramagnetic Spin Correlations in the Spin-Liquid Pyrochlore
+  Tb2Ti2O7. Ordered literal display authors: Ying-Jer Kao, Matthew Enjalran,
+  Michel J.P. Gingras. Original citation meta author strings are retained separately;
+  names are not rearranged or split into family/given components.
+- Selected submission timestamp: 2002-07-10T17:10:30+00:00. The later v3 date
+  (2003-03-02) remains only in raw source/dateline metadata. The PDF also prints
+  a typeset date in 2019; that was not used to infer a bibliographic date.
+- Categories: cond-mat.dis-nn and cond-mat.stat-mech. The page supplies arXiv DOI
+  10.48550/arXiv.cond-mat/0207270; it is retained separately as arxiv_doi. No journal
+  DOI/reference was present, so those fields were omitted.
+- Saved-ID BibTeX and CSL exports inspected: title, ordered literal names, v1 eprint
+  and stable abstract URL agree with metadata. BibTeX year=2002; CSL issued date is
+  [2002,7,10]. The saved-ID branch reads only storage and the citation formatter;
+  it performs no HTTP request. No journal substitution or inferred publisher.
+- Xberg warnings for supplemental tables and partial structure stayed visible.
+  Mathematical notation remains intact in metadata/source bytes; extracted PDF
+  subscripts, columns and mathematical layout are not reconstructed.
+
+No remaining concrete blocker. Only this paper/version was exercised. Other ID
+forms and contradictory/missing metadata branches were source-inspected, not a
+synthetic fixture or extra corpus. The parser deliberately depends on selected
+version markup and fails if that contract changes. No fallback is attempted.
+
+### Working commands
+
+Server remains http://127.0.0.1:8420. Startup, only when no other copy is listening:
+
+```sh
+cd /home/mainpc/Projects/webtool
+./target/debug/webtoold --config runtime/media-config.toml
+```
+
+The papers library and outputs already exist. Successful steps were not repeated:
+
+```sh
+cd /home/mainpc/Projects/webtool
+export PATH="$PWD/target/debug:$PATH"
+webtool --format json read https://arxiv.org/abs/cond-mat/0207270v1 --library papers --refresh >runtime/arxiv-paper.json
+DOC_ID=$(python3 -c 'import json;print(json.load(open("runtime/arxiv-paper.json"))["id"])')
+webtool read "$DOC_ID"
+webtool find "$DOC_ID" 'magnetic moments occupy'
+webtool export "$DOC_ID" --kind original --output runtime/arxiv-original.pdf --force
+HASH=$(python3 -c 'import json;print(json.load(open("runtime/arxiv-paper.json"))["source"]["original"]["sha256"])')
+cmp "data/objects/$HASH" runtime/arxiv-original.pdf
+webtool cite "$DOC_ID" --as bibtex >runtime/arxiv-paper.bib
+webtool cite "$DOC_ID" --as csl >runtime/arxiv-paper.csl.json
+```
+
+Use the saved ID directly to inspect existing evidence without network retrieval.
+No content access implies permission to redistribute PDFs; observe the paper's
+license. The previous API-first instructions are superseded, not an active retry
+plan. Historical completed milestones follow below.
+
 ## Milestone 7: incremental crawl libraries
 
 Verified September 10, 2026. Branch feat/crawl-library-workflow, issue #13, PR #14.

@@ -7,25 +7,26 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current milestone: crawl into shared libraries
+## Current milestone: arXiv paper reading and citations
 
-Work on feat/crawl-library-workflow, issue #13. PR #12 was merged at authorized
-8f447a8ed69eacc76e0e262b03e5d1307b557de9 with green build and match-head guard;
-issue #11 closed. Stream bounded crawl results as they complete. Attach documents
-and persist progress before waiting for slow siblings. Preserve depth, URL query
-semantics, same-origin/redirect/robots restrictions, page budgets (including failed
-attempts), cancellation, and interrupted-on-restart behavior. No resumable frontier.
-Use existing HTTP/extraction/SQLite/workers. Keep CLI progress on stderr, data on
-stdout. Report saved IDs, visited attempts, failures and bounded scope honestly.
-Build normally with cargo build --locked -p webtool-cli -p webtool-server.
-Use one local site and one three-page/depth-one crawl. While its delayed response
-is pending, verify a completed child is attached/readable, then inspect final counts,
-library search and request log for duplicates/robots exclusions. Temporary files in
-runtime/. Rerun only failures. No suites/framework, benchmarks, public crawl,
-browser crawl, sitemap work, parser cleanup, scheduler, or dependencies changes.
-Preserve all helpers, config/data, PDF/GitHub/captions/Lightpanda, pins and CI. Restart
-only this server with runtime/media-config.toml; never a second listener on 8420.
-Update docs and mark ready after proof. Do not merge this milestone PR.
+Work on feat/arxiv-paper-reading, issue #15. PR #14 merged at authorized
+e811d9b6fe9a413265e79e712648f0bb93017a87 with green build and match-head guard;
+issue #13 closed. Auto abs/pdf routing only, modern/legacy IDs and explicit versions.
+Resolve metadata only from official abstract-page HTML with existing HTTP/scraper.
+Validate the selected version before fetching its pinned PDF through Xberg. Do not
+retry Atom first or introduce a provider chain. Keep HTML metadata artifact and
+PDF original separate.
+Follow official request spacing/concurrency across the server. Never substitute
+latest versions, abstracts, other providers, or HTML for failed full text.
+Generate saved-ID BibTeX/CSL offline from retained metadata, literal ordered names,
+explicit preprint version and stable URL. Preserve DOI behavior; invent no fields.
+Build normally with cargo build --locked -p webtool-cli -p webtool-server. Verify
+one small explicit-version paper: library read, body phrase, page locations, PDF
+export comparison and both citations. No suites/corpus/campaign, unrelated parser
+work, OCR, browser, bibliography manager, or dependencies changes. Retry failures
+only; report upstream blocks. Keep existing readers/crawl/config/data/helpers/pins/CI.
+Restart only this server with runtime/media-config.toml, never a second listener.
+Update docs, mark ready only after paper-to-citation proof, and do not merge.
 
 ## Confirmed local caption setup
 
@@ -143,7 +144,23 @@ Git trees; do not follow symlinks/submodules or replace native errors with HTML.
 Directories retain API JSON, derived locations, and explicit scope/truncation
 warnings. README link supplements are limited, not a full CommonMark parser.
 Issues, PRs, releases, and complete-repository ingestion remain unimplemented.
-There is no dedicated arXiv version-resolution or scholarly-discovery module.
+The arxiv module uses official abstract-page HTML only, resolver
+arxiv-abstract-html/2. The same cond-mat/0207270v1 paper passed four-page PDF reading,
+body find, original-byte comparison and offline saved-ID BibTeX/CSL. A local probe
+returned HTTP 200 and its retained HTML matched the product's metadata artifact.
+Earlier API HTTP 500 results were local observations, not a global-outage diagnosis.
+No API requests were retried during this continuation.
+Require the "for this version" row and sole unlinked history marker to agree;
+check other identity/version links, not mere occurrence in history. Canonical
+links may be unversioned. Use the selected history timestamp for citations, not
+the latest revision/date or a typeset date inside the PDF. Literal display authors
+and citation meta authors are retained without surname inference. Journal DOI and
+arXiv DOI remain distinct. Preserve mathematical notation in retained metadata.
+Keep text/html arxiv_metadata provenance and PDF original separate. Citation
+metadata-origin claims come from the stored record, including legacy records.
+Shared HTTP gate/pacing and one-day cache remain. Layout changes, contradictory
+identity or missing selection evidence fail explicitly. Other identifier/version
+forms were source-inspected, not an extra paper corpus. No scholarly search.
 
 Search supports ordinary web results only.
 Image, video, news, date, language, and domain-filter interfaces remain incomplete.

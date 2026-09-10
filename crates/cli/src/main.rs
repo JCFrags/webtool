@@ -55,8 +55,8 @@ enum Command{
     Jobs{id:Option<String>,#[arg(long,requires="id",conflicts_with="cancel")]wait:bool,#[arg(long,requires="id")]cancel:bool},
     /// Retrieve existing captions through yt-dlp. No video download or transcription.
     Media{url:String,#[arg(long,default_value="en")]language:String,#[arg(long)]library:Option<String>},
-    /// Retrieve bibliography metadata through DOI content negotiation.
-    Cite{doi:String,#[arg(long="as",default_value="bibtex",value_parser=["bibtex","ris","csl"])]style:String},
+    /// Cite a saved arXiv paper offline, or retrieve a DOI citation.
+    Cite{#[arg(value_name="DOI_OR_DOCUMENT_ID")]doi:String,#[arg(long="as",default_value="bibtex",value_parser=["bibtex","ris","csl"])]style:String},
     /// Export a saved document. Existing files require --force.
     Export{document:String,#[arg(long,value_enum,default_value="markdown")]kind:ExportKind,#[arg(long,default_value_t=1)]table:usize,#[arg(short,long)]output:PathBuf,#[arg(long)]force:bool},
     /// Read URLs from a UTF-8 file or stdin. Emit one result per line with --format jsonl.
