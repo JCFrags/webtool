@@ -67,7 +67,7 @@ impl Engine {
         }
         if caption_url.is_some() { media::validate_language(&request.language)?; }
         let key=hex::encode(Sha256::digest(serde_json::to_vec(&json!({"url":caption_url.as_deref().unwrap_or(url.as_str()),"renderer":request.renderer,
-            "language":request.language,"media_parser":media::PARSER,"selector":request.selector,"version":EXTRACTION_VERSION,"document_config":self.config.document_config,
+            "language":request.language,"media_parser":media::PARSER,"source_resolver":sources::VERSION,"selector":request.selector,"version":EXTRACTION_VERSION,"document_config":self.config.document_config,
             "browser_wait_ms":self.config.browser_wait_ms,"crw":self.config.crw_renderer}))?));
         let lock={
             let mut locks=self.locks.lock().await;
@@ -93,19 +93,34 @@ impl Engine {
             if let Some(name)=request.library{self.store.add(&name,&document.id,request.actor).await?;}
             return Ok(ReadResponse{document,cached:false});
         }
-        let fetched={
+        let (fetched,github)={
             let _slot=self.network.acquire().await?;
-            match request.renderer{
-                Renderer::Auto|Renderer::Http=>if let Some(result)=sources::github_readme(&self.client,&url,self.config.max_bytes).await?{result}
-                    else{fetch::http(&self.client,url.as_str(),self.config.max_bytes).await?},
-                _=>{let _browser=self.browser_slots.acquire().await?;fetch::browser(url.as_str(),&request.renderer,&self.config).await?},
+            let native=if matches!(request.renderer,Renderer::Auto) && request.selector.is_none() {
+                sources::github(&self.client,&url,self.config.max_bytes).await?
+            } else { None };
+            if let Some(resolved)=native { (resolved.fetched,Some(resolved.details)) }
+            else {
+                let fetched=match request.renderer {
+                    Renderer::Auto|Renderer::Http=>fetch::http(&self.client,url.as_str(),self.config.max_bytes).await?,
+                    _=>{let _browser=self.browser_slots.acquire().await?;fetch::browser(url.as_str(),&request.renderer,&self.config).await?},
+                };
+                (fetched,None)
             }
         };
-        let mime=readers::detect(&fetched.resolved,fetched.content_type.as_deref(),&fetched.bytes);
+        let filename=github.as_ref().map(|g|g.filename.clone()).unwrap_or_else(||fetched.resolved.clone());
+        let mime=readers::detect(&filename,fetched.content_type.as_deref(),&fetched.bytes);
         let original=self.store.put_bytes(&fetched.bytes,&mime,&fetched.role).await?;
         let source=Source {requested:request.url,resolved:fetched.resolved.clone(),retrieved_at:Utc::now().to_rfc3339(),
             status:fetched.status,version:fetched.version,original};
-        let parsed=self.parse(fetched.bytes,fetched.resolved,mime,request.selector).await?;
+        let readme_links=github.as_ref().filter(|g|g.readme).map(|g|sources::readme_links(&fetched.bytes,g));
+        let mut parsed=if let Some(details)=github.as_ref().filter(|g|g.directory) {
+            sources::directory(&fetched.bytes,details)?
+        } else { self.parse(fetched.bytes,filename,mime,request.selector).await? };
+        if let Some(details)=github { parsed.metadata["github"]=details.metadata; }
+        if let Some(links)=readme_links {
+            parsed.links.extend(links);
+            parsed.warnings.push(Warning::new("readme_links_partial","Pinned links supplement inline Markdown links and reference definitions. Original text is unchanged; complex Markdown/HTML link syntax is not fully interpreted."));
+        }
         let document=self.finish(parsed,source,fetched.warnings).await?;
         self.store.cache(key,document.id.clone()).await?;
         if let Some(name)=request.library{self.store.add(&name,&document.id,request.actor).await?;}

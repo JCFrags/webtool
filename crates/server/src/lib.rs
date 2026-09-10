@@ -37,7 +37,18 @@ impl From<anyhow::Error> for ApiError{fn from(e:anyhow::Error)->Self{Self(e)}}
 impl IntoResponse for ApiError{
     fn into_response(self)->Response{
         let message=format!("{:#}",self.0);
-        let (status,code)=if message.contains("media_helper_missing") {(StatusCode::UNPROCESSABLE_ENTITY,"media_helper_missing")}
+        let (status,code)=if message.contains("github_rate_limited") {(StatusCode::TOO_MANY_REQUESTS,"github_rate_limited")}
+            else if message.contains("github_access_denied") {(StatusCode::BAD_GATEWAY,"github_access_denied")}
+            else if message.contains("github_reference_ambiguous") {(StatusCode::UNPROCESSABLE_ENTITY,"github_reference_ambiguous")}
+            else if message.contains("github_reference_limit") || message.contains("github_path_limit") {(StatusCode::UNPROCESSABLE_ENTITY,"github_resolution_limit")}
+            else if message.contains("github_reference_not_found") {(StatusCode::NOT_FOUND,"github_reference_not_found")}
+            else if message.contains("github_repository_unavailable") {(StatusCode::NOT_FOUND,"github_repository_unavailable")}
+            else if message.contains("github_path_not_found") || message.contains("github_path_missing") {(StatusCode::NOT_FOUND,"github_path_not_found")}
+            else if message.contains("github_listing_incomplete") {(StatusCode::BAD_GATEWAY,"github_listing_incomplete")}
+            else if message.contains("github_unsupported_object") {(StatusCode::UNPROCESSABLE_ENTITY,"github_unsupported_object")}
+            else if message.contains("github_content_unavailable") || message.contains("github_readme_unavailable") {(StatusCode::UNPROCESSABLE_ENTITY,"github_content_unavailable")}
+            else if message.contains("github_invalid_response") || message.contains("github_api_error") {(StatusCode::BAD_GATEWAY,"github_api_error")}
+            else if message.contains("media_helper_missing") {(StatusCode::UNPROCESSABLE_ENTITY,"media_helper_missing")}
             else if message.contains("media_source_blocked") {(StatusCode::BAD_GATEWAY,"media_source_blocked")}
             else if message.contains("media_captions_unavailable") {(StatusCode::UNPROCESSABLE_ENTITY,"media_captions_unavailable")}
             else if message.contains("media_captions_malformed") {(StatusCode::UNPROCESSABLE_ENTITY,"media_captions_malformed")}
