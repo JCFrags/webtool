@@ -86,6 +86,10 @@ pub fn plain(d:&Document)->String{
             _=>out.push_str(&format!("{}\n\n",b.content.text())),
         }
     }
+    if d.metadata.pointer("/github/kind").and_then(|v|v.as_str())==Some("readme") && !d.links.is_empty() {
+        out.push_str("Pinned README links (source text above is unchanged):\n");
+        for link in &d.links { out.push_str(&format!("{}: {}\n",link.text,link.url)); }
+    }
     terminal_safe(&out)
 }
 #[cfg(test)]mod tests{
