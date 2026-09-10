@@ -86,13 +86,13 @@ impl Engine {
             }
         }
         if let Some(identity)=paper_id {
-            let (paper,api,pdf,metadata_artifact,metadata_time)={
+            let (paper,metadata,pdf,metadata_artifact,metadata_time)={
                 let _network=self.network.acquire().await?;
-                let (paper,api)=arxiv::resolve(&self.client,&identity,self.config.max_bytes).await?;
+                let (paper,metadata)=arxiv::resolve(&self.client,&identity,self.config.max_bytes).await?;
                 let metadata_time=Utc::now().to_rfc3339();
-                let artifact=self.store.put_bytes(&api.bytes,"application/atom+xml","arxiv_metadata").await?;
+                let artifact=self.store.put_bytes(&metadata.bytes,"text/html","arxiv_metadata").await?;
                 let pdf=arxiv::pdf(&self.client,&paper,self.config.max_bytes).await?;
-                (paper,api,pdf,artifact,metadata_time)
+                (paper,metadata,pdf,artifact,metadata_time)
             };
             let original=self.store.put_bytes(&pdf.bytes,"application/pdf","arxiv_pdf").await?;
             let source=Source{requested:request.url,resolved:pdf.resolved,retrieved_at:Utc::now().to_rfc3339(),status:pdf.status,version:pdf.version,original};
@@ -102,7 +102,7 @@ impl Engine {
             parsed.title=paper.title.clone();
             parsed.links.push(Link{url:paper.abstract_url.clone(),text:format!("arXiv {}",paper.versioned_id)});
             parsed.metadata["arxiv"]=serde_json::to_value(&paper)?;
-            parsed.metadata["arxiv"]["provenance"]=json!({"api_url":api.resolved,"status":api.status,"retrieved_at":metadata_time,"artifact":metadata_artifact});
+            parsed.metadata["arxiv"]["provenance"]=json!({"source_url":metadata.resolved,"metadata_origin":paper.metadata_origin,"status":metadata.status,"retrieved_at":metadata_time,"artifact":metadata_artifact});
             let document=self.finish(parsed,source,pdf.warnings).await?;
             self.store.cache(key,document.id.clone()).await?;
             if let Some(name)=request.library{self.store.add(&name,&document.id,request.actor).await?;}

@@ -41,7 +41,7 @@ impl IntoResponse for ApiError{
             else if message.contains("arxiv_version_unavailable") || message.contains("arxiv_empty_result") {(StatusCode::NOT_FOUND,"arxiv_unavailable")}
             else if message.contains("arxiv_invalid_identifier") {(StatusCode::BAD_REQUEST,"arxiv_invalid_identifier")}
             else if message.contains("arxiv_identity_mismatch") {(StatusCode::BAD_GATEWAY,"arxiv_identity_mismatch")}
-            else if message.contains("arxiv_invalid_metadata") || message.contains("arxiv_api_failed") {(StatusCode::BAD_GATEWAY,"arxiv_api_failed")}
+            else if message.contains("arxiv_invalid_metadata") || message.contains("arxiv_metadata_failed") {(StatusCode::BAD_GATEWAY,"arxiv_metadata_failed")}
             else if message.contains("arxiv_pdf_failed") || message.contains("arxiv_full_text_failed") {(StatusCode::BAD_GATEWAY,"arxiv_full_text_failed")}
             else if message.contains("citation_metadata_unavailable") || message.contains("citation_format_unsupported") {(StatusCode::UNPROCESSABLE_ENTITY,"citation_unavailable")}
             else if message.contains("github_rate_limited") {(StatusCode::TOO_MANY_REQUESTS,"github_rate_limited")}
