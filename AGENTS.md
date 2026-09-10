@@ -7,42 +7,33 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current milestone: usable YouTube captions
+## Current milestone: GitHub source reading
 
-Work on `feat/media-captions`, issue #7. PR #6 was merged only at authorized
-25059c5d42fef93bdb980817b89c5fe210b187fe with a green build; issue #5 closed.
-Open a linked draft PR early and push coherent checkpoints. Keep the new PR
-unmerged; mark ready only when the bounded caption workflow works.
+Work on `feat/github-source-reading`, issue #9. PR #8 was merged only at
+4500215be8d3449130890783e9f66e8265fb0781 with a green build and match-head guard;
+issue #7 closed. Open a linked draft PR early; push coherent checkpoints.
+Mark ready only after the bounded directory/file workflow works. Do not merge.
 
-Use official yt-dlp with its documented JavaScript runtime/EJS support. Reuse
-installed Node when supported; no extra runtime is needed on this workstation.
-Keep helper binaries and machine-specific config outside Git. No browser cookies,
-login sessions, proxies, audio/video downloads, transcription, or playlists.
-Let yt-dlp fetch the selected subtitle using its source context and headers;
-do not send a signed caption URL to the generic HTTP client. Bound subprocesses,
-file sizes, and time; clean temporary files on success or failure.
+Extend sources.rs using the existing HTTP client and GitHub APIs, not gh, cloning,
+a service, or bulk ingestion. Auto mode routes repo roots to pinned README, blob
+URLs to actual bytes, and tree URLs to immediate entries. Explicit HTTP/CSS/browser
+choices bypass native routing. Resolve refs immutably, including encoded/slash
+refs with bounded work and honest ambiguity/missing/rate-limit errors.
 
-Default YouTube watch/youtu.be reads now yield captions, not surrounding HTML.
-Renderer Auto is the default; explicit Http or selector stays HTML. Captions
-forces the media reader. ReadRequest.language defaults to en; cache keys include
-language and media parser revision 2. Keep existing request constructors current.
-Honor requested language, prefer provided tracks, label automatic captions, and
-never silently translate. Keep explicit reader choices, stable video metadata,
-verbatim original caption bytes, cue text/timestamps, and meaningful errors.
-Cache by language as well as source. Bump media parser revision when changing it.
+Retain source-file bytes, real filenames, commit/path/ref metadata and source
+lines. Directory originals are API JSON and readable listings are derived, never
+claims that child files were read. Keep incomplete listing warnings visible and
+README relative links pinned. Version source-resolution changes in cache keys.
 
-Build with `cargo build --locked -p webtool-cli -p webtool-server`, restart only
-this server without deleting data, then try one short public video. Inspect
-reading, a known phrase, timestamps, and original export. No suites, broad lint,
-benchmarks, provider sweeps, or new test framework. Rerun only failed steps. If
-YouTube blocks this host, retain the actual blocker and keep the PR draft.
-
-Preserve PDF defaults, search pins, and the one cached CI build. No browser/OCR
-integration or unrelated refactor. Update README.md and docs/STATUS.md with
-actual helper versions, setup, commands, outcomes, and limitations.
-
-Keep target/, data/, runtime/, caches, weights, binaries, and secrets out of Git.
-Preserve license notices; MANIFEST.sha256 describes the original archive only.
+Build with `cargo build --locked -p webtool-cli -p webtool-server`. Restart only
+this project's server with runtime/media-config.toml, without deleting data or
+starting a second listener. Read one JCFrags/webtool directory, follow one pinned
+Rust-file link, inspect code/commit/lines, find a symbol, and compare original
+export with the same pinned source. Fresh retrieval; runtime/ holds outputs.
+No suites, framework, benchmarks, broad lint, or unrelated regression reruns.
+Only failed steps may be rerun. Preserve PDF defaults, captions setup, search
+pins, and the single CI build. No issues/PRs/releases, auth, browser, or OCR work.
+Update README.md and docs/STATUS.md with results and concrete limits.
 
 ## Confirmed local caption setup
 
