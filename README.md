@@ -6,17 +6,15 @@ There is no TUI, alternate screen, browser-control interface, or default LLM wor
 
 ## Delivery status
 
-This is an implementation snapshot, not a verified release.
-The application source, 70 Rust tests, build setup, and documentation are included.
-No Rust executable is included.
+The default Rust CLI and server now build and run locally. The saved-document
+round trip preserved all 87 original bytes. Default HTML extraction read
+https://example.com, and one live search returned five links from Brave and
+DuckDuckGo. This is the first runnable milestone, not a complete V1 release.
 
-The delivery environment had no Rust compiler and could not download one.
-Cargo compilation, Rust tests, dependency resolution, and live provider integrations have not run.
-The separate Chromium smoke test timed out.
-
-The actual SQLite migration and package fixtures passed 33 local checks.
-These checks do not prove that the Rust application compiles or works end to end.
-See [STATUS.md](docs/STATUS.md), [the recorded results](docs/local-validation.json), and [the test log](docs/local-validation.log).
+Optional documents, OCR, browsers, captions, and Docker remain unverified.
+Full Rust tests were not run during bootstrap. See [STATUS.md](docs/STATUS.md)
+for exact commands, results, and remaining limits. The older local-validation
+logs describe the imported snapshot, not the current executable.
 
 ## What is implemented in source
 
@@ -37,7 +35,7 @@ See [STATUS.md](docs/STATUS.md), [the recorded results](docs/local-validation.js
 | Bibliography | DOI metadata retrieval as BibTeX, RIS, or CSL JSON |
 | Exports | Markdown, JSON, retained originals, and selected tables as CSV |
 
-All Rust implementations in this table remain uncompiled in this delivery environment.
+The default packages compile; optional integrations remain unverified.
 Some integration boundaries are intentionally marked experimental.
 
 ## Build and run
@@ -46,26 +44,22 @@ Install a current stable Rust toolchain on a network-connected development machi
 Run these commands from this repository's root.
 
 ```sh
-cargo generate-lockfile
-cargo fmt --all
-cargo test --locked --workspace
-cargo build --locked --release -p webtool-cli -p webtool-server
+cargo build --locked -p webtool-cli -p webtool-server
 ```
 
-Review and commit the generated `Cargo.lock` before distributing binaries.
-The archive has no invented lockfile or fabricated dependency hashes.
-Compilation may expose integration errors that could not be detected here.
+Cargo.lock is committed. Use debug builds during bootstrap. Full tests and
+optional integration checks remain manual, not prerequisites for this milestone.
 
 Start the server in one terminal.
 
 ```sh
-./target/release/webtoold --config config.example.toml
+./target/debug/webtoold --config config.example.toml
 ```
 
 Use the CLI from another terminal.
 
 ```sh
-export PATH="$PWD/target/release:$PATH"
+export PATH="$PWD/target/debug:$PATH"
 webtool doctor
 webtool library create research --description "Shared research sources"
 webtool ingest tests/fixtures/source.md --library research --actor Alice
@@ -84,7 +78,7 @@ webtool note "$DOC_ID" --actor Alice --text "Reviewed the original." --tag revie
 webtool export "$DOC_ID" --kind markdown --output source.md
 ```
 
-The commands above are usage examples, not a transcript of successful execution here.
+The exact executed bootstrap sequence is recorded in docs/STATUS.md.
 
 ## Connect several people
 
@@ -99,7 +93,7 @@ Do not expose it directly to the public internet.
 On a trusted LAN, bind the server deliberately.
 
 ```sh
-./target/release/webtoold --bind 0.0.0.0:8420 --data-dir ./data
+./target/debug/webtoold --bind 0.0.0.0:8420 --data-dir ./data
 ```
 
 Point each client at that machine.
@@ -132,7 +126,7 @@ A refresh that produces identical content can reuse the existing document ID.
 Its retained snapshot date remains the original date, while cache freshness is updated separately.
 
 Search snippets are provider output, not verified excerpts from destination pages.
-Live availability and relevance have not been tested in this environment.
+Brave and DuckDuckGo returned links in one bootstrap smoke query; broader availability and relevance remain untested.
 There is no automatic semantic reranker, image-search command, or date-filter implementation yet.
 
 ## Formats
@@ -275,7 +269,7 @@ Bibliography libraries, citation formatting, and Zotero synchronization remain f
 
 - `scripts/check.sh` compiles and runs the Rust tests when Cargo is available.
 - `scripts/validate_local.py` runs the real SQL migration and package checks using Python's standard library.
-- `.github/workflows/ci.yml` defines core tests and separate optional-integration compile checks.
+- `.github/workflows/ci.yml` defines one cached, locked default build on pull requests and manual dispatch. Tests and optional checks are manual.
 - `Dockerfile` and `compose.yaml` provide an unbuilt development deployment.
 - `AGENTS.md` lists the next implementation and validation tasks.
 

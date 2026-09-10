@@ -1,29 +1,90 @@
 # Implementation and validation status
 
-Snapshot date: September 9, 2026.
+Imported snapshot date: September 9, 2026.
+Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
-## What was actually executed
+## Runnable bootstrap results
 
-| Check | Result |
-|---|---|
-| Actual SQLite migration, FTS triggers, relations, cache, job updates, and database integrity | 23 Python-driven checks passed |
-| Cargo TOML, workspace paths, client dependency boundary, and synthetic fixture checks | 10 checks passed |
-| Rust lexical delimiter inspection | No unmatched delimiters or lexer errors detected, not a parser or compiler check |
-| Standalone Chromium capture of a local JavaScript fixture | Timed out after the configured test deadline |
-| Separate Chromium blank-page probe | Also timed out |
-| Rust compilation | Not run, compiler unavailable |
-| Rust unit and integration tests | 70 test functions authored, none run |
-| Dependency resolution and Cargo.lock generation | Not run |
-| Live search, DOI, GitHub, and captions | Not run |
-| Xberg, OCR, and fastCRW | Not compiled or integration-tested |
-| Docker and CI workflow | Authored, not executed |
+- Rust 1.98.0 / Cargo 1.98.0 on Fedora 44; debug build.
+- `cargo build --locked -p webtool-cli -p webtool-server`: passed with
+  existing unused-import and optional-document dead-code warnings.
+- A real Cargo.lock was generated and committed. Default HTML and search stay enabled.
+- `webtoold` started; `webtool doctor` reached API v1 at http://127.0.0.1:8420.
+- Created shared library `bootstrap` and ingested tests/fixtures/source.md.
+- Read saved document and found `Exact code` in block b3, source lines 5–7.
+- Original export: 87 bytes; `cmp` confirmed byte-for-byte equality.
+- Default `read https://example.com`: passed, returned “Example Domain”,
+  the domain-purpose paragraph, and “Learn more”, without a selector or browser.
+- Live `search 'Rust programming language' --limit 5`: exit 0, five links,
+  no warnings. Brave and DuckDuckGo both contributed. Inspected returned URLs:
+  https://en.wikipedia.org/wiki/Rust_(programming_language),
+  https://rust-lang.org/learn/,
+  https://www.geeksforgeeks.org/rust/introduction-to-rust-programming-language/,
+  https://rust-lang.org/, https://rust-lang.org/en-US/.
+  Snippets are provider output; destination pages were not read by this search.
+- Full tests, optional feature builds, lint, benchmarks, coverage, Docker,
+  DOI, repository readers, and captions were not run in this milestone.
 
-The SQL checks execute `migrations/001_initial.sql` itself.
-They do not test a Python replacement for the Rust service.
-The fixture checks validate the input files, not the Rust readers' outputs.
+### Build corrections
 
-`local-validation.json` and `local-validation.log` contain the recorded results.
-No binary performance or extraction-quality results are claimed.
+metadata-search-engine-rs 0.3.2 has a dependency cycle through search-tui.
+Pinning 0.3.1 resolves it without importing a TUI or disabling search.
+Caption timestamp replacement required a string replacement argument.
+Search futures are collected before bounded stream execution to satisfy
+Axum's handler-future lifetime requirements; concurrency remains bounded at four.
+
+### Local operation
+
+Checkout: `/home/mainpc/Projects/webtool`, branch `feat/bootstrap-running-cli`.
+The server is left running on loopback only. Data lives in ignored `data/`;
+logs, PID, and smoke outputs live in ignored `runtime/`.
+One server process per data directory. Do not start a second while it is running.
+
+```sh
+cd /home/mainpc/Projects/webtool
+cargo build --locked -p webtool-cli -p webtool-server
+mkdir -p runtime
+nohup ./target/debug/webtoold --config config.example.toml >runtime/webtoold.log 2>&1 </dev/null &
+echo $! >runtime/webtoold.pid
+export PATH="$PWD/target/debug:$PATH"
+export WEBTOOL_SERVER=http://127.0.0.1:8420
+webtool doctor
+webtool library create bootstrap --description 'Runnable CLI smoke'
+webtool --format json ingest tests/fixtures/source.md --library bootstrap --actor JCFrags
+DOC_ID=cd6afccebfcf8a897537c855c8e33c70686eb91372878e7ed33133475905f4da
+webtool read "$DOC_ID"
+webtool find "$DOC_ID" 'Exact code'
+webtool export "$DOC_ID" --kind original --output runtime/source-original.md
+cmp tests/fixtures/source.md runtime/source-original.md
+webtool read https://example.com
+webtool search 'Rust programming language' --limit 5
+```
+
+Library and export already exist after this run. Use a new library/output name
+for a later run, or explicit `--force` only when replacing the export is intended.
+To stop, verify the PID in runtime/webtoold.pid belongs to this webtoold and send
+SIGTERM. Rollback means stopping this process and using a prior feature commit;
+do not delete data or reset main. No merge has been authorized.
+
+### Remaining blockers and next task
+
+No blocker remains for the default runnable milestone. Optional Xberg documents,
+OCR models/native runtimes, fastCRW, Lightpanda, Chromium, and yt-dlp are not
+validated or configured; doctor reports them unavailable. They are not implied
+working by a successful default build. No provider cycling was needed.
+
+Highest-value next task: validate default HTML source fidelity on a representative
+public documentation page containing code and tables, against retained originals.
+
+## Historical archive checks
+
+The supplied Python SQLite/package logs report 33 passing checks. The supplied
+Chromium probes timed out. These historical checks are not Rust test results.
+The existing 70 Rust tests were kept but not run or expanded during bootstrap.
+`MANIFEST.sha256` describes archive bytes only; it is not a current-tree checksum.
+Downloads README(20260910-045733).md and STATUS.md matched the archive exactly.
+The older shared-terminal proposal specifies Python; the current direction and
+Rust implementation supersede that stack choice.
 
 ## Implementation state
 
@@ -31,7 +92,7 @@ No binary performance or extraction-quality results are claimed.
 
 The repository contains the application, not just interfaces or pseudocode.
 It includes a CLI, HTTP server, storage, native readers, search orchestration, job execution, and tests.
-It still needs compilation and execution before any operational claim is justified.
+The default build and small smoke sequence above now run; this does not validate every advertised capability.
 
 ### Optional integrations need validation
 
@@ -63,16 +124,12 @@ These are source implementations, not working integrations demonstrated in this 
 
 These differences are unfinished work, not evidence that the proposal was fully implemented.
 
-## Remaining validation priorities
+## Deferred validation
 
-1. Resolve and compile the core dependency graph.
-2. Run the local Rust and actual CLI integration tests.
-3. Compile each optional integration independently.
-4. Test default HTML extraction without an explicit CSS selector.
-5. Test browsers on both local fixtures and representative live pages.
-6. Test document extraction on actual PDFs, spreadsheets, presentations, and scans.
-7. Evaluate search relevance and provider availability from the deployment host.
-8. Measure total resources and content fidelity before making performance claims.
+Beyond bootstrap, check representative source fidelity before adding integrations.
+Full tests and optional integration checks remain manual. Documents, browser
+readiness, crawl recovery, captions, and resource measurements need separate work.
+Do not expand this milestone into those checks.
 
 ## Operational limits
 
