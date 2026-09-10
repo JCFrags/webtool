@@ -22,7 +22,10 @@ Let yt-dlp fetch the selected subtitle using its source context and headers;
 do not send a signed caption URL to the generic HTTP client. Bound subprocesses,
 file sizes, and time; clean temporary files on success or failure.
 
-Default YouTube watch/youtu.be reads should yield captions, not surrounding HTML.
+Default YouTube watch/youtu.be reads now yield captions, not surrounding HTML.
+Renderer Auto is the default; explicit Http or selector stays HTML. Captions
+forces the media reader. ReadRequest.language defaults to en; cache keys include
+language and media parser revision 2. Keep existing request constructors current.
 Honor requested language, prefer provided tracks, label automatic captions, and
 never silently translate. Keep explicit reader choices, stable video metadata,
 verbatim original caption bytes, cue text/timestamps, and meaningful errors.
@@ -40,6 +43,21 @@ actual helper versions, setup, commands, outcomes, and limitations.
 
 Keep target/, data/, runtime/, caches, weights, binaries, and secrets out of Git.
 Preserve license notices; MANIFEST.sha256 describes the original archive only.
+
+## Confirmed local caption setup
+
+Official PyPI helper installed with `uv tool install 'yt-dlp[default]' --index-url
+https://pypi.org/simple`: yt-dlp 2026.08.19 and EJS 0.8.0. Existing Node v24.18.0
+satisfies documented Node >=22; no new runtime or ffmpeg is needed for this path.
+Machine paths live only in ignored runtime/media-config.toml. Start this server
+with `./target/debug/webtoold --config runtime/media-config.toml`.
+
+One live 19-second video passed with six provided English cues. Nonfatal yt-dlp
+impersonation warnings remain visible; do not install extra dependencies only to
+silence them. See docs/STATUS.md for results. Media selection uses load-info-json
+to keep source headers, literal language selection, and one track. Keep the
+helper's group/time/stdout/stderr bounds and Unix file-size limit. Never retain
+signed track metadata in Git or logs. PDF defaults/search pins/CI are unchanged.
 
 ## Workspace
 

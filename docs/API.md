@@ -64,6 +64,12 @@ Crawl request:
 {"url":"https://example.com","max_pages":20,"max_depth":2,"library":"research","actor":"Alice"}
 ```
 
+Caption routing: `/v1/read` accepts `language` (default `en`) and renderer
+`auto` (default), `captions`, or the existing explicit renderers. Auto routes
+YouTube watch/youtu.be URLs to captions unless a CSS selector is supplied.
+Explicit `http` still reads HTML. `/v1/media` uses the same stored caption path.
+Language is part of the cache key; source status is null when yt-dlp supplies none.
+
 ## Contract details
 
 `read` returns `document` and `cached` fields.

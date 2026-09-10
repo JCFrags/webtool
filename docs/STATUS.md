@@ -3,6 +3,87 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Milestone 4: YouTube captions
+
+Verified September 10, 2026 UTC. Branch `feat/media-captions`, issue #7, PR #8.
+PR #6 was squash-merged at authorized 25059c5d42fef93bdb980817b89c5fe210b187fe
+with a green build and --match-head-commit. Main fast-forwarded to `02edc6b`;
+issue #5 closed. Runtime data was preserved; PR #8 is not merged.
+
+- Normal locked debug build passed; source checkpoint CI passed. PDF defaults,
+  search versions, Cargo.lock, and CI are unchanged. Added only the existing nix
+  dependency's resource feature for per-helper file-size limits.
+- Official PyPI yt-dlp 2026.08.19 + yt-dlp-ejs 0.8.0 installed locally with uv.
+  Existing `/usr/bin/node` v24.18.0 satisfies the official EJS Node >=22 requirement.
+  No runtime, ffmpeg, impersonation package, browser, cookies, proxies, models,
+  transcription, or audio/video download was used.
+- One source: https://youtu.be/jNQXAC9IVRw (“Me at the zoo”, 19 seconds).
+  Default auto read selected six provided English cues, saved in library captions.
+  Stable video metadata, language/origin, and null (not invented) HTTP status retained.
+- Timestamped plain output and original VTT inspected. Find “elephants” returned
+  b1, 1200–3360 ms. First cue exactly matches original:
+  `All right, so here we are, in front of the\nelephants`.
+- Exported 440 bytes equal the verbatim downloaded track retained in data/objects/;
+  SHA-256 `5c7fcf32df4558291ee896d133264e6efea2b39ffbadd36f764ce9e8c392ec71`.
+- Nonfatal helper warning: no impersonation target available. Caption retrieval
+  still succeeded; the warning is preserved, not suppressed. No source blocker.
+- Automatic-origin selection, absent-language/blocked-source errors, timeout
+  cleanup, and language cache separation are implemented but not separate live
+  tests. No provider sweep, test suite, broad lint, benchmark, or smoke retry ran.
+
+Media/native-caption parser revisions are 2. `read --renderer auto` routes only
+supported YouTube video URLs to captions; explicit http/CSS remains HTML. Exact
+language matching prefers provided over automatic tracks and rejects translated
+`tlang` URLs. yt-dlp's own downloader receives selected track/source headers via
+temporary load-info-json, not a generic HTTP subtitle fetch. TempDir cleanup,
+process groups, one overall deadline, bounded output, and Unix RLIMIT_FSIZE apply.
+Signed URLs are redacted from diagnostics and excluded from saved metadata.
+Missing helper, blocked source, unavailable captions, and malformed cues are
+separate API errors. Metadata alone cannot succeed as a transcript.
+
+### Setup and working commands
+
+Official references checked: [installation](https://github.com/yt-dlp/yt-dlp#installation)
+and [EJS](https://github.com/yt-dlp/yt-dlp/wiki/EJS). GitHub rendered reads failed;
+the official raw README/wiki sources were read instead. Helper source inspected
+from the installed official package, including subtitle header propagation.
+
+```sh
+uv tool install 'yt-dlp[default]' --index-url https://pypi.org/simple
+yt-dlp --version
+node --version
+cd /home/mainpc/Projects/webtool
+cargo build --locked -p webtool-cli -p webtool-server
+# Already running; do not start a second server:
+./target/debug/webtoold --config runtime/media-config.toml
+```
+
+Ignored runtime/media-config.toml copies config.example.toml and sets
+`ytdlp_path = "/home/mainpc/.local/bin/yt-dlp"` and
+`ytdlp_js_runtime = "node:/usr/bin/node"`. PID/log remain runtime/webtoold.pid
+and runtime/webtoold.log; address http://127.0.0.1:8420. Only this project's old
+server was stopped, after checking its executable path.
+
+```sh
+cd /home/mainpc/Projects/webtool
+export PATH="$PWD/target/debug:$PATH"
+export WEBTOOL_SERVER=http://127.0.0.1:8420
+webtool doctor
+# Library captions already exists from this proof.
+webtool --format json read 'https://youtu.be/jNQXAC9IVRw' --language en --library captions --refresh >runtime/youtube-read.json
+DOC_ID=$(python3 -c 'import json;print(json.load(open("runtime/youtube-read.json"))["id"])')
+webtool read "$DOC_ID"
+webtool find "$DOC_ID" 'elephants'
+webtool export "$DOC_ID" --kind original --output runtime/youtube-original.vtt --force
+HASH=$(python3 -c 'import json;print(json.load(open("runtime/youtube-read.json"))["source"]["original"]["sha256"])')
+cmp "data/objects/$HASH" runtime/youtube-original.vtt
+webtool library items captions
+```
+
+Saved ID: `1a28a8f63209abdb9912532346d649a1e87c509c68a3a905454e54cce99fc9ef`.
+The historical milestones below retain their original outcomes and former setup;
+current server configuration is recorded above.
+
 ## Milestone 3: usable PDF reading
 
 Verified September 10, 2026 UTC. Checkout `/home/mainpc/Projects/webtool`, branch

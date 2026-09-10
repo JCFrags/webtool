@@ -11,7 +11,8 @@ A two-page public PDF passed URL read, local ingestion, page-location checks,
 phrase finding, and byte-identical original export. Default HTML nested code and
 tables also passed the preceding bounded milestone. This is not a full V1 release.
 
-OCR, Office formats, browsers, captions, and Docker remain unverified. No model
+One short YouTube video also passed English caption read/find/export through yt-dlp.
+OCR, Office formats, browsers, and Docker remain unverified. No model
 downloads or full Rust tests were run. See [STATUS.md](docs/STATUS.md) for exact
 commands, evidence, and limits. Historical archive logs are not current results.
 
@@ -30,7 +31,7 @@ commands, evidence, and limits. Historical archive logs are not current results.
 | Crawling | Persistent bounded jobs, basic robots rules, same-origin traversal, cancellation, restart status |
 | Browser helpers | Explicit Lightpanda or Chromium DOM capture, plus an experimental fastCRW integration |
 | Documents | Default Xberg native PDF text with reported pages and labeled supplemental tables; Office formats unverified |
-| Media | Optional yt-dlp metadata and existing-caption retrieval, without video download |
+| Media | Configured yt-dlp: provided/automatic YouTube captions, exact language selection, timestamped storage and original export; no media download |
 | Bibliography | DOI metadata retrieval as BibTeX, RIS, or CSL JSON |
 | Exports | Markdown, JSON, retained originals, and selected tables as CSV |
 
@@ -260,20 +261,53 @@ It requires explicit `crw_renderer` configuration and `--renderer crw`.
 It is not used silently when Lightpanda or Chromium is selected.
 Its configuration and API compatibility still require compilation and integration tests.
 
-### Captions and media metadata
+## YouTube captions
 
-Set `ytdlp_path` to an installed yt-dlp executable.
+`read` defaults to `--renderer auto`: YouTube watch/youtu.be URLs use captions;
+other URLs keep HTTP reading. `--renderer captions` forces caption selection.
+Explicit `--renderer http` or `--selector` keeps HTML selection; no hidden HTML
+fallback occurs when caption retrieval fails. The existing `media` command also
+uses the caption path. `--language` defaults to `en` and must match a track exactly.
+Provided subtitles are preferred; automatic captions are labeled. No translation,
+transcription, browser cookies, login sessions, proxies, or audio/video downloads.
+
+Install the official PyPI distribution (using an existing uv installation):
 
 ```sh
-webtool media "https://www.youtube.com/watch?v=VIDEO_ID" --language en --library research
+uv tool install 'yt-dlp[default]' --index-url https://pypi.org/simple
 ```
 
-The reader requests an existing VTT track in the exact requested language.
-It labels automatically generated tracks and errors when no supported track is available.
-YouTube may require an additional JavaScript runtime for yt-dlp.
-This helper and live caption retrieval were not tested here.
+The default extra includes yt-dlp-ejs. Official [EJS requirements](https://github.com/yt-dlp/yt-dlp/wiki/EJS)
+currently support Node >=22; this host already has Node 24.18.0. No additional
+runtime or ffmpeg was installed. Configure local, ignored server settings:
 
-### Bibliography
+```toml
+ytdlp_path = "/path/to/yt-dlp"
+ytdlp_js_runtime = "node:/path/to/node"
+```
+
+```sh
+webtool read 'https://youtu.be/jNQXAC9IVRw' --language en --library research --refresh
+webtool media 'https://www.youtube.com/watch?v=jNQXAC9IVRw' --language en
+# Use the saved ID for find and original export:
+webtool find "$DOC_ID" 'elephants'
+webtool export "$DOC_ID" --kind original --output captions.vtt
+```
+
+The helper retrieves one untranslated VTT track with its own source metadata and
+request headers. Temporary signed metadata and downloads are cleaned afterward;
+only verbatim caption bytes and stable video metadata are retained. Cache keys
+include language. Missing helper, blocked source, absent track, and malformed
+captions have separate errors. `doctor` checks the local executable without
+contacting YouTube. Helper diagnostics remain on stderr, with URLs redacted.
+
+Verified: yt-dlp 2026.08.19, EJS 0.8.0, Node v24.18.0; “Me at the zoo” produced six
+provided English cues and an identical 440-byte VTT export. A nonfatal missing
+impersonation-target warning remained visible; no extra dependency was installed.
+Automatic captions, other languages, and blocked-source paths remain unverified.
+See docs/STATUS.md for exact local commands and evidence.
+
+## Bibliography
 
 ```sh
 webtool cite 10.1038/nphys1170 --as bibtex

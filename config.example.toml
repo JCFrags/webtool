@@ -19,6 +19,7 @@ browser_no_sandbox = false
 # lightpanda_path = "/usr/local/bin/lightpanda"
 # chromium_path = "/usr/bin/chromium"
 # ytdlp_path = "/usr/local/bin/yt-dlp"
+# ytdlp_js_runtime = "node" # Node >=22; use runtime:/path/to/executable if needed.
 
 # Optional Xberg overrides. Document support is included in the normal server.
 # Only native PDF text is verified. OCR and Office formats are not verified.
