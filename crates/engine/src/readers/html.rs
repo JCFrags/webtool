@@ -7,6 +7,8 @@ use url::Url;
 use webtool_protocol::*;
 use super::Parsed;
 
+pub const PARSER:&str="rs-trafilatura/0.2.2+source-blocks/3";
+
 fn selector(s:&str)->Result<Selector>{Selector::parse(s).map_err(|e|anyhow!("invalid CSS selector: {e:?}"))}
 fn normalized(s:&str)->String{s.split_whitespace().collect::<Vec<_>>().join(" ")}
 fn text(e:ElementRef<'_>)->String{e.text().collect::<String>()}
@@ -64,7 +66,18 @@ fn flush_run(e: ElementRef<'_>, run: &mut String, p: &mut Parsed, unmapped: &mut
 fn emit(e: ElementRef<'_>, origins: &Origins<'_>, base: Option<&Url>, p: &mut Parsed, unmapped: &mut usize) -> Result<()> {
     if ignored(e) || matches!(e.value().name(), "script"|"style"|"noscript"|"template") { return Ok(()); }
     if !is_block(e) {
-        for child in e.children().filter_map(ElementRef::wrap) { emit(child, origins, base, p, unmapped)?; }
+        // Selected transparent containers can hold readable text directly (e.g.
+        // JavaScript-created div/span cards). Do not discard it or restore any
+        // unselected original subtree. Fragment locations remain derived.
+        let mut run = String::new();
+        for child in e.children() {
+            if let Some(t) = child.value().as_text() { run.push_str(t); }
+            else if let Some(child) = ElementRef::wrap(child) {
+                flush_run(e, &mut run, p, unmapped);
+                emit(child, origins, base, p, unmapped)?;
+            }
+        }
+        flush_run(e, &mut run, p, unmapped);
         return Ok(());
     }
     let tag = e.value().name();
@@ -137,14 +150,22 @@ pub fn links(source:&str,url:&str)->Vec<Link>{
     }).collect()
 }
 
+/// Only browser captures use their DOM base; retained bytes remain unchanged.
+pub fn rendered_base(bytes:&[u8],url:&str)->String{
+    let Ok(source)=std::str::from_utf8(bytes) else {return url.into()};
+    let doc=Html::parse_document(source);let base=Url::parse(url).ok();
+    doc.select(&Selector::parse("base[href]").expect("constant selector")).next()
+        .and_then(|e|absolute(base.as_ref(),e.value().attr("href")?)).unwrap_or_else(||url.into())
+}
+
 pub fn parse(bytes:&[u8],url:&str,explicit:Option<&str>)->Result<Parsed>{
     let source=std::str::from_utf8(bytes).map_err(|_|anyhow!("HTML is not UTF-8. Encoding conversion is not implemented in this build."))?;
     let original=Html::parse_document(source);
     let title=original.select(&selector("title")?).next().map(text).unwrap_or_else(||url.into());
-    let mut p=Parsed::new(&normalized(&title),"rs-trafilatura/0.2.2+source-blocks/2");
+    let mut p=Parsed::new(&normalized(&title),PARSER);
     p.links=links(source,url);
     let selected=if let Some(css)=explicit{
-        p.parser="explicit-css+source-blocks/2".into();
+        p.parser="explicit-css+source-blocks/3".into();
         let found=original.select(&selector(css)?).map(|n|n.html()).collect::<Vec<_>>();
         if found.is_empty(){bail!("CSS selector matched no elements");}found.join("\n")
     }else{

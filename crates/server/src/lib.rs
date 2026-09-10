@@ -48,6 +48,12 @@ impl IntoResponse for ApiError{
             else if message.contains("github_unsupported_object") {(StatusCode::UNPROCESSABLE_ENTITY,"github_unsupported_object")}
             else if message.contains("github_content_unavailable") || message.contains("github_readme_unavailable") {(StatusCode::UNPROCESSABLE_ENTITY,"github_content_unavailable")}
             else if message.contains("github_invalid_response") || message.contains("github_api_error") {(StatusCode::BAD_GATEWAY,"github_api_error")}
+            else if message.contains("browser_helper_missing") {(StatusCode::UNPROCESSABLE_ENTITY,"browser_helper_missing")}
+            else if message.contains("browser_timeout") {(StatusCode::GATEWAY_TIMEOUT,"browser_timeout")}
+            else if message.contains("browser_size_limit") {(StatusCode::PAYLOAD_TOO_LARGE,"browser_size_limit")}
+            else if message.contains("browser_navigation_failed") {(StatusCode::BAD_GATEWAY,"browser_navigation_failed")}
+            else if message.contains("browser_empty_output") {(StatusCode::UNPROCESSABLE_ENTITY,"browser_empty_output")}
+            else if message.contains("browser_invalid_output") {(StatusCode::BAD_GATEWAY,"browser_invalid_output")}
             else if message.contains("media_helper_missing") {(StatusCode::UNPROCESSABLE_ENTITY,"media_helper_missing")}
             else if message.contains("media_source_blocked") {(StatusCode::BAD_GATEWAY,"media_source_blocked")}
             else if message.contains("media_captions_unavailable") {(StatusCode::UNPROCESSABLE_ENTITY,"media_captions_unavailable")}
@@ -74,7 +80,8 @@ async fn documents(State(e):State<Engine>,Query(q):Query<ListQuery>)->ApiResult<
 async fn original(State(e):State<Engine>,Path(id):Path<String>)->Result<Response,ApiError>{
     let d=e.store.document(&id).await?;let b=e.store.bytes(&d.source.original).await?;
     // Download rather than execute retained HTML in an origin with API access.
-    Ok(([(header::CONTENT_TYPE,"application/octet-stream"),(header::CONTENT_DISPOSITION,"attachment")],b).into_response())
+    let disposition=if d.source.original.role=="rendered_dom" {"attachment; filename=rendered-dom.html"} else {"attachment"};
+    Ok(([(header::CONTENT_TYPE,"application/octet-stream"),(header::CONTENT_DISPOSITION,disposition)],b).into_response())
 }
 async fn find(State(e):State<Engine>,Path(id):Path<String>,Json(r):Json<FindRequest>)->ApiResult<FindResponse>{Ok(Json(e.find(&id,r).await?))}
 async fn extract(State(e):State<Engine>,Path(id):Path<String>,Json(r):Json<ExtractRequest>)->ApiResult<ExtractResponse>{Ok(Json(e.extract(&id,r).await?))}

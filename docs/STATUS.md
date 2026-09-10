@@ -3,6 +3,145 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Milestone 6: Lightpanda JavaScript reading
+
+Verified September 10, 2026. Branch feat/lightpanda-reading, issue #11, PR #12.
+PR #10 squash-merged at authorized 31ed31e2fb451dae70c615ea7d8437f8ac281a30 with
+unchanged head, green build, and --match-head-commit. Main fast-forwarded to
+179ca9f. Issue #9 remained open after merge and was explicitly closed as completed.
+
+### Helper and interface
+
+Reused /home/mainpc/.local/bin/lightpanda. `version` returned 0.3.6. Release:
+https://github.com/lightpanda-io/browser/releases/tag/0.3.6 (release ID 359777982).
+Installed SHA-256 matched the official Linux x86_64 release asset:
+`e438c0ad44e0f6916c14cf13beb003512c60438d8fd200738d2e596e73f652d6`.
+No binary or dependencies installed. Setup for a machine where it is absent:
+
+```sh
+mkdir -p "$HOME/.local/bin"
+gh release download 0.3.6 --repo lightpanda-io/browser --pattern lightpanda-x86_64-linux --output "$HOME/.local/bin/lightpanda"
+echo 'e438c0ad44e0f6916c14cf13beb003512c60438d8fd200738d2e596e73f652d6  '"$HOME/.local/bin/lightpanda" | sha256sum -c -
+chmod +x "$HOME/.local/bin/lightpanda"
+LIGHTPANDA_DISABLE_TELEMETRY=true "$HOME/.local/bin/lightpanda" version
+LIGHTPANDA_DISABLE_TELEMETRY=true "$HOME/.local/bin/lightpanda" fetch --help
+```
+
+Interface checked against installed help, https://lightpanda.io/docs/reference/cli/fetch,
+and source at release commit f72cba80a82eeeefdd8161688d78de70612b7a47, inspected
+in a shallow research clone. No upstream source was copied, built, or executed.
+Current docs describe newer flags/defaults than 0.3.6. This adapter uses only the
+verified flags and JSON fields (content, dump, http_status, url). It explicitly
+requests done quiescence then readyState complete within browser_wait_ms=2000.
+The second condition prevents the 0.3.6 waitForAll deadline from silently passing
+as quiescence. Neither condition guarantees future/application completeness.
+0.3.6 logs some fatal fetch failures yet exits zero; stderr and output validation
+are required. No --fail-on-http-error assumption or timed-only success fallback.
+
+### Actual proof
+
+- Normal locked debug build passed. Local fixture passed without a retry.
+- HTTP original: 1,496 bytes, identical to authored input. JavaScript inserted
+  "Lightpanda quartz lantern arrived" and Rust code after a 100 ms timer. The
+  marker was absent from HTTP bytes but present in the 1,963-byte retained DOM.
+- Default extraction retained the marker, exact four-space/tab/newline code,
+  Rust language, a header cell with colspan=2, and snapshot-relative selectors.
+  A DOM base tag resolved next.html to http://127.0.0.1:8768/manual/next.html.
+- Saved in library javascript, read as ordinary text, found the marker at its
+  HTML selector, exported 1,963 bytes and cmp matched the retained object.
+  Export explicitly identified rendered_dom rather than original HTTP bytes.
+  Source status was actual 200; final URL was the reported local URL.
+  Low extractor-confidence warning stayed visible despite successful checks.
+- Public https://quotes.toscrape.com/js/ produced an 8,986-byte DOM containing
+  JavaScript-generated quotes. Initial extraction dropped selected container text
+  and returned only heading/login. This was a failure, not useful page reading.
+- Small correction in the existing source-block converter retains selected direct
+  div/span text and uses derived locations. HTML parser revision is now
+  rs-trafilatura/0.2.2+source-blocks/3, also included in cache keys. No original
+  subtrees, alternate extractor, selector workaround, or substitute page used.
+- Rebuilt normally after that correction and retried only the failed public read.
+  It passed with ten readable quotes, 52 blocks, actual HTTP 200 and reported final
+  URL. Fifty text fragments have explicitly derived locations. Quote/tag grouping
+  is coarse; this was not a general HTML cleanup. The local proof was not repeated.
+- Capture version lightpanda-json-dom/2 and helper path/wait configuration are in
+  cache identity. The DOM, not envelope/diagnostics, is the original artifact.
+  HTTP/Auto/GitHub routing, PDF defaults, captions config, stored documents,
+  dependency pins, lockfile, and single CI build remain unchanged.
+- Only this project's server was restarted, checking port 8420 before starting.
+  Temporary fixture server bound loopback port 8768; it was stopped after proof.
+  No suites, framework, benchmarks, browser comparison or unrelated regressions.
+
+Local ID: `601901df1661c0695ea15d04ed1d67529e757c088093d7dddfaa2c1393ee0dcd`.
+Final public ID: `554249b123992ceb990111014d669600da59a1873dbd3683781b37d949cb1c0c`.
+No concrete blocker. Error/missing/timeout branches were source-inspected rather
+than a failure campaign. Process-per-request, incomplete web-platform support,
+coarse selected inline fragments and application-specific readiness remain limits.
+JSON overhead counts toward stdout cap; each subresource is byte-bounded, not the
+aggregate page transfer. Diagnostics use the existing 1 MiB stderr bound. No pool.
+
+### Reproduce
+
+The existing ignored runtime/media-config.toml now includes lightpanda_path and
+retains yt-dlp and Node settings. To roll back configuration, remove only the active
+lightpanda_path line. Do not replace the config or delete stored documents.
+Server startup (leave existing listener alone until a guarded restart is needed):
+
+```sh
+cd /home/mainpc/Projects/webtool
+cargo build --locked -p webtool-cli -p webtool-server
+./target/debug/webtoold --config runtime/media-config.toml
+```
+
+Fixture creation and loopback serving (temporary output only):
+
+```sh
+mkdir -p runtime/lightpanda-site
+cat >runtime/lightpanda-site/index.html <<'HTML'
+<!doctype html><html><head><title>JavaScript source fidelity</title><base href="/manual/"></head><body><main><article>
+<h1>JavaScript source fidelity</h1>
+<p>This small technical article describes a browser capture. The initial response provides this introduction. A script adds the measured content after a short timer. The reader must retain the resulting document, preserve source locations, and distinguish that document from the response sent by the local server.</p>
+<div id="result"></div>
+<script>
+setTimeout(() => {
+ const host = document.getElementById('result');
+ const p = document.createElement('p');
+ p.textContent = ['Lightpanda', 'quartz', 'lantern', 'arrived'].join(' ') + '. This paragraph was inserted by JavaScript after navigation. Its presence proves that the capture executed the script rather than reading only the initial page.';
+ host.appendChild(p);
+ const pre = document.createElement('pre');
+ const code = document.createElement('code'); code.className = 'language-rust';
+ code.textContent = 'fn quartz() {\n    let answer = 42;\n\tprintln!("{}", answer);\n}\n';
+ pre.appendChild(code); host.appendChild(pre);
+ const table = document.createElement('table');
+ table.innerHTML = '<tr><th colspan="2">Captured values</th></tr><tr><td>quartz</td><td>42</td></tr>';
+ host.appendChild(table);
+ const link = document.createElement('a'); link.href = 'next.html'; link.textContent = 'Next source page'; host.appendChild(link);
+}, 100);
+</script></article></main></body></html>
+HTML
+printf 'User-agent: *\nAllow: /\n' >runtime/lightpanda-site/robots.txt
+python3 -m http.server 8768 --bind 127.0.0.1 --directory runtime/lightpanda-site
+```
+
+In another terminal, using the existing library javascript:
+
+```sh
+cd /home/mainpc/Projects/webtool
+export PATH="$PWD/target/debug:$PATH"
+export WEBTOOL_SERVER=http://127.0.0.1:8420
+webtool --format json read http://127.0.0.1:8768/index.html --renderer http --refresh >runtime/lightpanda-http.json
+webtool --format json read http://127.0.0.1:8768/index.html --renderer lightpanda --library javascript --refresh >runtime/lightpanda-local.json
+ID=$(python3 -c 'import json;print(json.load(open("runtime/lightpanda-local.json"))["id"])')
+webtool read "$ID"
+webtool find "$ID" 'Lightpanda quartz lantern arrived'
+webtool export "$ID" --kind original --output runtime/lightpanda-export.html --force
+HASH=$(python3 -c 'import json;print(json.load(open("runtime/lightpanda-local.json"))["source"]["original"]["sha256"])')
+cmp "data/objects/$HASH" runtime/lightpanda-export.html
+webtool read https://quotes.toscrape.com/js/ --renderer lightpanda --refresh
+```
+
+Stop the temporary fixture server with Ctrl-C. Keep webtoold running.
+Historical milestones below describe their state at the time, not current gaps.
+
 ## Milestone 5: GitHub source reading
 
 Verified September 10, 2026. Branch `feat/github-source-reading`, issue #9, PR #10

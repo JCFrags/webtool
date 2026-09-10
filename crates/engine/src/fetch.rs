@@ -87,12 +87,7 @@ pub async fn browser(url:&str,renderer:&Renderer,config:&Config)->Result<Fetched
         { bail!("fastCRW requires a server built with --features crw-browser"); }
     }
     let mut cmd=match renderer{
-        Renderer::Lightpanda=>{
-            let path=config.lightpanda_path.as_ref().context("Lightpanda is not configured. Set lightpanda_path in the server config.")?;
-            let mut c=Command::new(path);
-            c.env("LIGHTPANDA_DISABLE_TELEMETRY","true")
-                .args(["fetch","--obey-robots","--dump","html","--wait-ms",&config.browser_wait_ms.to_string(),url]);c
-        },
+        Renderer::Lightpanda=>return lightpanda(url,config).await,
         Renderer::Chromium=>{
             let path=config.chromium_path.as_ref().context("Chromium is not configured. Set chromium_path in the server config.")?;
             let mut c=Command::new(path);
@@ -110,6 +105,64 @@ pub async fn browser(url:&str,renderer:&Renderer,config:&Config)->Result<Fetched
     Ok(Fetched{bytes,resolved:url.into(),content_type:Some("text/html".into()),status:None,version:None,role:"rendered_dom".into(),
         warnings:vec![Warning::new("browser_status_unavailable","CLI DOM capture does not report navigation status or final redirect URL. The saved URL is the requested URL."),
         Warning::new("browser_wait_budget","DOM capture used a fixed readiness budget. Late-loading content may be absent.")]})
+}
+
+/// CLI contract verified against official Lightpanda 0.3.6, src/lightpanda.zig.
+pub const BROWSER_CAPTURE_VERSION:&str="lightpanda-json-dom/2";
+async fn lightpanda(url:&str,config:&Config)->Result<Fetched>{
+    let path=config.lightpanda_path.as_ref().context("browser_helper_missing: configure lightpanda_path")?;
+    let mut cmd=Command::new(path);
+    cmd.env("LIGHTPANDA_DISABLE_TELEMETRY","true")
+        .args(["fetch","--obey-robots","--dump","html","--json",
+            "--wait-until","done","--wait-script","document.readyState === 'complete'",
+            "--wait-ms",&config.browser_wait_ms.to_string(),
+            "--http-max-response-size",&config.max_bytes.to_string(),
+            "--http-timeout",&config.request_timeout_seconds.saturating_mul(1000).to_string(),url]);
+    // Keep the existing stdout cap: JSON escaping/metadata also count toward it.
+    let output=helper_output(cmd,config.helper_timeout_seconds,config.max_bytes).await.map_err(|e|{
+        let message=format!("{e:#}");
+        let code=if e.downcast_ref::<std::io::Error>().is_some_and(|e|e.kind()==std::io::ErrorKind::NotFound){"browser_helper_missing"}
+            else if message.contains("deadline") || message.contains("err=Timeout"){"browser_timeout"}
+            else if message.contains("exceeded") && message.contains("bytes"){"browser_size_limit"}
+            else {"browser_navigation_failed"};
+        anyhow!("{code}: {message}")
+    })?;
+    let diagnostics=String::from_utf8_lossy(&output.stderr).trim().to_string();
+    // 0.3.6 can exit zero after logging a fatal fetch/wait failure.
+    if diagnostics.contains("level=fatal") || output.stdout.iter().all(u8::is_ascii_whitespace){
+        if diagnostics.contains("err=Timeout") || diagnostics.contains("Terminated") {
+            bail!("browser_timeout: Lightpanda navigation/readiness failed: {diagnostics}");
+        }
+        if !diagnostics.is_empty(){bail!("browser_navigation_failed: {diagnostics}");}
+        bail!("browser_empty_output: Lightpanda returned no DOM envelope");
+    }
+    let value:serde_json::Value=serde_json::from_slice(&output.stdout).context("browser_invalid_output: expected Lightpanda JSON envelope")?;
+    if value.get("error").is_some_and(|e|!e.is_null()){
+        bail!("browser_navigation_failed: {}; {diagnostics}",value["error"]);
+    }
+    if value["dump"].as_str()!=Some("html"){bail!("browser_invalid_output: expected HTML dump; {diagnostics}");}
+    let content=value["content"].as_str().context("browser_invalid_output: missing DOM content")?;
+    if content.trim().is_empty(){bail!("browser_empty_output: empty DOM; {diagnostics}");}
+    if content.len()>config.max_bytes{bail!("browser_size_limit: DOM exceeds configured bytes");}
+    let status=match value.get("http_status") {
+        None|Some(serde_json::Value::Null)=>None,
+        Some(v) if v.as_u64()==Some(0)=>None,
+        Some(v)=>Some(v.as_u64().filter(|n|(100..=599).contains(n))
+            .context("browser_invalid_output: invalid navigation status")? as u16),
+    };
+    if status.is_some_and(|s|!(200..300).contains(&s)){
+        bail!("browser_navigation_failed: source returned HTTP {}; {diagnostics}",status.unwrap());
+    }
+    let mut warnings=vec![Warning::new("rendered_dom_snapshot","Retained original/export bytes are a Lightpanda DOM snapshot, not the HTTP response. HTML source locations refer to this snapshot."),
+        Warning::new("browser_readiness_scope","Requested done quiescence and document.readyState complete within the configured wait deadline. These conditions do not establish application completeness or future updates.")];
+    if status.is_none(){warnings.push(Warning::new("browser_status_unavailable","Lightpanda did not report an HTTP status; status remains null."));}
+    let resolved=match value["url"].as_str().filter(|s|!s.is_empty()){
+        Some(u)=>validated_url(u).context("browser_invalid_output: invalid reported final URL")?.to_string(),
+        None=>{warnings.push(Warning::new("browser_final_url_unavailable","No final URL was reported. The saved URL and relative-link base use the requested URL, not a confirmed redirect destination."));url.into()},
+    };
+    if !diagnostics.is_empty(){warnings.push(Warning::new("browser_helper_diagnostic",diagnostics));}
+    Ok(Fetched{bytes:content.as_bytes().to_vec(),resolved,content_type:Some("text/html".into()),status,
+        version:None,role:"rendered_dom".into(),warnings})
 }
 
 #[cfg(feature="crw-browser")]
