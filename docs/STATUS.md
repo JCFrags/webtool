@@ -3,6 +3,88 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Milestone 5: GitHub source reading
+
+Verified September 10, 2026. Branch `feat/github-source-reading`, issue #9, PR #10
+(not merged). PR #8 was squash-merged at authorized
+4500215be8d3449130890783e9f66e8265fb0781 after confirming its unchanged head and
+green build, using --match-head-commit. Main fast-forwarded to `3d7df72`;
+issue #7 closed. No local changes or runtime data were discarded.
+
+- Normal locked debug build and source-checkpoint CI passed, existing warnings
+  only. Dependencies, PDF defaults, captions config, search pins, and CI unchanged.
+- Fresh directory read: JCFrags/webtool/tree/main/crates/engine/src resolved to
+  `3d7df722944aafe26b6f3b1311649fe46b8b2060`. Nine immediate entries with pinned
+  blob/tree links; all listing blocks derived. Original API JSON: 2,107 bytes,
+  truncated=false. Visible repository_directory_only warning; no child ingestion.
+- Followed its sources.rs link with refresh and saved in library github. Actual
+  Rust source, not HTML: 2,312 bytes, 33 lines, Rust language label, exact whitespace.
+  Metadata retained requested SHA, repository, path, and resolved commit;
+  source.version is that same commit. File read had no warnings.
+- Find github_readme returned the source block, lines 1–33. Plain output inspected.
+  Export cmp matched `git show COMMIT:crates/engine/src/sources.rs` from the already
+  existing checkout. No cloning or application gh subprocess was introduced.
+- Startup guard found a stale PID: the old process was gone and port 8420 had no
+  listener. After checking this, one server was started with the preserved
+  runtime/media-config.toml. No unrelated process was stopped or data deleted.
+  No source request failed or needed a retry.
+
+Behavior version: github-source/2 participates in read cache keys. Native routing
+is Auto-only without CSS; explicit HTTP/browser remains explicit. Root README
+scope warning remains. Files use native readers with real filenames; directory
+originals are API JSON and readable listings are derived. Missing references,
+paths, public access, rate limits, incomplete trees and unsupported objects have
+separate errors. Ref resolution checks at most eight candidate splits; full SHAs
+or percent-encoded reference slashes give explicit boundaries. Path traversal is
+limited to 16 components. All content requests follow immutable commit/tree/blob
+identities, not mutable download URLs. No repository-wide ingestion.
+
+No concrete blocker. Only the requested directory/file workflow was exercised.
+Slash-ref ambiguity, encoded paths, missing/rate-limited objects, root README link
+supplements, and truncation handling were inspected in source, not separate live
+checks. Symlinks/submodules are unsupported. GitHub API response bounds include
+base64 overhead; no authenticated quota is configured. README link supplements
+handle common inline/reference definitions, not complex CommonMark or unmarked
+directory destinations. Highest-value next gap: improve README link interpretation
+and directory-target links without changing retained source text.
+
+### Working commands
+
+Server remains at http://127.0.0.1:8420. Startup (do not start another copy):
+
+```sh
+cd /home/mainpc/Projects/webtool
+cargo build --locked -p webtool-cli -p webtool-server
+./target/debug/webtoold --config runtime/media-config.toml
+```
+
+Reproduction uses existing library github and replaces only temporary exports:
+
+```sh
+cd /home/mainpc/Projects/webtool
+export PATH="$PWD/target/debug:$PATH"
+export WEBTOOL_SERVER=http://127.0.0.1:8420
+webtool --format json read https://github.com/JCFrags/webtool/tree/main/crates/engine/src --refresh >runtime/github-directory.json
+DIR_ID=$(python3 -c 'import json;print(json.load(open("runtime/github-directory.json"))["id"])')
+webtool read "$DIR_ID"
+FILE_URL=$(python3 -c 'import json;print(next(l["url"] for l in json.load(open("runtime/github-directory.json"))["links"] if l["text"]=="blob: sources.rs"))')
+webtool --format json read "$FILE_URL" --library github --refresh >runtime/github-file.json
+FILE_ID=$(python3 -c 'import json;print(json.load(open("runtime/github-file.json"))["id"])')
+webtool read "$FILE_ID"
+webtool find "$FILE_ID" github_readme
+webtool export "$FILE_ID" --kind original --output runtime/github-export.rs --force
+COMMIT=$(python3 -c 'import json;print(json.load(open("runtime/github-file.json"))["metadata"]["github"]["resolved_commit"])')
+git show "$COMMIT:crates/engine/src/sources.rs" >runtime/github-pinned.rs
+cmp runtime/github-pinned.rs runtime/github-export.rs
+```
+
+These commands reflect the current main commit at proof time; after main changes,
+use its reported commit and a symbol in that revision (or use the recorded SHA).
+Directory ID: `f05e3e00e5127e6ec7f857a031d67ca955d3a6a834fcf4c092b485f3e37ebc86`.
+File ID: `cce49eb3f720cc8d684ff37ecfb0a9c4fb00a2d784f579a3cf76833ca2bbe26a`.
+No suites, new test framework, benchmarks, broad lint or unrelated regression
+reruns were used. The historical milestones below describe their prior state.
+
 ## Milestone 4: YouTube captions
 
 Verified September 10, 2026 UTC. Branch `feat/media-captions`, issue #7, PR #8.

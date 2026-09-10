@@ -119,8 +119,14 @@ Running jobs become interrupted after restart, while queued jobs are rescheduled
 Robots handling is partial and must not be described as fully RFC-compliant.
 Automatic sitemap-tree expansion is absent.
 
-GitHub repository roots retrieve only a pinned README.
-Blob, tree, release, issue, pull-request, and complete-repository readers are not implemented.
+GitHub auto routing now supports root README, actual blob bytes, and immediate
+nonrecursive tree listings. source_resolver=github-source/2 versions cache keys.
+Resolve refs via bounded candidates (8 maximum); require explicit SHA or encoded
+slash boundary when ambiguous. Traverse at most 16 path components through pinned
+Git trees; do not follow symlinks/submodules or replace native errors with HTML.
+Directories retain API JSON, derived locations, and explicit scope/truncation
+warnings. README link supplements are limited, not a full CommonMark parser.
+Issues, PRs, releases, and complete-repository ingestion remain unimplemented.
 There is no dedicated arXiv version-resolution or scholarly-discovery module.
 
 Search supports ordinary web results only.

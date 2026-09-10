@@ -23,7 +23,7 @@ commands, evidence, and limits. Historical archive logs are not current results.
 | CLI | Ordinary commands, text and Markdown output, JSON, JSONL batches, stderr warnings, meaningful failure exits |
 | Shared service | Axum API, concurrent requests, bounded processing, one server-local SQLite database |
 | Search | Native DuckDuckGo, Brave, Startpage, and Yahoo adapters, result deduplication, reciprocal-rank merging |
-| Reading | HTTP retrieval, original-byte retention, automatic HTML selection, explicit CSS selection |
+| Reading | HTTP/HTML, pinned GitHub files and immediate directories, original-byte retention, explicit selection |
 | Libraries | Shared named collections, references to saved documents, attributed notes and tags |
 | Local search | SQLite FTS5 keyword search, literal matching, optional regex matching |
 | Extraction | Tables, code, links, images, metadata, outlines, CSS selections, JSON pointers |
@@ -128,6 +128,39 @@ Its retained snapshot date remains the original date, while cache freshness is u
 Search snippets are provider output, not verified excerpts from destination pages.
 Brave and DuckDuckGo returned links in one bootstrap smoke query; broader availability and relevance remain untested.
 There is no automatic semantic reranker, image-search command, or date-filter implementation yet.
+
+## GitHub repositories, files, and directories
+
+Default `read` uses GitHub APIs for public repository roots and blob/tree URLs.
+An explicit `--renderer http`, CSS selector, or browser choice bypasses native
+routing. A root still reads only its pinned README, with a visible scope warning.
+
+```sh
+webtool read https://github.com/JCFrags/webtool
+webtool read https://github.com/JCFrags/webtool/tree/main/crates/engine/src --refresh
+# Follow a displayed immutable /blob/COMMIT/... link to read a file.
+webtool read https://github.com/JCFrags/webtool/blob/3d7df722944aafe26b6f3b1311649fe46b8b2060/crates/engine/src/sources.rs --refresh
+```
+
+Mutable refs resolve to commit SHAs before any file/tree retrieval. File bytes
+use the real filename and existing readers; commit, path, and requested ref are
+in metadata. Source text/code keeps its original whitespace and line locations.
+Directories show immediate entries only, with pinned file/directory links. Their
+original artifact is the API JSON, while listing blocks are explicitly derived.
+Truncated or incomplete trees remain visible; a directory read does not read files.
+
+Slash-containing refs are resolved by checking at most eight possible ref/path
+splits. Ambiguous URLs error rather than selecting a branch. Use a full commit
+SHA or encode reference slashes (`feature%2Fname`) to give an explicit boundary.
+Paths are UTF-8 percent-decoded once and limited to 16 components. Symlinks and
+submodules are explicitly unsupported. Public API rate limits and response byte
+limits apply; base64 API overhead counts toward the response limit.
+
+Root README text remains unchanged. Supplemental links pin common inline and
+reference-definition destinations; external links remain external. This is not
+full CommonMark: complex links and directory links without a trailing slash need
+further work. One directory-to-Rust-file workflow is verified, not every ref/error
+case. See docs/STATUS.md for exact evidence and export comparison commands.
 
 ## Formats
 
