@@ -1,6 +1,6 @@
 //! Persistent crawl records with a bounded in-process worker pool.
 //! Interrupted running jobs are reported, not silently replayed as new work.
-use std::{collections::{HashSet,VecDeque},time::Duration};
+use std::{collections::{HashSet,VecDeque},sync::Arc,time::Duration};
 use anyhow::{bail,Context,Result};
 use chrono::Utc;
 use futures_util::{stream,StreamExt,FutureExt};
@@ -34,7 +34,7 @@ impl Engine {
         if queued>=100{bail!("job queue is full");}
         let now=Utc::now().to_rfc3339();
         let job=Job{id:uuid::Uuid::new_v4().to_string(),state:JobState::Queued,request,created_at:now.clone(),updated_at:now,
-            document_ids:vec![],visited:0,warnings:vec![],error:None};
+            document_ids:vec![],visited:0,failed:0,warnings:vec![Warning::new("crawl_scope","Bounded same-origin HTTP crawl only. Visited counts completed attempts (including failures), not pending/cancelled requests. Saved IDs identify usable documents; this is not a complete-site archive.")],error:None};
         self.store.put_job(job.clone()).await?;self.schedule(job.clone()).await;Ok(job)
     }
     async fn schedule(&self,job:Job){
@@ -87,45 +87,74 @@ impl Engine {
         let robots=tokio::select!{r=load_robots(&engine.client,&origin,self.config.max_bytes)=>r?,_=token.cancelled()=>{
             job.state=JobState::Cancelled;return self.store.put_job(job).await;
         }};
+        let robots=Arc::new(robots);
+        // Recheck every redirect hop against robots as well as origin. Fresh
+        // crawl reads cannot reuse an ordinary-read cache that bypassed this policy.
+        let redirect_robots=robots.clone();let allowed_origin=base.origin();
+        engine.client=reqwest::Client::builder().user_agent(&self.config.user_agent)
+            .timeout(Duration::from_secs(self.config.request_timeout_seconds))
+            .redirect(reqwest::redirect::Policy::custom(move|a|{
+                if a.previous().len()>=10{a.error("too many redirects")}
+                else if a.url().origin()!=allowed_origin{a.error("redirect leaves crawl origin")}
+                else if !redirect_robots.allowed(&robot_target(a.url())){a.error("redirect excluded by robots.txt")}
+                else{a.follow()}
+            })).build()?;
         let mut frontier=VecDeque::from([(base.to_string(),0usize)]);
         let mut seen=HashSet::from([base.to_string()]);let mut attempts=0usize;
         while !frontier.is_empty()&&attempts<job.request.max_pages&&!token.is_cancelled(){
             let mut batch=Vec::new();
+            let level=frontier.front().map(|(_,depth)|*depth);
             while batch.len()<self.config.crawl_concurrency&&attempts+batch.len()<job.request.max_pages{
+                // Keep breadth-first depth semantics even at a short batch boundary.
+                if frontier.front().map(|(_,depth)|*depth)!=level{break;}
                 let Some((url,depth))=frontier.pop_front()else{break;};
                 let u=Url::parse(&url)?;
-                let target=match u.query(){Some(q)=>format!("{}?{q}",u.path()),None=>u.path().into()};
+                let target=robot_target(&u);
                 if !robots.allowed(&target){job.warnings.push(Warning::new("robots_excluded",url));continue;}
                 batch.push((url,depth));
             }
-            if batch.is_empty(){break;}
+            if batch.is_empty(){continue;}
             attempts+=batch.len();
-            let results=stream::iter(batch).map(|(url,depth)|{
+            let mut results=stream::iter(batch).map(|(url,depth)|{
                 let engine=engine.clone();let token=token.clone();let origin=origin.clone();
-                let delay=robots.delay;let request=ReadRequest{url:url.clone(),refresh:false,renderer:Renderer::Http,language:default_language(),library:None,selector:None,actor:None};
+                let delay=robots.delay;let request=ReadRequest{url:url.clone(),refresh:true,renderer:Renderer::Http,language:default_language(),library:None,selector:None,actor:None};
                 async move{
                     let result=tokio::select!{
                         r=async{engine.pace(&origin,delay).await;engine.read(request).await}=>Some(r),
                         _=token.cancelled()=>None,
                     };(url,depth,result)
                 }
-            }).buffer_unordered(self.config.crawl_concurrency).collect::<Vec<_>>().await;
-            for (url,depth,result) in results{
+            }).buffer_unordered(self.config.crawl_concurrency);
+            while let Some((url,depth,result))=results.next().await{
                 let Some(result)=result else{continue;};job.visited+=1;
                 match result{
                     Ok(result)=>{
                         let d=result.document;
-                        if fetch::validated_url(&d.source.resolved).is_ok_and(|u|u.origin()!=base.origin()) {
-                            job.warnings.push(Warning::new("out_of_scope_cached_source",format!("{url}: saved result resolves outside this crawl origin")));
+                        if !fetch::validated_url(&d.source.resolved).is_ok_and(|u|u.origin()==base.origin() && robots.allowed(&robot_target(&u))) || d.blocks.is_empty() {
+                            job.failed+=1;
+                            job.warnings.push(Warning::new("crawl_unusable_document",format!("{url}: empty or out-of-scope result was not attached")));
+                            job.updated_at=Utc::now().to_rfc3339();self.store.put_job(job.clone()).await?;
                             continue;
                         }
                         if !d.warnings.is_empty(){job.warnings.push(Warning::new("document_warnings",format!("{} has {} extraction warnings",d.id,d.warnings.len())));}
                         if let Some(name)=&job.request.library{self.store.add(name,&d.id,job.request.actor.clone()).await?;}
                         if !job.document_ids.contains(&d.id){job.document_ids.push(d.id.clone());}
-                        if depth<job.request.max_depth{
-                            for link in d.links{
+                        for link in d.links{
                                 let Ok(next)=fetch::validated_url(&link.url)else{continue;};
                                 if next.origin()!=base.origin(){continue;}
+                                if seen.contains(next.as_str()){continue;}
+                                if !robots.allowed(&robot_target(&next)) {
+                                    if !job.warnings.iter().any(|w|w.code=="robots_excluded" && w.message==next.as_str()) {
+                                        job.warnings.push(Warning::new("robots_excluded",next.to_string()));
+                                    }
+                                    continue;
+                                }
+                                if depth>=job.request.max_depth {
+                                    if !job.warnings.iter().any(|w|w.code=="depth_limit_reached") {
+                                        job.warnings.push(Warning::new("depth_limit_reached","Links beyond the configured traversal depth were not followed."));
+                                    }
+                                    continue;
+                                }
                                 if seen.len()>=10000 {
                                     if !job.warnings.iter().any(|w|w.code=="frontier_limit") {
                                         job.warnings.push(Warning::new("frontier_limit","URL discovery stopped at 10000 candidates."));
@@ -133,17 +162,22 @@ impl Engine {
                                     break;
                                 }
                                 if seen.insert(next.to_string()){frontier.push_back((next.to_string(),depth+1));}
-                            }
                         }
-                    },Err(e)=>job.warnings.push(Warning::new("crawl_read_failed",format!("{url}: {e:#}"))),
+                    },Err(e)=>{job.failed+=1;job.warnings.push(Warning::new("crawl_read_failed",format!("{url}: {e:#}")));},
                 }
+                // Publish each completion, not the slowest sibling in the batch.
+                job.updated_at=Utc::now().to_rfc3339();self.store.put_job(job.clone()).await?;
             }
-            job.updated_at=Utc::now().to_rfc3339();self.store.put_job(job.clone()).await?;
         }
         if token.is_cancelled(){job.state=JobState::Cancelled;}
         else{
             if !frontier.is_empty(){job.warnings.push(Warning::new("page_limit_reached","The configured page budget was reached. This is not a complete-site archive."));}
-            job.state=if job.warnings.is_empty(){JobState::Complete}else{JobState::Partial};
+            if job.document_ids.is_empty() && job.visited>0 {
+                job.state=JobState::Failed;
+                job.error=Some("No usable documents were saved from the completed crawl attempts.".into());
+            } else {
+                job.state=if job.warnings.iter().all(|w|w.code=="crawl_scope"){JobState::Complete}else{JobState::Partial};
+            }
         }
         job.updated_at=Utc::now().to_rfc3339();self.store.put_job(job).await
     }
@@ -162,6 +196,10 @@ impl Engine {
         let all=crate::readers::html::links(source,&result.resolved);
         Ok(json!({"source":result.resolved,"kind":"page_links","links":all.iter().take(limit).collect::<Vec<_>>(),"truncated":all.len()>limit}))
     }
+}
+
+fn robot_target(url:&Url)->String{
+    match url.query(){Some(q)=>format!("{}?{q}",url.path()),None=>url.path().into()}
 }
 
 #[derive(Default)]struct Group{agents:Vec<String>,rules:Vec<(bool,String)>,delay:Option<f64>}
