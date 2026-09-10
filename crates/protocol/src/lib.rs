@@ -220,6 +220,8 @@ pub struct Problem { pub code: String, pub message: String }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Capability { pub name: String, pub available: bool, pub detail: String }
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Health { pub version: String, pub api_version: String, pub capabilities: Vec<Capability> }
+pub struct Health { pub version: String, pub api_version: String,
+    #[serde(default,skip_serializing_if="Option::is_none")] pub build_commit: Option<String>,
+    pub capabilities: Vec<Capability> }
 
 pub mod render;

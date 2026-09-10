@@ -77,7 +77,7 @@ impl IntoResponse for ApiError{
     }
 }
 type ApiResult<T>=Result<Json<T>,ApiError>;
-async fn health(State(e):State<Engine>)->Json<Health>{Json(e.health().await)}
+async fn health(State(e):State<Engine>)->Json<Health>{{let mut health=e.health().await;health.build_commit=Some(option_env!("WEBTOOL_BUILD_COMMIT").unwrap_or("unknown").to_owned());Json(health)}}
 async fn read(State(e):State<Engine>,Json(r):Json<ReadRequest>)->ApiResult<ReadResponse>{Ok(Json(e.read(r).await?))}
 async fn search(State(e):State<Engine>,Json(r):Json<SearchRequest>)->ApiResult<SearchResponse>{Ok(Json(e.search(r).await?))}
 async fn document(State(e):State<Engine>,Path(id):Path<String>)->ApiResult<Document>{Ok(Json(e.store.document(&id).await?))}
