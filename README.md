@@ -39,73 +39,118 @@ commands, evidence, and limits. Historical archive logs are not current results.
 The default packages compile; optional integrations remain unverified.
 Some integration boundaries are intentionally marked experimental.
 
-## Build and run
+## Install and connect
 
-Install a current stable Rust toolchain on a network-connected development machine.
-Run these commands from this repository's root.
+Use a current stable Rust toolchain and the system build tools needed by Cargo.
+Clone this repository, then use the small local installer. It builds optimized
+binaries with the committed lockfile and normal features. It does not use sudo,
+edit shell profiles, manage services or download browsers, media helpers or models.
+Cargo may download locked Rust dependencies. No published binary release/tag yet.
+
+### Client machine
+
+```sh
+cd /path/to/webtool
+./scripts/install-local.sh --client-only
+# Optional destination: --bin-dir /absolute/user-owned/bin
+export PATH="$HOME/.local/bin:$PATH" # current shell only
+cd /tmp
+webtool connect http://research-server:8420
+webtool config show
+webtool doctor
+webtool library list
+```
+
+Client-only builds/installations select only `webtool-cli`, not the engine or
+server. The client uploads files through HTTP. It never creates server storage,
+opens the server SQLite file or requires document/browser/media helpers.
+
+`connect` validates and saves an absolute HTTP(S) endpoint without contacting it.
+URLs may include a reverse-proxy base path, but not credentials, queries or
+fragments. It saves `server` in `$XDG_CONFIG_HOME/webtool/client.toml`, falling
+back to `$HOME/.config/webtool/client.toml` on Linux. An unset, empty or relative
+XDG_CONFIG_HOME uses the HOME fallback. Existing unrelated TOML settings are
+preserved, though comments/formatting may be rewritten. Updates use a synced
+same-directory temporary file and atomic replacement. Malformed files and target
+symlinks are refused rather than overwritten.
+
+Endpoint precedence, highest first:
+1. `--server URL`
+2. `WEBTOOL_SERVER`
+3. Saved client `server` setting
+4. `http://127.0.0.1:8420`
+
+`webtool config show` reports the effective endpoint, configuration path and
+selection source without network access. `--format json` works for both new
+commands. An override does not change the saved setting. A disconnected server
+produces an actionable error; no command automatically starts another server.
+`doctor` also reports the selected endpoint and server build commit, or `unknown`
+for builds without provenance/older servers. A dirty source build is labeled.
+
+### Host machine
+
+The default installer installs both `webtool` and `webtoold` into `~/.local/bin`.
+Existing unrelated executables are refused. Per-binary checksum receipts allow
+later replacement only when the installed file still matches the prior install.
+Do not delete those receipts to force replacement. Use a different bin directory
+if a name is occupied. Binaries are replaced by rename, not overwritten in place;
+running processes are not restarted. Keep a copy of previous binaries/receipts
+when planning a rollback. No automatic update mechanism is installed.
+
+```sh
+cd /path/to/webtool
+./scripts/install-local.sh
+# Select an absolute config path and the intended absolute data directory.
+# Stop your existing server gracefully before starting its replacement.
+cd /tmp
+/home/USER/.local/bin/webtoold \
+  --config /absolute/path/server.toml \
+  --data-dir /absolute/path/existing-data
+```
+
+For a new host, copy `config.example.toml` to the selected config path and edit it
+before startup. Keep loopback binding unless trusted-LAN access is intentional.
+Configure optional helpers only on the host. Select the existing data directory
+for an existing deployment; do not copy examples into a different empty database.
+The server prints its effective listening address, resolved absolute data directory,
+config path and build commit. An occupied bind address fails before opening storage.
+
+Relative paths retain their historical working-directory meaning, not the config
+file's or binary's directory. A relative data directory produces a warning. Use
+absolute config/data paths and absolute configured helper paths for installed
+startup. No checkout-local working directory is required with these explicit paths.
+
+This project's preserved deployment uses:
+
+```sh
+cd /tmp
+/home/mainpc/.local/bin/webtoold \
+  --config /home/mainpc/Projects/webtool/runtime/media-config.toml \
+  --data-dir /home/mainpc/Projects/webtool/data
+```
+
+Start only one process for this data directory. The command does not install a
+system service. No systemd, Docker, firewall, TLS, account or automatic-update
+management is provided.
+
+For explicit trusted-LAN binding, add `--bind 0.0.0.0:8420` to the host command,
+then connect clients to `http://HOST_LAN_ADDRESS:8420`, not `0.0.0.0`. This does not
+open ports or change firewall rules. Libraries are shared by every connected user.
+Contributor names are attribution, not authentication. The service can reach HTTP
+services visible to its host. It is **not an authenticated public service** and
+must not be exposed directly to the public internet.
+
+### Development
+
+Use debug builds while editing:
 
 ```sh
 cargo build --locked -p webtool-cli -p webtool-server
 ```
 
-Cargo.lock is committed. Use debug builds during these bounded milestones. Full tests and
-optional integration checks remain manual, not prerequisites for this milestone.
-
-Start the server in one terminal.
-
-```sh
-./target/debug/webtoold --config config.example.toml
-```
-
-Use the CLI from another terminal.
-
-```sh
-export PATH="$PWD/target/debug:$PATH"
-webtool doctor
-webtool library create research --description "Shared research sources"
-webtool ingest tests/fixtures/source.md --library research --actor Alice
-webtool saved
-webtool search "Exact code" --library research
-```
-
-Copy a full document ID from the ingest or saved output.
-
-```sh
-DOC_ID="replace-with-the-full-64-character-document-id"
-webtool read "$DOC_ID"
-webtool find "$DOC_ID" "Exact code"
-webtool extract "$DOC_ID" code
-webtool note "$DOC_ID" --actor Alice --text "Reviewed the original." --tag reviewed
-webtool export "$DOC_ID" --kind markdown --output source.md
-```
-
-The exact executed bootstrap sequence is recorded in docs/STATUS.md.
-
-## Connect several people
-
-Install only `webtool` on client machines.
-Keep the server, database, browser helpers, and document processors on the shared machine.
-
-All connected users have the same access.
-Names attribute contributions and do not establish identity or permissions.
-The server has no authentication and can reach HTTP services visible to its host.
-Do not expose it directly to the public internet.
-
-On a trusted LAN, bind the server deliberately.
-
-```sh
-./target/debug/webtoold --bind 0.0.0.0:8420 --data-dir ./data
-```
-
-Point each client at that machine.
-
-```sh
-export WEBTOOL_SERVER="http://research-server:8420"
-webtool library list
-```
-
-Run one server process per data directory.
-Clients never open the SQLite file or require a shared filesystem.
+The installer runs the release build for installation. Keep binaries, data and
+smoke artifacts outside Git. Full tests and optional integration checks remain
+manual. See docs/STATUS.md for the bounded installed two-client proof and limits.
 
 ## Read and search
 

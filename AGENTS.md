@@ -7,34 +7,44 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current milestone: arXiv paper reading and citations
+## Current milestone: installable client and shared-server setup
 
-Work on feat/arxiv-paper-reading, issue #15. PR #14 merged at authorized
-e811d9b6fe9a413265e79e712648f0bb93017a87 with green build and match-head guard;
-issue #13 closed. Auto abs/pdf routing only, modern/legacy IDs and explicit versions.
-Resolve metadata only from official abstract-page HTML with existing HTTP/scraper.
-Validate the selected version before fetching its pinned PDF through Xberg. Do not
-retry Atom first or introduce a provider chain. Keep HTML metadata artifact and
-PDF original separate.
-Follow official request spacing/concurrency across the server. Never substitute
-latest versions, abstracts, other providers, or HTML for failed full text.
-Generate saved-ID BibTeX/CSL offline from retained metadata, literal ordered names,
-explicit preprint version and stable URL. Preserve DOI behavior; invent no fields.
-Build normally with cargo build --locked -p webtool-cli -p webtool-server. Verify
-one small explicit-version paper: library read, body phrase, page locations, PDF
-export comparison and both citations. No suites/corpus/campaign, unrelated parser
-work, OCR, browser, bibliography manager, or dependencies changes. Retry failures
-only; report upstream blocks. Keep existing readers/crawl/config/data/helpers/pins/CI.
-Restart only this server with runtime/media-config.toml, never a second listener.
-Update docs, mark ready only after paper-to-citation proof, and do not merge.
+Work on feat/install-connect, issue #17, PR #18. PR #16 squash-merged with its
+requested head 93c3870f7ad9e13af76211c66a46c1ea27fb6611 and green CI through the
+match-head guard. Main merge is 1d5924b; issue #15 closed.
+
+Keep CLI-only settings separate from the engine. `connect` is local and offline;
+`config show` explains endpoint precedence: --server, WEBTOOL_SERVER, saved TOML,
+localhost default. Preserve unrelated TOML values and atomic replacement. Clients
+never open server storage or install helpers. The installer supports --client-only,
+uses locked release builds and refuses unrelated executable names. Preserve its
+checksum receipts. No sudo, shell-profile edits, service manager, downloads of
+helpers/models, published release/tag or automatic updater.
+
+Keep relative server paths cwd-relative, never silently config-relative. Installed
+startup must use explicit absolute config/data paths, with the existing database
+and helper settings. Print effective bind/data and build identity. Doctor's added
+build field is backward-compatible. Do not start a second server or manage other
+projects. This project is unrelated to Pi/Glance/Chrono and Terminal Agent Browser
+release coordination; direct those requests to their owning worker.
+
+Use debug builds during editing, then one locked release build through installation.
+Prove two independent temporary client configs outside the checkout share one
+server/library through upload, saved read and identical original export. This is
+not another physical machine's LAN proof. No suites, benchmarks, source-refetch
+campaign, installation matrix, parser changes, dependency upgrades or CI changes.
+Preserve all existing data/readers/helpers. Rerun failed steps only. Update README,
+AGENTS and STATUS, leave one server running, mark ready after proof, never merge.
 
 ## Confirmed local caption setup
 
 Official PyPI helper installed with `uv tool install 'yt-dlp[default]' --index-url
 https://pypi.org/simple`: yt-dlp 2026.08.19 and EJS 0.8.0. Existing Node v24.18.0
 satisfies documented Node >=22; no new runtime or ffmpeg is needed for this path.
-Machine paths live only in ignored runtime/media-config.toml. Start this server
-with `./target/debug/webtoold --config runtime/media-config.toml`.
+Machine helper settings live in ignored runtime/media-config.toml. Installed
+startup: `/home/mainpc/.local/bin/webtoold --config
+/home/mainpc/Projects/webtool/runtime/media-config.toml --data-dir
+/home/mainpc/Projects/webtool/data`. Use these absolute paths outside the checkout.
 
 One live 19-second video passed with six provided English cues. Nonfatal yt-dlp
 impersonation warnings remain visible; do not install extra dependencies only to

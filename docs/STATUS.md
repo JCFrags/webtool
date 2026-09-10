@@ -3,6 +3,104 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Milestone 9: installable client and shared-server setup
+
+Verified September 10, 2026. Issue #17, PR #18, branch feat/install-connect.
+PR #16 merged with unchanged authorized head and green build through
+`--match-head-commit 93c3870f7ad9e13af76211c66a46c1ea27fb6611`.
+Main merge: 1d5924b. Issue #15 closed. No release or tag was published.
+
+### Delivered and verified
+
+- Local `connect` validates an HTTP(S) URL and atomically saves client TOML without
+  contacting a server. Existing unrelated settings survived the update. Config
+  lives at XDG_CONFIG_HOME/webtool/client.toml or HOME/.config/webtool/client.toml.
+- `config show` reports endpoint/path/source. Verified localhost default, saved
+  setting, WEBTOOL_SERVER and --server precedence. JSON remains machine-readable.
+- Offline connect to port 9 succeeded. Doctor then failed with an actionable
+  connection-refused error, selected endpoint and explicit no-server-start message.
+- Normal locked debug build passed. One locked optimized build through
+  `./scripts/install-local.sh` passed in 1m54s and installed both binaries into
+  /home/mainpc/.local/bin. Existing unused-import warnings remain. No suite,
+  benchmark, source re-fetch, optional build or installation matrix was run.
+- Installer client-only branch selects only webtool-cli; source-inspected, not
+  separately built as a second installation matrix. CLI has no engine dependency
+  or storage initialization. It reuses already pinned TOML/tempfile crates; lock
+  changes add only those two CLI dependency edges. No version/pin/CI changes.
+- Installer requires a user-owned bin directory, refuses unrelated existing files,
+  and records checksums for later owned-file updates. It does not use sudo, edit
+  profiles, download runtime helpers/models, start services or open ports.
+- The old runtime PID file was stale and port 8420 had no listener. A fresh process
+  check found no webtoold. No stale PID was signaled. Installed webtoold started
+  from /tmp with explicit absolute config and data arguments. Its log printed
+  the intended paths, loopback address and build commit.
+- Existing data/webtool.sqlite3 retained its inode. Document count changed from
+  17 to 18 and library count from 6 to 7 after the single upload/library creation.
+  Preserved runtime/media-config.toml remained byte-identical, including helpers.
+- Client A and B used separate temporary XDG_CONFIG_HOME directories and installed
+  CLI commands from /tmp. A created install-shared and uploaded shared.txt. B
+  connected independently, listed the shared item, read its text/indentation and
+  exported 72 bytes identical to the input.
+- Saved ID: `4ed73eb0f9d58b9aab56b01561c1c1b3c593bcbeab9d8a13313f89ee0926fe20`.
+  Both doctors reported http://127.0.0.1:8420, source saved client settings and
+  build `984376ed71b695c53f720c6ab8896ba310a37d11`.
+- Installed binary code matches that implementation checkpoint. Subsequent docs-only
+  commits do not require another release build. Health's optional build_commit
+  field defaults for older responses; text/JSON doctor reports unknown when absent.
+  Dirty code builds are labeled. Backward compatibility/unknown paths were inspected,
+  not separately exercised against another server.
+
+No concrete blocker. This proves separate local client configurations sharing one
+server, not connectivity from another physical machine. No LAN/firewall changes,
+public authenticated-service claim, account/TLS infrastructure or systemd/Docker
+management. Relative server paths retain cwd semantics with a data-directory warning;
+installed deployments must use explicit absolute paths. Older readers and parser
+behavior were not changed or re-fetched. Prior milestone evidence follows below.
+
+### Installed commands and artifacts
+
+Binaries: /home/mainpc/.local/bin/webtool and /home/mainpc/.local/bin/webtoold.
+Checksum receipts: sibling .webtool.install-sha256 and .webtoold.install-sha256.
+Proof inputs/JSON/exports/configs/log are under ignored runtime/install-proof/.
+The working server remains on loopback. Its PID is in runtime/webtoold.pid.
+
+Start only after confirming no existing copy is running:
+
+```sh
+cd /tmp
+/home/mainpc/.local/bin/webtoold \
+  --config /home/mainpc/Projects/webtool/runtime/media-config.toml \
+  --data-dir /home/mainpc/Projects/webtool/data
+```
+
+The following commands describe the completed proof; do not repeat successful
+library creation or uploads merely to reproduce this report:
+
+```sh
+cd /tmp
+CLI=/home/mainpc/.local/bin/webtool
+PROOF=/home/mainpc/Projects/webtool/runtime/install-proof
+unset WEBTOOL_SERVER
+export XDG_CONFIG_HOME="$PROOF/client-a"
+"$CLI" connect http://127.0.0.1:8420
+"$CLI" library create install-shared
+"$CLI" --format json ingest "$PROOF/shared.txt" --library install-shared >"$PROOF/ingested.json"
+ID=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["id"])' "$PROOF/ingested.json")
+export XDG_CONFIG_HOME="$PROOF/client-b"
+"$CLI" connect http://127.0.0.1:8420
+"$CLI" config show
+"$CLI" doctor
+"$CLI" library items install-shared
+"$CLI" read "$ID"
+"$CLI" export "$ID" --kind original --output "$PROOF/exported-b.txt"
+cmp "$PROOF/shared.txt" "$PROOF/exported-b.txt"
+```
+
+Use the saved ID and existing client B config for further local inspection without
+uploading again. No global client endpoint was changed. Keep previous binaries and
+matching receipts before later updates; never remove existing server data/config
+as part of an installation rollback.
+
 ## Milestone 8: arXiv abstract HTML and saved-paper citations
 
 Verified September 10, 2026 on feat/arxiv-paper-reading, issue #15, PR #16.
