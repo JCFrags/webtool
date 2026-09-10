@@ -7,25 +7,24 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current milestone: crawl into shared libraries
+## Current milestone: arXiv paper reading and citations
 
-Work on feat/crawl-library-workflow, issue #13. PR #12 was merged at authorized
-8f447a8ed69eacc76e0e262b03e5d1307b557de9 with green build and match-head guard;
-issue #11 closed. Stream bounded crawl results as they complete. Attach documents
-and persist progress before waiting for slow siblings. Preserve depth, URL query
-semantics, same-origin/redirect/robots restrictions, page budgets (including failed
-attempts), cancellation, and interrupted-on-restart behavior. No resumable frontier.
-Use existing HTTP/extraction/SQLite/workers. Keep CLI progress on stderr, data on
-stdout. Report saved IDs, visited attempts, failures and bounded scope honestly.
-Build normally with cargo build --locked -p webtool-cli -p webtool-server.
-Use one local site and one three-page/depth-one crawl. While its delayed response
-is pending, verify a completed child is attached/readable, then inspect final counts,
-library search and request log for duplicates/robots exclusions. Temporary files in
-runtime/. Rerun only failures. No suites/framework, benchmarks, public crawl,
-browser crawl, sitemap work, parser cleanup, scheduler, or dependencies changes.
-Preserve all helpers, config/data, PDF/GitHub/captions/Lightpanda, pins and CI. Restart
-only this server with runtime/media-config.toml; never a second listener on 8420.
-Update docs and mark ready after proof. Do not merge this milestone PR.
+Work on feat/arxiv-paper-reading, issue #15. PR #14 merged at authorized
+e811d9b6fe9a413265e79e712648f0bb93017a87 with green build and match-head guard;
+issue #13 closed. Auto abs/pdf routing only, modern/legacy IDs and explicit versions.
+Resolve and validate official API identity before fetching the pinned PDF. Use
+existing HTTP/XML/Xberg/storage. Keep PDF original and metadata response artifact.
+Follow official request spacing/concurrency across the server. Never substitute
+latest versions, abstracts, other providers, or HTML for failed full text.
+Generate saved-ID BibTeX/CSL offline from retained metadata, literal ordered names,
+explicit preprint version and stable URL. Preserve DOI behavior; invent no fields.
+Build normally with cargo build --locked -p webtool-cli -p webtool-server. Verify
+one small explicit-version paper: library read, body phrase, page locations, PDF
+export comparison and both citations. No suites/corpus/campaign, unrelated parser
+work, OCR, browser, bibliography manager, or dependencies changes. Retry failures
+only; report upstream blocks. Keep existing readers/crawl/config/data/helpers/pins/CI.
+Restart only this server with runtime/media-config.toml, never a second listener.
+Update docs, mark ready only after paper-to-citation proof, and do not merge.
 
 ## Confirmed local caption setup
 
