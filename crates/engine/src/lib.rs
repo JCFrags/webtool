@@ -1,3 +1,4 @@
+pub mod arxiv;
 pub mod config;
 pub mod fetch;
 pub mod jobs;
@@ -59,6 +60,7 @@ impl Engine {
         let _operation=self.operation_slots.acquire().await?;
         let url=fetch::validated_url(&request.url)?;
         if let Some(name)=&request.library{self.store.require_library(name).await?;}
+        let paper_id=if matches!(request.renderer,Renderer::Auto) && request.selector.is_none(){arxiv::identify(&url)?}else{None};
         let caption_url = if matches!(request.renderer,Renderer::Captions) || (matches!(request.renderer,Renderer::Auto) && request.selector.is_none()) {
             media::youtube_url(url.as_str())?
         } else { None };
@@ -67,7 +69,7 @@ impl Engine {
         }
         if caption_url.is_some() { media::validate_language(&request.language)?; }
         let key=hex::encode(Sha256::digest(serde_json::to_vec(&json!({"url":caption_url.as_deref().unwrap_or(url.as_str()),"renderer":request.renderer,
-            "language":request.language,"media_parser":media::PARSER,"source_resolver":sources::VERSION,"selector":request.selector,"version":EXTRACTION_VERSION,"document_config":self.config.document_config,
+            "language":request.language,"media_parser":media::PARSER,"source_resolver":sources::VERSION,"arxiv_resolver":arxiv::VERSION,"selector":request.selector,"version":EXTRACTION_VERSION,"document_config":self.config.document_config,
             "html_parser":readers::html::PARSER,"browser_capture":fetch::BROWSER_CAPTURE_VERSION,"lightpanda_path":self.config.lightpanda_path,"browser_wait_ms":self.config.browser_wait_ms,"crw":self.config.crw_renderer}))?));
         let lock={
             let mut locks=self.locks.lock().await;
@@ -78,10 +80,33 @@ impl Engine {
         };
         let _same_source=lock.lock().await;
         if !request.refresh{
-            if let Some(document)=self.store.cached(&key,self.config.cache_seconds).await?{
+            if let Some(document)=self.store.cached(&key,if paper_id.is_some(){86400}else{self.config.cache_seconds}).await?{
                 if let Some(name)=&request.library{self.store.add(name,&document.id,request.actor.clone()).await?;}
                 return Ok(ReadResponse{document,cached:true});
             }
+        }
+        if let Some(identity)=paper_id {
+            let (paper,api,pdf,metadata_artifact,metadata_time)={
+                let _network=self.network.acquire().await?;
+                let (paper,api)=arxiv::resolve(&self.client,&identity,self.config.max_bytes).await?;
+                let metadata_time=Utc::now().to_rfc3339();
+                let artifact=self.store.put_bytes(&api.bytes,"application/atom+xml","arxiv_metadata").await?;
+                let pdf=arxiv::pdf(&self.client,&paper,self.config.max_bytes).await?;
+                (paper,api,pdf,artifact,metadata_time)
+            };
+            let original=self.store.put_bytes(&pdf.bytes,"application/pdf","arxiv_pdf").await?;
+            let source=Source{requested:request.url,resolved:pdf.resolved,retrieved_at:Utc::now().to_rfc3339(),status:pdf.status,version:pdf.version,original};
+            let mut parsed=self.parse(pdf.bytes,format!("{}.pdf",paper.versioned_id.replace('/',"_")),"application/pdf".into(),None).await
+                .context("arxiv_full_text_failed: PDF extraction failed; metadata is not full text")?;
+            if parsed.blocks.is_empty(){bail!("arxiv_full_text_failed: PDF has no readable blocks");}
+            parsed.title=paper.title.clone();
+            parsed.links.push(Link{url:paper.abstract_url.clone(),text:format!("arXiv {}",paper.versioned_id)});
+            parsed.metadata["arxiv"]=serde_json::to_value(&paper)?;
+            parsed.metadata["arxiv"]["provenance"]=json!({"api_url":api.resolved,"status":api.status,"retrieved_at":metadata_time,"artifact":metadata_artifact});
+            let document=self.finish(parsed,source,pdf.warnings).await?;
+            self.store.cache(key,document.id.clone()).await?;
+            if let Some(name)=request.library{self.store.add(&name,&document.id,request.actor).await?;}
+            return Ok(ReadResponse{document,cached:false});
         }
         if let Some(canonical)=caption_url {
             let _slot=self.parse_slots.acquire().await?;
@@ -211,6 +236,10 @@ impl Engine {
         Ok(ExtractResponse{document_id:d.id,data,warnings})
     }
     pub async fn citation(&self,doi:&str,format:&str)->Result<Value>{
+        let input=doi.trim();
+        if input.len()==64 && input.bytes().all(|b|b.is_ascii_hexdigit()) {
+            return arxiv::citation(&self.store.document(input).await?,format);
+        }
         let doi=doi.trim().trim_start_matches("https://doi.org/").trim_start_matches("doi:");
         if !doi.starts_with("10.")||!doi.contains('/')||doi.chars().any(char::is_whitespace){bail!("expected a DOI such as 10.1234/example");}
         let accept=match format{"bibtex"=>"application/x-bibtex","ris"=>"application/x-research-info-systems","csl"=>"application/vnd.citationstyles.csl+json",_=>bail!("format must be bibtex, ris, or csl")};

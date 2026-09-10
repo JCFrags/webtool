@@ -37,7 +37,14 @@ impl From<anyhow::Error> for ApiError{fn from(e:anyhow::Error)->Self{Self(e)}}
 impl IntoResponse for ApiError{
     fn into_response(self)->Response{
         let message=format!("{:#}",self.0);
-        let (status,code)=if message.contains("github_rate_limited") {(StatusCode::TOO_MANY_REQUESTS,"github_rate_limited")}
+        let (status,code)=if message.contains("arxiv_rate_limited") {(StatusCode::TOO_MANY_REQUESTS,"arxiv_rate_limited")}
+            else if message.contains("arxiv_version_unavailable") || message.contains("arxiv_empty_result") {(StatusCode::NOT_FOUND,"arxiv_unavailable")}
+            else if message.contains("arxiv_invalid_identifier") {(StatusCode::BAD_REQUEST,"arxiv_invalid_identifier")}
+            else if message.contains("arxiv_identity_mismatch") {(StatusCode::BAD_GATEWAY,"arxiv_identity_mismatch")}
+            else if message.contains("arxiv_invalid_metadata") || message.contains("arxiv_api_failed") {(StatusCode::BAD_GATEWAY,"arxiv_api_failed")}
+            else if message.contains("arxiv_pdf_failed") || message.contains("arxiv_full_text_failed") {(StatusCode::BAD_GATEWAY,"arxiv_full_text_failed")}
+            else if message.contains("citation_metadata_unavailable") || message.contains("citation_format_unsupported") {(StatusCode::UNPROCESSABLE_ENTITY,"citation_unavailable")}
+            else if message.contains("github_rate_limited") {(StatusCode::TOO_MANY_REQUESTS,"github_rate_limited")}
             else if message.contains("github_access_denied") {(StatusCode::BAD_GATEWAY,"github_access_denied")}
             else if message.contains("github_reference_ambiguous") {(StatusCode::UNPROCESSABLE_ENTITY,"github_reference_ambiguous")}
             else if message.contains("github_reference_limit") || message.contains("github_path_limit") {(StatusCode::UNPROCESSABLE_ENTITY,"github_resolution_limit")}
@@ -105,7 +112,7 @@ async fn map(State(e):State<Engine>,Json(r):Json<MapRequest>)->ApiResult<Value>{
 #[derive(Deserialize)]struct MediaRequest{url:String,#[serde(default="english")]language:String,library:Option<String>}
 fn english()->String{"en".into()}
 async fn media(State(e):State<Engine>,Json(r):Json<MediaRequest>)->ApiResult<Document>{Ok(Json(e.media(r.url,r.language,r.library).await?))}
-#[derive(Deserialize)]struct CiteRequest{doi:String,format:String}
+#[derive(Deserialize)]struct CiteRequest{#[serde(alias="document_id")]doi:String,format:String}
 async fn cite(State(e):State<Engine>,Json(r):Json<CiteRequest>)->ApiResult<Value>{Ok(Json(e.citation(&r.doi,&r.format).await?))}
 async fn ingest(State(e):State<Engine>,mut multipart:Multipart)->ApiResult<Document>{
     let mut data=None;let mut name=None;let mut library=None;let mut actor=None;let mut selector=None;
