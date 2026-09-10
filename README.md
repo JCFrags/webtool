@@ -29,7 +29,7 @@ commands, evidence, and limits. Historical archive logs are not current results.
 | Local search | SQLite FTS5 keyword search, literal matching, optional regex matching |
 | Extraction | Tables, code, links, images, metadata, outlines, CSS selections, JSON pointers |
 | Imports | Files and stdin uploaded from the client, including native text, structured data, feed, caption, and notebook readers |
-| Crawling | Persistent bounded jobs, basic robots rules, same-origin traversal, cancellation, restart status |
+| Crawling | Incremental library attachment and progress, bounded same-origin HTTP jobs, robots, cancellation and restart status |
 | Browser helpers | Explicit Lightpanda or Chromium DOM capture, plus an experimental fastCRW integration |
 | Documents | Default Xberg native PDF text with reported pages and labeled supplemental tables; Office formats unverified |
 | Media | Configured yt-dlp: provided/automatic YouTube captions, exact language selection, timestamped storage and original export; no media download |
@@ -221,11 +221,35 @@ webtool map https://example.com
 webtool map https://example.com/sitemap.xml
 ```
 
-Crawling uses HTTP and stays within the seed origin.
+Crawling uses fresh HTTP reads and stays within the seed origin. Every redirect
+hop must stay in that origin and pass robots rules. Completed pages are attached
+to the selected library and job progress is saved immediately, without waiting for
+slow siblings. Saved reads, doctor, and library search remain usable during a crawl.
+
+```sh
+webtool library items research
+webtool search 'distinctive phrase' --library research
+```
+
+`visited` counts completed attempts, including failures. `failed` counts unsuccessful
+completed attempts, separately from document extraction warnings. Pending/cancelled
+requests are not counted as visited. The page budget reserves attempts before
+launch, so failures cannot create extra retries beyond the limit. Saved IDs are
+unique documents, not a promise that every discovered URL was read.
+
+Depth zero is the seed. Same-depth batches preserve traversal semantics; query
+order and repeated parameters are not sorted or removed during deduplication.
+Fragments are removed. Page/depth/discovery limits and robots exclusions are
+reported as warnings. `partial` can reflect scope/extraction warnings with zero
+retrieval failures. No usable documents from attempted reads means `failed`;
+`jobs JOB_ID --wait` prints the final record then exits nonzero for failed or
+interrupted jobs. Progress stays on stderr; JSON stdout remains machine-readable.
+
 Basic robots directives and per-origin delays are implemented, not full RFC conformance.
-A running job becomes `interrupted` after a server restart.
-Queued jobs are rescheduled, and previously saved documents remain available.
-The crawler does not yet persist its frontier for exact continuation.
+`jobs JOB_ID --cancel` stops pending work without removing saved documents. Ctrl-C
+while waiting only stops the client wait. A running job becomes `interrupted`
+after an unclean server restart; queued jobs are rescheduled. The frontier is not
+persisted for exact continuation. This is not a complete-site archive.
 Map reads one page or sitemap and does not recursively expand sitemap indexes.
 
 ## PDF reading (normal server)

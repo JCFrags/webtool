@@ -117,6 +117,19 @@ application completeness. Helpers remain process-per-request with bounded resour
 Chromium's historical timeout is unresolved; fastCRW is still unverified. Do not
 change browser binaries/config in place and assume cached results describe them.
 
+Crawl results are consumed with buffer_unordered and next(), never collected as
+an entire batch before publishing. Attach each usable document and persist its
+job update before waiting again. Keep same-depth batches, bounded candidate
+admission (including excluded URLs), query semantics, and fresh HTTP reads so
+ordinary-read caches cannot bypass redirect scope/robots checks. Failed attempts
+consume budget. visited counts completed attempts; failed is separate from
+extraction warnings. Zero usable results after attempted reads is Failed, not
+successful Partial. Old job payloads without failed deserialize with zero; no
+historical recount is implied. Cancellation retains saved library documents.
+One three-page/depth-one local crawl verified attachment/read/search and doctor
+while a 15-second sibling was pending, final IDs/counts and no duplicate/excluded
+fetches. No failure/cancellation/restart campaign was run.
+
 The crawl frontier is not persisted.
 Running jobs become interrupted after restart, while queued jobs are rescheduled.
 Robots handling is partial and must not be described as fully RFC-compliant.
