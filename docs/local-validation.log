@@ -1,0 +1,38 @@
+test_annotation_roundtrip (__main__.SqlSchemaTests.test_annotation_roundtrip) ... ok
+test_annotations_require_real_documents (__main__.SqlSchemaTests.test_annotations_require_real_documents) ... ok
+test_bad_job_json_is_rejected (__main__.SqlSchemaTests.test_bad_job_json_is_rejected) ... ok
+test_cache_upsert (__main__.SqlSchemaTests.test_cache_upsert) ... ok
+test_cascade_does_not_leave_library_references (__main__.SqlSchemaTests.test_cascade_does_not_leave_library_references) ... ok
+test_database_integrity (__main__.SqlSchemaTests.test_database_integrity) ... ok
+test_disk_wal_and_two_connections (__main__.SqlSchemaTests.test_disk_wal_and_two_connections) ... ok
+test_document_json_constraint (__main__.SqlSchemaTests.test_document_json_constraint) ... ok
+test_expired_cache_filter (__main__.SqlSchemaTests.test_expired_cache_filter) ... ok
+test_foreign_key_integrity (__main__.SqlSchemaTests.test_foreign_key_integrity) ... ok
+test_fts_delete_trigger (__main__.SqlSchemaTests.test_fts_delete_trigger) ... ok
+test_fts_insert_trigger (__main__.SqlSchemaTests.test_fts_insert_trigger) ... ok
+test_fts_library_filter (__main__.SqlSchemaTests.test_fts_library_filter) ... ok
+test_fts_update_trigger (__main__.SqlSchemaTests.test_fts_update_trigger) ... ok
+test_job_upsert (__main__.SqlSchemaTests.test_job_upsert) ... ok
+test_membership_is_idempotent (__main__.SqlSchemaTests.test_membership_is_idempotent) ... ok
+test_missing_document_cannot_be_added (__main__.SqlSchemaTests.test_missing_document_cannot_be_added) ... ok
+test_one_document_in_two_libraries (__main__.SqlSchemaTests.test_one_document_in_two_libraries) ... ok
+test_schema_is_idempotent (__main__.SqlSchemaTests.test_schema_is_idempotent) ... ok
+test_schema_version (__main__.SqlSchemaTests.test_schema_version) ... ok
+test_title_is_indexed (__main__.SqlSchemaTests.test_title_is_indexed) ... ok
+test_transaction_rollback (__main__.SqlSchemaTests.test_transaction_rollback) ... ok
+test_unicode_text_roundtrip (__main__.SqlSchemaTests.test_unicode_text_roundtrip) ... ok
+test_all_sources_are_utf8_without_nul (__main__.ArtifactChecks.test_all_sources_are_utf8_without_nul) ... ok
+test_cargo_manifests_are_valid_toml (__main__.ArtifactChecks.test_cargo_manifests_are_valid_toml) ... ok
+test_client_does_not_depend_on_server_or_engine (__main__.ArtifactChecks.test_client_does_not_depend_on_server_or_engine) ... ok
+test_csv_fixture_has_exact_edge_cases (__main__.ArtifactChecks.test_csv_fixture_has_exact_edge_cases) ... ok
+test_json_fixtures_are_valid (__main__.ArtifactChecks.test_json_fixtures_are_valid) ... ok
+test_jsonl_fixture_is_valid (__main__.ArtifactChecks.test_jsonl_fixture_is_valid) ... ok
+test_no_tui_dependency (__main__.ArtifactChecks.test_no_tui_dependency) ... ok
+test_rust_schema_include_resolves (__main__.ArtifactChecks.test_rust_schema_include_resolves) ... ok
+test_workspace_members_exist (__main__.ArtifactChecks.test_workspace_members_exist) ... ok
+test_xml_fixtures_are_valid (__main__.ArtifactChecks.test_xml_fixtures_are_valid) ... ok
+
+----------------------------------------------------------------------
+Ran 33 tests in 0.022s
+
+OK

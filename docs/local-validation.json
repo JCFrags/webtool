@@ -1,0 +1,32 @@
+{
+  "scope": "Real SQL migration and fixture checks, not Rust execution",
+  "sqlite_version": "3.46.1",
+  "tests_run": 33,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "rust_compilation": {
+    "status": "not_run",
+    "reason": "No Cargo/Rust compiler in delivery environment. Compiler downloads failed."
+  },
+  "rust_tests": {
+    "status": "not_run"
+  },
+  "external_chromium": {
+    "status": "failed",
+    "reason": "helper timed out",
+    "scope": "external Chromium only"
+  },
+  "live_search": {
+    "status": "not_run"
+  },
+  "xberg_and_ocr": {
+    "status": "not_run"
+  },
+  "lightpanda": {
+    "status": "not_run"
+  },
+  "yt_dlp": {
+    "status": "not_run"
+  }
+}

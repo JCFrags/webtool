@@ -1,0 +1,10 @@
+{
+  "rust_source_files": 20,
+  "rust_source_lines": 2614,
+  "authored_rust_test_functions": 70,
+  "rust_tests_execution": "not_run",
+  "lexical_errors": [],
+  "lexical_check_is_not_compilation": true,
+  "python_development_scripts_parsed": 2,
+  "cargo_lock_included": false
+}

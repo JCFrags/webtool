@@ -1,0 +1,12 @@
+services:
+  webtool:
+    build: .
+    # Local-only by default. Publish to a trusted LAN deliberately, not the public internet.
+    ports:
+      - "127.0.0.1:8420:8420"
+    volumes:
+      - webtool-data:/data
+    init: true
+    restart: unless-stopped
+volumes:
+  webtool-data:

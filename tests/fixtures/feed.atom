@@ -1,0 +1,1 @@
+<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Research feed</title><id>urn:synthetic:feed</id><updated>2026-01-01T00:00:00Z</updated><entry><title>Research entry</title><id>urn:synthetic:1</id><updated>2026-01-01T00:00:00Z</updated><summary>Entry summary</summary><link href="https://example.invalid/paper"/></entry></feed>

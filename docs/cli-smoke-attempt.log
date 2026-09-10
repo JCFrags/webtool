@@ -1,0 +1,1 @@
+Build both binaries first: cargo build -p webtool-cli -p webtool-server
