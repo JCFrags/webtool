@@ -7,33 +7,22 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current milestone: GitHub source reading
+## Current milestone: Lightpanda JavaScript reading
 
-Work on `feat/github-source-reading`, issue #9. PR #8 was merged only at
-4500215be8d3449130890783e9f66e8265fb0781 with a green build and match-head guard;
-issue #7 closed. Open a linked draft PR early; push coherent checkpoints.
-Mark ready only after the bounded directory/file workflow works. Do not merge.
-
-Extend sources.rs using the existing HTTP client and GitHub APIs, not gh, cloning,
-a service, or bulk ingestion. Auto mode routes repo roots to pinned README, blob
-URLs to actual bytes, and tree URLs to immediate entries. Explicit HTTP/CSS/browser
-choices bypass native routing. Resolve refs immutably, including encoded/slash
-refs with bounded work and honest ambiguity/missing/rate-limit errors.
-
-Retain source-file bytes, real filenames, commit/path/ref metadata and source
-lines. Directory originals are API JSON and readable listings are derived, never
-claims that child files were read. Keep incomplete listing warnings visible and
-README relative links pinned. Version source-resolution changes in cache keys.
-
-Build with `cargo build --locked -p webtool-cli -p webtool-server`. Restart only
-this project's server with runtime/media-config.toml, without deleting data or
-starting a second listener. Read one JCFrags/webtool directory, follow one pinned
-Rust-file link, inspect code/commit/lines, find a symbol, and compare original
-export with the same pinned source. Fresh retrieval; runtime/ holds outputs.
-No suites, framework, benchmarks, broad lint, or unrelated regression reruns.
-Only failed steps may be rerun. Preserve PDF defaults, captions setup, search
-pins, and the single CI build. No issues/PRs/releases, auth, browser, or OCR work.
-Update README.md and docs/STATUS.md with results and concrete limits.
+Work on feat/lightpanda-reading, issue #11. PR #10 merged at authorized
+31ed31e2fb451dae70c615ea7d8437f8ac281a30 with green build and match-head guard.
+Use the existing bounded helper and HTML extractor, explicit Lightpanda only.
+Keep auto/HTTP, GitHub, PDF, captions, pins, CI and stored documents unchanged.
+Capture JavaScript DOM as rendered_dom, never original HTTP bytes. Retain honest
+navigation metadata, readiness conditions/limits, diagnostics, and source locations.
+Verify installed help against upstream docs; telemetry stays disabled.
+Build normally with cargo build --locked -p webtool-cli -p webtool-server.
+Restart only this server with preserved runtime/media-config.toml; no second listener.
+Verify one local JS page and one public JS page with refresh. Inspect code/marker,
+HTTP versus DOM bytes, saved find and exact DOM export. No suites/framework,
+benchmarks, browser comparisons, or unrelated regression reruns. Retry failed steps
+only. No pool, Chromium/fastCRW, browser actions, screenshots, OCR, or README-link
+cleanup. Document actual results; mark ready only after JS works. Do not merge.
 
 ## Confirmed local caption setup
 
