@@ -7,49 +7,39 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current milestone: usable PDF reading
+## Current milestone: usable YouTube captions
 
-Work on `feat/pdf-reading`, issue #5. PR #4 was merged only at the authorized
-7558b25529e9130697a72d144624784d9579f715 with its build green; issue #3 closed.
-Open a linked draft PR early, push coherent checkpoints, mark ready after the
-bounded PDF workflow works. Do not merge this new PR without authorization.
-Preserve local changes and runtime data. Do not force-push.
+Work on `feat/media-captions`, issue #7. PR #6 was merged only at authorized
+25059c5d42fef93bdb980817b89c5fe210b187fe with a green build; issue #5 closed.
+Open a linked draft PR early and push coherent checkpoints. Keep the new PR
+unmerged; mark ready only when the bounded caption workflow works.
 
-Use the existing pinned Xberg adapter, no replacement PDF parser or models.
-Start integration with:
+Use official yt-dlp with its documented JavaScript runtime/EJS support. Reuse
+installed Node when supported; no extra runtime is needed on this workstation.
+Keep helper binaries and machine-specific config outside Git. No browser cookies,
+login sessions, proxies, audio/video downloads, transcription, or playlists.
+Let yt-dlp fetch the selected subtitle using its source context and headers;
+do not send a signed caption URL to the generic HTTP client. Bound subprocesses,
+file sizes, and time; clean temporary files on success or failure.
 
-```sh
-cargo build --locked -p webtool-cli -p webtool-server --features webtool-server/documents
-```
+Default YouTube watch/youtu.be reads should yield captions, not surrounding HTML.
+Honor requested language, prefer provided tracks, label automatic captions, and
+never silently translate. Keep explicit reader choices, stable video metadata,
+verbatim original caption bytes, cue text/timestamps, and meaningful errors.
+Cache by language as well as source. Bump media parser revision when changing it.
 
-Documents are now enabled in the server default. The pinned-feature build and
-normal build both passed without dependency/lockfile changes. Continue with:
+Build with `cargo build --locked -p webtool-cli -p webtool-server`, restart only
+this server without deleting data, then try one short public video. Inspect
+reading, a known phrase, timestamps, and original export. No suites, broad lint,
+benchmarks, provider sweeps, or new test framework. Rerun only failed steps. If
+YouTube blocks this host, retain the actual blocker and keep the PR draft.
 
-```sh
-cargo build --locked -p webtool-cli -p webtool-server
-```
+Preserve PDF defaults, search pins, and the one cached CI build. No browser/OCR
+integration or unrelated refactor. Update README.md and docs/STATUS.md with
+actual helper versions, setup, commands, outcomes, and limitations.
 
-Keep the CLI independent of the engine and the one cached Ubuntu CI build.
-No search-provider upgrades, browser, OCR, model downloads, Office verification
-claims, unrelated refactoring, or Markdown rewrite. Only targeted dependency
-changes required for the pinned adapter; commit the real lockfile if changed.
-
-Preserve original bytes, reported pages, readable unmodified upstream page text,
-metadata, warnings, and upstream output. Empty page objects are not success.
-Do not label every empty page a scan; report unavailable OCR when appropriate.
-Keep tables available through extract and label supplemental tables in reading.
-Bump the parser revision for normalization changes. Preserve old saved documents.
-
-Verify one small public text PDF through URL read and local ingestion of the same
-bytes under runtime/. Inspect ordinary output/JSON page locations, find a known
-phrase, and compare original export with input. Read one existing saved HTML
-once. Restart only this project's server without deleting data. No cargo test,
-broad lint, benchmarks, format matrix, new test framework, or repeated smoke
-campaigns. Rerun only failed steps; compilation is not extraction accuracy.
-Update README.md and docs/STATUS.md with actual supported behavior and limits.
-
-Keep target/, data/, runtime/, caches, weights, downloaded binaries, and secrets
-out of Git. Preserve licenses. MANIFEST.sha256 describes the imported archive.
+Keep target/, data/, runtime/, caches, weights, binaries, and secrets out of Git.
+Preserve license notices; MANIFEST.sha256 describes the original archive only.
 
 ## Workspace
 
