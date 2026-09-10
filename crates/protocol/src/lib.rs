@@ -112,16 +112,18 @@ impl Document {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum Renderer { #[default] Http, Lightpanda, Chromium, Crw }
+pub enum Renderer { #[default] Auto, Http, Captions, Lightpanda, Chromium, Crw }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadRequest {
     pub url: String,
     #[serde(default)] pub refresh: bool,
     #[serde(default)] pub renderer: Renderer,
+    #[serde(default = "default_language")] pub language: String,
     #[serde(default)] pub library: Option<String>,
     #[serde(default)] pub selector: Option<String>,
     #[serde(default)] pub actor: Option<String>,
 }
+pub fn default_language() -> String { "en".into() }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadResponse { pub document: Document, pub cached: bool }
 #[derive(Debug, Clone, Serialize, Deserialize)]

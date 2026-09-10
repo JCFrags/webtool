@@ -15,8 +15,8 @@ struct Cli{
     #[command(subcommand)]command:Command,
 }
 #[derive(Clone,Copy,ValueEnum)]enum Output{Text,Markdown,Json,Jsonl}
-#[derive(Clone,Copy,ValueEnum)]enum Browser{Http,Lightpanda,Chromium,Crw}
-impl From<Browser> for Renderer{fn from(v:Browser)->Self{match v{Browser::Http=>Self::Http,Browser::Lightpanda=>Self::Lightpanda,Browser::Chromium=>Self::Chromium,Browser::Crw=>Self::Crw}}}
+#[derive(Clone,Copy,ValueEnum)]enum Browser{Auto,Http,Captions,Lightpanda,Chromium,Crw}
+impl From<Browser> for Renderer{fn from(v:Browser)->Self{match v{Browser::Auto=>Self::Auto,Browser::Captions=>Self::Captions,Browser::Http=>Self::Http,Browser::Lightpanda=>Self::Lightpanda,Browser::Chromium=>Self::Chromium,Browser::Crw=>Self::Crw}}}
 #[derive(Clone,Copy,ValueEnum)]enum Kind{Tables,Links,Code,Images,Metadata,Outline,JsonPointer,Css}
 impl From<Kind> for ExtractKind{fn from(v:Kind)->Self{match v{Kind::Tables=>Self::Tables,Kind::Links=>Self::Links,Kind::Code=>Self::Code,Kind::Images=>Self::Images,Kind::Metadata=>Self::Metadata,Kind::Outline=>Self::Outline,Kind::JsonPointer=>Self::JsonPointer,Kind::Css=>Self::Css}}}
 #[derive(Clone,Copy,ValueEnum)]enum ExportKind{Markdown,Json,Original,TableCsv}
@@ -28,7 +28,8 @@ enum Command{
     /// Search the web, or a saved library. Use --library '*' for all saved documents.
     Search{#[arg(required=true,num_args=1..)]query:Vec<String>,#[arg(long,default_value_t=10)]limit:usize,#[arg(long)]library:Option<String>},
     /// Read a URL or a saved document ID. URLs are retained automatically.
-    Read{source:String,#[arg(long)]refresh:bool,#[arg(long,value_enum,default_value="http")]renderer:Browser,
+    Read{source:String,#[arg(long)]refresh:bool,#[arg(long,value_enum,default_value="auto")]renderer:Browser,
+        #[arg(long,default_value="en")]language:String,
         #[arg(long)]selector:Option<String>,#[arg(long)]library:Option<String>,#[arg(long)]actor:Option<String>,
         #[arg(long)]start_block:Option<usize>,#[arg(long)]end_block:Option<usize>,#[arg(long)]page:Option<usize>},
     /// Upload a local file. Use '-' for stdin and --name to identify its format.
@@ -88,7 +89,7 @@ impl Client{
     }
     async fn resolve(&self,source:&str)->Result<Document>{
         if source.starts_with("https://")||source.starts_with("http://"){
-            let result:ReadResponse=self.post("/v1/read",&ReadRequest{url:source.into(),refresh:false,renderer:Renderer::Http,library:None,selector:None,actor:None}).await?;
+            let result:ReadResponse=self.post("/v1/read",&ReadRequest{url:source.into(),refresh:false,renderer:Renderer::Auto,language:default_language(),library:None,selector:None,actor:None}).await?;
             Ok(result.document)
         }else{
             document_id(source)?;self.get(&format!("/v1/documents/{source}")).await
@@ -167,12 +168,12 @@ async fn run(cli:Cli)->Result<()>{
             }else{output(&result,format)?;}
             if result.results.is_empty()&&!result.warnings.is_empty(){bail!("search returned no results and reported provider warnings");}Ok(())
         },
-        Command::Read{source,refresh,renderer,selector,library,actor,start_block,end_block,page}=>{
+        Command::Read{source,refresh,renderer,language,selector,library,actor,start_block,end_block,page}=>{
             let mut d=if source.starts_with("https://")||source.starts_with("http://"){
-                let result:ReadResponse=client.post("/v1/read",&ReadRequest{url:source,refresh,renderer:renderer.into(),library,selector,actor}).await?;
+                let result:ReadResponse=client.post("/v1/read",&ReadRequest{url:source,refresh,renderer:renderer.into(),language,library,selector,actor}).await?;
                 if result.cached{eprintln!("Using saved extraction. Pass --refresh to retrieve again.");}result.document
             }else{
-                if refresh||selector.is_some()||library.is_some()||actor.is_some()||!matches!(renderer,Browser::Http){bail!("retrieval flags apply to URLs, not saved document IDs");}
+                if refresh||selector.is_some()||library.is_some()||actor.is_some()||!matches!(renderer,Browser::Auto)||language!="en"{bail!("retrieval flags apply to URLs, not saved document IDs");}
                 client.resolve(&source).await?
             };
             if let Some(number)=page {
@@ -253,7 +254,7 @@ async fn run(cli:Cli)->Result<()>{
         Command::Batch{file,library}=>{
             let data=String::from_utf8(input(&file)?).context("batch file must be UTF-8")?;let mut errors=0;
             for url in data.lines().map(str::trim).filter(|s|!s.is_empty()&&!s.starts_with('#')){
-                let result:Result<ReadResponse>=client.post("/v1/read",&ReadRequest{url:url.into(),refresh:false,renderer:Renderer::Http,library:library.clone(),selector:None,actor:None}).await;
+                let result:Result<ReadResponse>=client.post("/v1/read",&ReadRequest{url:url.into(),refresh:false,renderer:Renderer::Auto,language:default_language(),library:library.clone(),selector:None,actor:None}).await;
                 match result{Ok(r)=>{
                     if matches!(format,Output::Jsonl){output(&json!({"ok":true,"url":url,"document":r.document}),format)?;}else{document(&r.document,format)?;}
                 },Err(e)=>{errors+=1;

@@ -51,7 +51,7 @@ async fn mock_http() -> (String, Arc<AtomicUsize>, tokio::task::JoinHandle<()>) 
     (url, hits, task)
 }
 fn request(url: String) -> ReadRequest {
-    ReadRequest { url, refresh: false, renderer: Renderer::Http,
+    ReadRequest { url, refresh: false, renderer: Renderer::Http, language: default_language(),
         library: None, selector: Some("main".into()), actor: None }
 }
 

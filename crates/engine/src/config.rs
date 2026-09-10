@@ -21,6 +21,8 @@ pub struct Config {
     pub lightpanda_path: Option<PathBuf>,
     pub chromium_path: Option<PathBuf>,
     pub ytdlp_path: Option<PathBuf>,
+    /// yt-dlp runtime spec, e.g. node:/usr/bin/node. None uses yt-dlp defaults.
+    pub ytdlp_js_runtime: Option<String>,
     pub browser_no_sandbox: bool,
     pub browser_wait_ms: u64,
     /// Used only by the optional fastCRW adapter. No fallback ladder is implicit.
@@ -38,7 +40,7 @@ impl Default for Config {
             request_timeout_seconds: 30, helper_timeout_seconds: 90,
             cache_seconds: 3600, user_agent: "webtool/0.1 (+shared research reader)".into(),
             search_engines: vec!["duckduckgo".into(), "brave".into()],
-            lightpanda_path: None, chromium_path: None, ytdlp_path: None,
+            lightpanda_path: None, chromium_path: None, ytdlp_path: None, ytdlp_js_runtime: None,
             browser_no_sandbox: false, browser_wait_ms: 2000,
             crw_renderer: None, document_config: None,
         }

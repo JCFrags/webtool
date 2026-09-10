@@ -41,7 +41,11 @@ pub async fn http(client:&reqwest::Client,url:&str,max:usize)->Result<Fetched>{
 }
 
 /// Child stdout, stderr, elapsed time, and process groups are all bounded.
-pub async fn helper(mut command:Command,timeout:u64,max:usize)->Result<Vec<u8>>{
+pub async fn helper(command:Command,timeout:u64,max:usize)->Result<Vec<u8>>{
+    Ok(helper_output(command,timeout,max).await?.stdout)
+}
+pub struct HelperOutput { pub stdout:Vec<u8>, pub stderr:Vec<u8> }
+pub async fn helper_output(mut command:Command,timeout:u64,max:usize)->Result<HelperOutput>{
     command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
     #[cfg(unix)]{
         use std::os::unix::process::CommandExt;
@@ -57,7 +61,7 @@ pub async fn helper(mut command:Command,timeout:u64,max:usize)->Result<Vec<u8>>{
     match outcome{
         Ok(Ok((out,err,status)))=>{
             if !status.success(){bail!("helper exited with {status}: {}",String::from_utf8_lossy(&err).chars().take(2000).collect::<String>());}
-            Ok(out)
+            Ok(HelperOutput { stdout:out, stderr:err })
         },
         Ok(Err(e))=>{let _=child.kill().await;let _=child.wait().await;Err(e)},
         Err(_)=>{let _=child.kill().await;let _=child.wait().await;bail!("helper exceeded its {timeout}-second deadline")},
@@ -96,7 +100,7 @@ pub async fn browser(url:&str,renderer:&Renderer,config:&Config)->Result<Fetched
             if config.browser_no_sandbox{c.arg("--no-sandbox");}
             c.arg(format!("--virtual-time-budget={}",config.browser_wait_ms));c
         },
-        Renderer::Http=>bail!("HTTP does not use a browser helper"),
+        Renderer::Auto|Renderer::Http|Renderer::Captions=>bail!("this reader does not use a browser helper"),
         Renderer::Crw=>bail!("fastCRW adapter was not selected"),
     };
     let profile=tempfile::tempdir()?;

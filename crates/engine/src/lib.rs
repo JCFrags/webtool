@@ -50,15 +50,24 @@ impl Engine {
             Capability{name:"documents".into(),available:cfg!(feature="documents"),detail:"Compiled Xberg document support for native PDF text and structured tables. This is not OCR or a guarantee of format accuracy.".into()},
             Capability{name:"ocr".into(),available:cfg!(feature="ocr"),detail:if cfg!(feature="ocr"){"OCR feature compiled; configured backend/model readiness is not verified.".into()}else{"OCR is not compiled. Image-only scans require OCR; native PDF text does not.".into()}},
             Capability{name:"crw_browser".into(),available:cfg!(feature="crw-browser")&&self.config.crw_renderer.is_some(),detail:"Experimental fastCRW adapter.".into()},
-            helper("lightpanda",&self.config.lightpanda_path),helper("chromium",&self.config.chromium_path),helper("yt_dlp",&self.config.ytdlp_path),
+            helper("lightpanda",&self.config.lightpanda_path),helper("chromium",&self.config.chromium_path),
+            Capability{name:"yt_dlp".into(),available:self.config.ytdlp_path.as_ref().is_some_and(|p|media::executable(p)),
+                detail:format!("Configured executable checked locally; no YouTube request made. JS runtime: {}. Track availability and runtime compatibility require an actual read.",self.config.ytdlp_js_runtime.as_deref().unwrap_or("yt-dlp default (Deno)"))},
         ]}
     }
     pub async fn read(&self,request:ReadRequest)->Result<ReadResponse>{
         let _operation=self.operation_slots.acquire().await?;
         let url=fetch::validated_url(&request.url)?;
         if let Some(name)=&request.library{self.store.require_library(name).await?;}
-        let key=hex::encode(Sha256::digest(serde_json::to_vec(&json!({"url":url.as_str(),"renderer":request.renderer,
-            "selector":request.selector,"version":EXTRACTION_VERSION,"document_config":self.config.document_config,
+        let caption_url = if matches!(request.renderer,Renderer::Captions) || (matches!(request.renderer,Renderer::Auto) && request.selector.is_none()) {
+            media::youtube_url(url.as_str())?
+        } else { None };
+        if matches!(request.renderer,Renderer::Captions) && (caption_url.is_none() || request.selector.is_some()) {
+            bail!("unsupported captions request: use a YouTube watch/youtu.be URL without a CSS selector");
+        }
+        if caption_url.is_some() { media::validate_language(&request.language)?; }
+        let key=hex::encode(Sha256::digest(serde_json::to_vec(&json!({"url":caption_url.as_deref().unwrap_or(url.as_str()),"renderer":request.renderer,
+            "language":request.language,"media_parser":media::PARSER,"selector":request.selector,"version":EXTRACTION_VERSION,"document_config":self.config.document_config,
             "browser_wait_ms":self.config.browser_wait_ms,"crw":self.config.crw_renderer}))?));
         let lock={
             let mut locks=self.locks.lock().await;
@@ -74,10 +83,20 @@ impl Engine {
                 return Ok(ReadResponse{document,cached:true});
             }
         }
+        if let Some(canonical)=caption_url {
+            let _slot=self.parse_slots.acquire().await?;
+            let (parsed,bytes,mime)=media::read(&canonical,&request.language,&self.config).await?;
+            let original=self.store.put_bytes(&bytes,&mime,"caption_track").await?;
+            let source=Source{requested:request.url,resolved:canonical,retrieved_at:Utc::now().to_rfc3339(),status:None,version:None,original};
+            let document=self.finish(parsed,source,vec![]).await?;
+            self.store.cache(key,document.id.clone()).await?;
+            if let Some(name)=request.library{self.store.add(&name,&document.id,request.actor).await?;}
+            return Ok(ReadResponse{document,cached:false});
+        }
         let fetched={
             let _slot=self.network.acquire().await?;
             match request.renderer{
-                Renderer::Http=>if let Some(result)=sources::github_readme(&self.client,&url,self.config.max_bytes).await?{result}
+                Renderer::Auto|Renderer::Http=>if let Some(result)=sources::github_readme(&self.client,&url,self.config.max_bytes).await?{result}
                     else{fetch::http(&self.client,url.as_str(),self.config.max_bytes).await?},
                 _=>{let _browser=self.browser_slots.acquire().await?;fetch::browser(url.as_str(),&request.renderer,&self.config).await?},
             }
@@ -127,15 +146,7 @@ impl Engine {
         Ok(document)
     }
     pub async fn media(&self,url:String,language:String,library:Option<String>)->Result<Document>{
-        let _operation=self.operation_slots.acquire().await?;
-        if let Some(name)=&library{self.store.require_library(name).await?;}
-        let _permit=self.browser_slots.acquire().await?;
-        let (parsed,bytes,mime)=media::read(&url,&language,&self.config,&self.client).await?;
-        let original=self.store.put_bytes(&bytes,&mime,"caption_track").await?;
-        let source=Source{requested:url.clone(),resolved:url,retrieved_at:Utc::now().to_rfc3339(),status:None,version:None,original};
-        let document=self.finish(parsed,source,vec![]).await?;
-        if let Some(name)=library{self.store.add(&name,&document.id,None).await?;}
-        Ok(document)
+        Ok(self.read(ReadRequest{url,language,library,renderer:Renderer::Captions,refresh:false,selector:None,actor:None}).await?.document)
     }
     pub async fn search(&self,request:SearchRequest)->Result<SearchResponse>{
         let start=Instant::now();

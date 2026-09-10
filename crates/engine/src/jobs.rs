@@ -102,7 +102,7 @@ impl Engine {
             attempts+=batch.len();
             let results=stream::iter(batch).map(|(url,depth)|{
                 let engine=engine.clone();let token=token.clone();let origin=origin.clone();
-                let delay=robots.delay;let request=ReadRequest{url:url.clone(),refresh:false,renderer:Renderer::Http,library:None,selector:None,actor:None};
+                let delay=robots.delay;let request=ReadRequest{url:url.clone(),refresh:false,renderer:Renderer::Http,language:default_language(),library:None,selector:None,actor:None};
                 async move{
                     let result=tokio::select!{
                         r=async{engine.pace(&origin,delay).await;engine.read(request).await}=>Some(r),
