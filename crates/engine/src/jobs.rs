@@ -143,10 +143,17 @@ impl Engine {
                                 let Ok(next)=fetch::validated_url(&link.url)else{continue;};
                                 if next.origin()!=base.origin(){continue;}
                                 if seen.contains(next.as_str()){continue;}
-                                if !robots.allowed(&robot_target(&next)) {
-                                    if !job.warnings.iter().any(|w|w.code=="robots_excluded" && w.message==next.as_str()) {
-                                        job.warnings.push(Warning::new("robots_excluded",next.to_string()));
+                                // Bound all discovered URLs, including exclusions, not
+                                // only candidates that eventually enter the frontier.
+                                if seen.len()>=10000 {
+                                    if !job.warnings.iter().any(|w|w.code=="frontier_limit") {
+                                        job.warnings.push(Warning::new("frontier_limit","URL discovery stopped at 10000 candidates."));
                                     }
+                                    break;
+                                }
+                                seen.insert(next.to_string());
+                                if !robots.allowed(&robot_target(&next)) {
+                                    job.warnings.push(Warning::new("robots_excluded",next.to_string()));
                                     continue;
                                 }
                                 if depth>=job.request.max_depth {
@@ -155,13 +162,7 @@ impl Engine {
                                     }
                                     continue;
                                 }
-                                if seen.len()>=10000 {
-                                    if !job.warnings.iter().any(|w|w.code=="frontier_limit") {
-                                        job.warnings.push(Warning::new("frontier_limit","URL discovery stopped at 10000 candidates."));
-                                    }
-                                    break;
-                                }
-                                if seen.insert(next.to_string()){frontier.push_back((next.to_string(),depth+1));}
+                                frontier.push_back((next.to_string(),depth+1));
                         }
                     },Err(e)=>{job.failed+=1;job.warnings.push(Warning::new("crawl_read_failed",format!("{url}: {e:#}")));},
                 }
