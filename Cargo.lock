@@ -7798,7 +7798,7 @@ dependencies = [
 
 [[package]]
 name = "webtool-cli"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -7816,7 +7816,7 @@ dependencies = [
 
 [[package]]
 name = "webtool-engine"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -7855,7 +7855,7 @@ dependencies = [
 
 [[package]]
 name = "webtool-protocol"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -7863,7 +7863,7 @@ dependencies = [
 
 [[package]]
 name = "webtool-server"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
