@@ -3,6 +3,76 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Milestone 11: local alpha candidates
+
+September 11, 2026 UTC. Issue #21 / draft PR #22, chore/alpha-packaging.
+PR #20 merged at authorized head ae7d05927245b65bc1e18fdb556d3042c30a474b
+with green CI and --match-head-commit. Main merge: 6a99b00. Issue #19 closed.
+
+Build SHA: `ec909cc6da5c7ba6e90f960d0b11070804e18d00`.
+Its CI build passed (run 34549817517). Both binaries built once, locked/offline,
+normal defaults, native x86_64-unknown-linux-gnu release, in 2m 23s. Existing unused
+imports produced warnings. No dependency versions changed; only four workspace
+lock entries changed to 0.1.0-alpha.1. API/stored-document versions are unchanged.
+
+### Candidate artifacts and proof
+
+Files under ignored `runtime/dist/`:
+
+| Archive | Bytes | SHA256 |
+|---|---:|---|
+| webtool-0.1.0-alpha.1-x86_64-unknown-linux-gnu-client.tar.gz | 3846962 | 362c644057ca8c2f2953e1101a5356cd1f0c9e5731d319ce001fbe2ae513dac4 |
+| webtool-0.1.0-alpha.1-x86_64-unknown-linux-gnu-host.tar.gz | 24286743 | d5d6120e3bdcca8603505f625a64fd891964c1ce29273ae095c0d3fc5475d3fa |
+| webtool-0.1.0-alpha.1-source.tar.gz | 513861 | 2e3e048207e38e89efdd6fcf392da38c2871d266dab437c10966635d822bd5eb |
+
+- All three entries in SHA256SUMS passed after assembly. Fresh unpacked binaries
+  both report 0.1.0-alpha.1. All three BUILD-INFO.json files are identical and name
+  the actual build SHA. All 61 allowlisted Git source files match that commit byte
+  for byte, including Cargo.lock and build/install/package scripts.
+- Archives exclude runtime/data, imported MANIFEST.sha256, models, target outputs
+  other than the intended binaries, helpers, machine paths and downloaded papers.
+  No installed file was replaced. No ingestion, public retrieval or suite ran.
+- The first assembly failed because this Cargo cache lacks .cargo-checksum.json.
+  Only archive assembly was retried, using committed Cargo.lock checksums and the
+  conservative native-target resolved dependency inventory. The successful binary
+  build was not repeated. The final script fixes that assumption. The source
+  candidate intentionally retains the original build-checkpoint script, which has
+  this known assembly defect. Assembly recovery is disclosed in BUILD-INFO.json.
+- Both ELF binaries link OpenSSL 3, glibc, libgcc and libm. The CLI requires symbols
+  through GLIBC_2.34; the host through GLIBC_2.43. Consult BUILD-INFO.json for all
+  symbol versions, interpreter, toolchain and platform. The archived generic notes
+  understate the CLI's OpenSSL requirement; both binaries need it. Current ALPHA.md
+  corrects that wording. No portability/static/reproducibility claim is made.
+- Packaged `--server http://127.0.0.1:8420 doctor` and saved `read` both exited 1
+  with connection refused and actionable diagnostics. The attempted saved ID was
+  04f9b1ba3433f1c3203cacc1bbb7d51ff0213686dfb1112cfe6e416c85eadded.
+  This is a blocked server-dependent proof, not a successful saved read.
+
+### Deployment and publication status
+
+PID 102510 and its listener were already absent before this milestone and remain
+absent. No server was stopped, restarted or started. Installed CLI/server binaries,
+installation receipts, helpers, client-settings presence, server config and database
+hashes all match the pre-packaging baseline. The last installed server binary was
+built at 984376ed71b695c53f720c6ab8896ba310a37d11, not the alpha checkpoint.
+
+The original license notice and complete AGPL terms are included, together with
+recovered third-party notices. Ten aggregate/generated material-gap entries remain.
+See THIRD-PARTY.md for missing notices, SearXNG/libdeflate provenance, dirty xberg
+snapshot qualification, MPL Covered Source and AGPL Corresponding Source obligations.
+profiling-procmacros also lacks a directly collected notice in this candidate.
+The project source archive is not a complete dependency source offer.
+
+PR #22 remains draft because the bounded server proof and publication materials are
+incomplete. No merge, release tag, publication or installation occurred. Further
+server-dependent proof requires a separately restored existing deployment. Keep
+these candidate files unchanged; a corrected distribution needs separate approval
+and a new artifact set rather than silently replacing these hashes.
+
+Private proof logs and unpacked files remain under ignored runtime/alpha-proof/.
+The final post-build changes fix packaging checksum lookup and documentation only;
+they do not change binary implementation or the recorded build checkpoint.
+
 ## Milestone 10: readable everyday text CLI
 
 Verified September 10, 2026, feat/readable-cli-output, issue #19 / PR #20.

@@ -6,6 +6,15 @@ There is no TUI, alternate screen, browser-control interface, or default LLM wor
 
 ## Delivery status
 
+Local `0.1.0-alpha.1` client, host and exact project-source candidates are packaged,
+not published or installed. See [alpha notes](docs/ALPHA.md) for generic setup,
+[third-party blockers](docs/THIRD-PARTY.md), and [artifact evidence](docs/STATUS.md).
+The checksum/version/source checks passed. Doctor and saved reading could not pass
+because the existing server was absent; no server was started. PR #22 stays draft.
+The single local packager is `scripts/package-local.sh`; it requires a clean Git
+checkpoint and cached native locked dependencies, and refuses existing outputs.
+
+
 The normal server now includes native PDF text reading through pinned Xberg.
 A two-page public PDF passed URL read, local ingestion, page-location checks,
 phrase finding, and byte-identical original export. Default HTML nested code and

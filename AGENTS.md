@@ -7,44 +7,42 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current milestone: readable everyday CLI output
+## Current milestone: local alpha candidates
 
-Work on feat/readable-cli-output, issue #19, PR #20. PR #18 squash-merged at
-requested head 7feae35e12dab16c808a638b7c1b4559baa5bf29 with green CI and the
-match-head guard. Main merge: d75ab5f. Issue #17 closed.
+Work on chore/alpha-packaging, issue #21, PR #22. PR #20 merged at its authorized
+unchanged head with green CI and --match-head-commit. Main merge: 6a99b00.
+Issue #19 closed. Features are frozen at 0.1.0-alpha.1. No dependency upgrades,
+API/schema changes, CI changes, installation, server startup, merge, tag or release.
 
-Presentation only: crates/cli/src/presentation.rs and protocol plain rendering.
-Keep explicit JSON/JSONL schemas/framing, Markdown exports, stored data and parser
-behavior unchanged. Use readable listings/confirmations/jobs and selected extracts.
-Never wrap/prefix code lines, truncate IDs/URLs or infer source headers/locations.
-Small rectangular ASCII tables fit an 88-column grid; all other tables use labeled
-cells preserving spans, empty/multiline values and source header flags. Preserve
-supplemental labels and warnings/progress on stderr. Escape terminal controls in
-human views only. No framework, colors, pager, prompts, TUI or new dependencies.
+The single locked native release build succeeded at ec909cc6da5c7ba6e90f960d0b11070804e18d00.
+Assembly then failed on an absent Cargo cache .cargo-checksum.json. Only assembly
+was retried using Cargo.lock checksums and a conservative native dependency
+inventory. The script now uses lockfile checksums. No binary rebuild followed.
+Existing archives/source retain the build checkpoint, including its old script.
+Do not claim that a later packaging correction was compiled into those binaries.
 
-Build CLI only with cargo build --locked -p webtool-cli. Verify one existing
-library listing, the terminal Partial job, and the saved Rust Book chapter's
-code/tables. Compare JSON content and check one pipe into head. Do not create a
-new Complete job just to replace the existing terminal Partial evidence.
-No suites, fixtures, public requests, benchmarks, broad lint or command matrix.
-Install once with scripts/install-local.sh --client-only. Preserve receipts and
-leave the installed server/process/config/helpers/database untouched. Do not
-rebuild the server to change its reported commit. Existing single CI build stays.
+See docs/STATUS.md for artifact hashes and failed server-dependent proof, and
+read docs/THIRD-PARTY.md plus packaging/licenses/index.json before distribution.
+Keep the PR draft while proof and publication blockers remain. Recover exact
+attribution files, not just LICENSE basenames. Native offline cargo metadata
+needs --filter-platform matching the Rust host to avoid unrelated target caches.
+Do not bundle raw dependency archives: they can contain excluded test-only models.
 
-Update README, AGENTS and STATUS with evidence and a short before/after example.
-Mark ready after proof; do not merge or publish. This project remains unrelated
-to Pi/Glance/Chrono and Terminal Agent Browser release coordination; direct those
-requests to their owning worker.
+The server was absent before packaging. Do not use historical PID records as proof
+of a live process. Both installed binaries, receipts, helper hashes, client settings,
+config and database were preserved. Do not start a server to hide the proof gap.
+No suites, new retrieval/ingestion, benchmarks or platform matrix are authorized.
+This project is unrelated to Pi/Glance/Chrono and Terminal Agent Browser release
+coordination. Direct those requests to their owning worker.
 
 ## Confirmed local caption setup
 
 Official PyPI helper installed with `uv tool install 'yt-dlp[default]' --index-url
 https://pypi.org/simple`: yt-dlp 2026.08.19 and EJS 0.8.0. Existing Node v24.18.0
 satisfies documented Node >=22; no new runtime or ffmpeg is needed for this path.
-Machine helper settings live in ignored runtime/media-config.toml. Installed
-startup: `/home/mainpc/.local/bin/webtoold --config
-/home/mainpc/Projects/webtool/runtime/media-config.toml --data-dir
-/home/mainpc/Projects/webtool/data`. Use these absolute paths outside the checkout.
+Machine helper settings live in ignored runtime/media-config.toml. Generic
+startup: `webtoold --config /absolute/path/server.toml --data-dir
+/absolute/path/existing-data`. Use the intended absolute paths outside the checkout.
 
 One live 19-second video passed with six provided English cues. Nonfatal yt-dlp
 impersonation warnings remain visible; do not install extra dependencies only to

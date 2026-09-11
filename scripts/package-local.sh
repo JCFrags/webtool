@@ -57,7 +57,8 @@ try:
             base = pathlib.Path(p['manifest_path']).parent
             key = p['name'] + '-' + p['version']
             cache = base.parent.parent.parent / 'cache' / base.parent.name / (key + '.crate')
-            checksum = json.loads((base / '.cargo-checksum.json').read_text())['package']
+            checksum = next(x['checksum'] for x in tomllib.loads((root / 'Cargo.lock').read_text())['package']
+                            if x['name'] == p['name'] and x['version'] == p['version'] and x.get('source') == p['source'])
             if not cache.is_file() or digest(cache) != checksum:
                 raise SystemExit('Missing or mismatched locked source archive: ' + key)
             notices = []

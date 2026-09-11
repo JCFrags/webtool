@@ -48,8 +48,8 @@ is no authentication or TLS setup; do not expose this service to the public inte
 Only the current native Linux architecture is packaged. Consult BUILD-INFO.json
 for the exact Rust toolchain, target, build commit, build platform, ELF interpreter,
 needed shared-library names and required symbol versions for each binary.
-These binaries are dynamically linked. The host additionally needs the reported
-OpenSSL libraries. Both need the reported glibc, loader and GCC runtime libraries.
+These binaries are dynamically linked. Both candidate binaries need the reported
+OpenSSL 3, glibc, loader and GCC runtime libraries.
 Runtime shared-library packages and certificate trust must be supplied by the OS.
 No static-linking, broad Linux portability or reproducible-binary claim is made.
 No other distribution, architecture or physical-machine LAN connection was tested.
