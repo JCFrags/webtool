@@ -18,7 +18,7 @@ fn time(ms:u64)->String{format!("{:02}:{:02}:{:02}.{:03}",ms/3600000,(ms/60000)%
 fn html(s:&str)->String{s.replace('&',"&amp;").replace('<',"&lt;").replace('>',"&gt;")}
 fn md_cell(s:&str)->String{s.replace('\\',"\\\\").replace('|',"\\|").replace('\n',"<br>")}
 
-fn supplemental_table(d:&Document, id:&str)->bool {
+pub fn supplemental_table(d:&Document, id:&str)->bool {
     d.metadata.get("supplemental_table_blocks").and_then(|v|v.as_array())
         .is_some_and(|items|items.iter().any(|v|v.as_str()==Some(id)))
 }
@@ -70,22 +70,74 @@ pub fn markdown(d:&Document)->String{
 pub fn terminal_safe(s:&str)->String{
     s.chars().map(|c|if (c.is_control()&&c!='\n'&&c!='\t')||('\u{80}'..='\u{9f}').contains(&c){c.escape_unicode().to_string()}else{c.to_string()}).collect()
 }
-pub fn plain(d:&Document)->String{
-    let mut out=format!("{}\n{}\nSaved {}\nID {}\n\n",d.title,d.source.resolved,d.source.retrieved_at,d.id);
-    for b in &d.blocks{
-        if matches!(b.content,Content::Table{..}) && supplemental_table(d,&b.id) {
-            out.push_str("Supplemental structured table (may repeat page text):\n");
-        }
-        if matches!(b.locator,Locator::Page{..}|Locator::Slide{..}|Locator::Sheet{..}) {
-            out.push_str(&format!("[{} | {}]\n",b.id,location(&b.locator)));
-        }
-        match &b.content{
-            Content::Heading{text,..}=>out.push_str(&format!("{text}\n\n")),
-            Content::Caption{text}=>out.push_str(&format!("[{}] {text}\n\n",location(&b.locator))),
-            Content::Image{url,alt}=>out.push_str(&format!("Image: {alt}\n{url}\n\n")),
-            _=>out.push_str(&format!("{}\n\n",b.content.text())),
+/// Conservative 88-column ASCII grid. Other cells use explicit row/cell labels
+/// so terminal character widths, tabs, line breaks and spans cannot misalign data.
+fn plain_table(rows:&[Vec<crate::Cell>])->String{
+    if rows.is_empty(){return "(no rows)\n".into();}
+    let columns=rows[0].len();
+    let header=columns>0 && rows[0].iter().all(|c|c.header);
+    let aligned=columns>0 && rows.iter().enumerate().all(|(i,row)|row.len()==columns && row.iter().all(|c|
+        c.row_span==1 && c.col_span==1 && c.text.is_ascii() && !c.text.chars().any(char::is_control)
+        && c.header==(i==0 && header)));
+    if aligned{
+        let widths:Vec<usize>=(0..columns).map(|i|rows.iter().map(|row|row[i].text.len()).max().unwrap_or(0)).collect();
+        if widths.iter().sum::<usize>()+3*columns+1<=88{
+            let border=format!("+{}+\n",widths.iter().map(|w|"-".repeat(w+2)).collect::<Vec<_>>().join("+"));
+            let mut out=String::new();
+            if header{out.push_str("First row: source header cells\n");}
+            out.push_str(&border);
+            for row in rows{
+                out.push('|');
+                for (cell,width) in row.iter().zip(&widths){out.push_str(&format!(" {:width$} |",cell.text,width=width));}
+                out.push('\n');out.push_str(&border);
+            }
+            return out;
         }
     }
+    let mut out=String::from("Labeled cells (no inferred column alignment):\n");
+    for (r,row) in rows.iter().enumerate(){
+        out.push_str(&format!("Row {} ({} cells)\n",r+1,row.len()));
+        for (c,cell) in row.iter().enumerate(){
+            out.push_str(&format!("Cell {} [header={}, rowspan={}, colspan={}]{}\n",c+1,cell.header,cell.row_span,cell.col_span,if cell.text.is_empty(){" (empty)"}else{""}));
+            if !cell.text.is_empty(){out.push_str(&cell.text);if !cell.text.ends_with('\n'){out.push('\n');}}
+            out.push_str("End cell\n");
+        }
+    }
+    out
+}
+
+pub fn plain_block(b:&crate::Block,supplemental:bool)->String{
+    let loc=format!("{} | {}",b.id,location(&b.locator));
+    let mut out=String::new();
+    match &b.content{
+        Content::Heading{level,text}=>out.push_str(&format!("{} {text}\n[{loc}]\n\n","#".repeat((*level).clamp(1,6) as usize))),
+        Content::Code{language,text}=>{
+            out.push_str(&format!("Code{} [{loc}]\n",language.as_ref().map(|s|format!(" ({s})")).unwrap_or_default()));
+            let fence="`".repeat((text.split(|c|c!='`').map(str::len).max().unwrap_or(0)+1).max(3));
+            out.push_str(&fence);out.push('\n');out.push_str(text);
+            if !text.ends_with('\n'){out.push('\n');}
+            out.push_str(&fence);out.push_str("\n\n");
+        },
+        Content::Table{rows}=>{
+            if supplemental{out.push_str("Supplemental structured table (may repeat page text):\n");}
+            out.push_str(&format!("Table [{loc}]\n"));out.push_str(&plain_table(rows));out.push('\n');
+        },
+        Content::Caption{text}=>out.push_str(&format!("Caption [{loc}]\n{text}\n\n")),
+        Content::Image{url,alt}=>out.push_str(&format!("Image [{loc}]: {alt}\n{url}\n\n")),
+        Content::Quote{text}=>out.push_str(&format!("Quote [{loc}]\n{text}\n\n")),
+        Content::Math{text}=>out.push_str(&format!("Math [{loc}]\n{text}\n\n")),
+        Content::ListItem{text,ordered}=>out.push_str(&format!("{} {text}\n",if *ordered{"Ordered item:"}else{"-"})),
+        Content::Paragraph{text}=>{
+            if matches!(b.locator,Locator::Page{..}|Locator::Slide{..}|Locator::Sheet{..}){out.push_str(&format!("[{loc}]\n"));}
+            out.push_str(text);out.push_str("\n\n");
+        },
+    }
+    terminal_safe(&out)
+}
+
+pub fn plain(d:&Document)->String{
+    let mut out=format!("{}\nSource: {}\nRetrieved: {}\nID: {}\n\n",d.title,d.source.resolved,d.source.retrieved_at,d.id);
+    for b in &d.blocks{out.push_str(&plain_block(b,supplemental_table(d,&b.id)));}
     if d.metadata.pointer("/github/kind").and_then(|v|v.as_str())==Some("readme") && !d.links.is_empty() {
         out.push_str("Pinned README links (source text above is unchanged):\n");
         for link in &d.links { out.push_str(&format!("{}: {}\n",link.text,link.url)); }

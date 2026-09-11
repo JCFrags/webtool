@@ -6,6 +6,7 @@ use serde::{de::DeserializeOwned,Serialize};
 use serde_json::{json,Value};
 use webtool_protocol::*;
 mod settings;
+mod presentation;
 
 #[derive(Parser)]
 #[command(name="webtool",version,about="Search, read, extract, and save sources through a shared server",after_help="No TUI. Results go to stdout. Warnings and progress go to stderr. Use --format json for scripts.")]
@@ -106,7 +107,7 @@ impl Client{
         loop{
             let job:Job=self.get(&format!("/v1/jobs/{id}")).await?;
             let message=format!("{id}: {:?}, {} visited attempts, {} saved, {} failed (limits: {} pages, depth {})",job.state,job.visited,job.document_ids.len(),job.failed,job.request.max_pages,job.request.max_depth);
-            if message!=previous{eprintln!("{message}");previous=message;}
+            if message!=previous{eprintln!("{}",render::terminal_safe(&message));previous=message;}
             if job.state.terminal(){return Ok(job);}
             tokio::select!{
                 _=tokio::time::sleep(Duration::from_millis(500))=>{},
@@ -121,10 +122,15 @@ fn output<T:Serialize>(value:&T,format:Output)->Result<()>{
     let text=if matches!(format,Output::Jsonl){serde_json::to_string(value)?}else{serde_json::to_string_pretty(value)?};
     stdout(&format!("{text}\n"))
 }
-fn warnings(items:&[Warning]){for w in items{eprintln!("Warning [{}]: {}",w.code,render::terminal_safe(&w.message));}}
+fn warnings(items:&[Warning]){for w in items{eprintln!("{}",render::terminal_safe(&format!("Warning [{}]: {}",w.code,w.message)));}}
 fn document(d:&Document,format:Output)->Result<()>{
     warnings(&d.warnings);
-    match format{Output::Text=>stdout(&render::plain(d)),Output::Markdown=>stdout(&render::markdown(d)),_=>output(d,format)}
+    match format{Output::Text=>stdout(&render::plain(d)),Output::Markdown=>stdout(&render::terminal_safe(&render::markdown(d))),_=>output(d,format)}
+}
+fn human(format:Output)->bool{matches!(format,Output::Text|Output::Markdown)}
+fn job_output(job:&Job,format:Output)->Result<()>{
+    warnings(&job.warnings);
+    if human(format){stdout(&presentation::job(job))}else{output(job,format)}
 }
 fn excerpt(text:&str,start:usize,end:usize)->String{
     let mut a=start.saturating_sub(100);let mut b=end.saturating_add(200).min(text.len());
@@ -227,31 +233,47 @@ async fn run(cli:Cli)->Result<()>{
             if found.truncated{eprintln!("Warning: match limit reached.");}Ok(())
         },
         Command::Extract{source,kind,expression}=>{
-            let d=client.resolve(&source).await?;let result:ExtractResponse=client.post(&format!("/v1/documents/{}/extract",d.id),&ExtractRequest{kind:kind.into(),expression}).await?;
-            warnings(&result.warnings);output(&result,format)
+            let d=client.resolve(&source).await?;let extract_kind:ExtractKind=kind.into();
+            let result:ExtractResponse=client.post(&format!("/v1/documents/{}/extract",d.id),&ExtractRequest{kind:extract_kind.clone(),expression}).await?;
+            warnings(&result.warnings);
+            if human(format){if let Some(text)=presentation::extract(&result,&extract_kind,&d)?{return stdout(&text);}}
+            output(&result,format)
         },
         Command::Library{action}=>match action{
             LibraryCommand::List=>{let v:Vec<Library>=client.get("/v1/libraries").await?;
-                if matches!(format,Output::Text|Output::Markdown){for l in v{stdout(&format!("{}  |  {} items  |  {}\n",l.name,l.items,render::terminal_safe(&l.description)))?;}Ok(())}else{output(&v,format)}},
-            LibraryCommand::Create{name,description}=>{let v:Library=client.post("/v1/libraries",&LibraryCreate{name,description}).await?;output(&v,format)},
-            LibraryCommand::Items{name,limit}=>{let v:Vec<DocumentSummary>=client.get(&format!("/v1/libraries/{name}/items?limit={limit}")).await?;output(&v,format)},
-            LibraryCommand::Add{name,document,actor}=>{document_id(&document)?;let v:Value=client.post(&format!("/v1/libraries/{name}/items"),&LibraryAdd{document_id:document,actor}).await?;output(&v,format)},
+                if human(format){stdout(&presentation::libraries(&v))}else{output(&v,format)}},
+            LibraryCommand::Create{name,description}=>{let v:Library=client.post("/v1/libraries",&LibraryCreate{name,description}).await?;
+                if human(format){stdout(&render::terminal_safe(&format!("Created library: {}\n",v.name)))}else{output(&v,format)}},
+            LibraryCommand::Items{name,limit}=>{let v:Vec<DocumentSummary>=client.get(&format!("/v1/libraries/{name}/items?limit={limit}")).await?;
+                if human(format){stdout(&render::terminal_safe(&format!("Library: {name}\n\n")))?;stdout(&presentation::documents(&v))}else{output(&v,format)}},
+            LibraryCommand::Add{name,document,actor}=>{document_id(&document)?;let v:Value=client.post(&format!("/v1/libraries/{name}/items"),&LibraryAdd{document_id:document.clone(),actor}).await?;
+                if human(format){
+                    if v["added"].as_bool()!=Some(true){bail!("server did not confirm library attachment");}
+                    stdout(&render::terminal_safe(&format!("Added document {document} to library {name}\n")))
+                }else{output(&v,format)}},
         },
-        Command::Saved{limit}=>{let v:Vec<DocumentSummary>=client.get(&format!("/v1/documents?limit={limit}")).await?;output(&v,format)},
+        Command::Saved{limit}=>{let v:Vec<DocumentSummary>=client.get(&format!("/v1/documents?limit={limit}")).await?;
+            if human(format){stdout(&presentation::documents(&v))}else{output(&v,format)}},
         Command::Note{document,actor,text,tags}=>{document_id(&document)?;let a:Annotation=client.post(&format!("/v1/documents/{document}/annotations"),&AnnotationCreate{actor,note:text,tags}).await?;output(&a,format)},
         Command::Notes{document}=>{document_id(&document)?;let a:Vec<Annotation>=client.get(&format!("/v1/documents/{document}/annotations")).await?;output(&a,format)},
         Command::Crawl{url,max_pages,max_depth,library,actor,wait}=>{
             let j:Job=client.post("/v1/crawl",&CrawlRequest{url,max_pages,max_depth,library,actor}).await?;
-            let j=if wait{client.wait(&j.id).await?}else{j};output(&j,format)?;
+            let j=if wait{client.wait(&j.id).await?}else{j};job_output(&j,format)?;
             if matches!(j.state,JobState::Failed|JobState::Interrupted){bail!("crawl did not complete successfully");}Ok(())
         },
         Command::Map{url,limit}=>{let v:Value=client.post("/v1/map",&json!({"url":url,"limit":limit})).await?;output(&v,format)},
         Command::Jobs{id,wait,cancel}=>{
             if let Some(id)=id{
-                if cancel{let v:Value=client.post(&format!("/v1/jobs/{id}/cancel"),&json!({})).await?;return output(&v,format);}
-                let j:Job=if wait{client.wait(&id).await?}else{client.get(&format!("/v1/jobs/{id}")).await?};output(&j,format)?;
+                if cancel{let v:Value=client.post(&format!("/v1/jobs/{id}/cancel"),&json!({})).await?;
+                    if human(format){return stdout(&render::terminal_safe(&format!("Job {id}: cancellation requested={} | state={}\n",v["cancel_requested"].as_bool().map(|b|b.to_string()).unwrap_or_else(||"unknown".into()),v["state"].as_str().unwrap_or("unknown"))));}
+                    return output(&v,format);}
+                let j:Job=if wait{client.wait(&id).await?}else{client.get(&format!("/v1/jobs/{id}")).await?};job_output(&j,format)?;
                 if wait && matches!(j.state,JobState::Failed|JobState::Interrupted){bail!("crawl did not complete successfully");}Ok(())
-            }else{let j:Vec<Job>=client.get("/v1/jobs").await?;output(&j,format)}
+            }else{let jobs:Vec<Job>=client.get("/v1/jobs").await?;
+                if human(format){
+                    if jobs.is_empty(){stdout("No jobs.\n")?;}
+                    for job in &jobs{job_output(job,format)?;}Ok(())
+                }else{for job in &jobs{warnings(&job.warnings);}output(&jobs,format)}}
         },
         Command::Media{url,language,library}=>{let d:Document=client.post("/v1/media",&json!({"url":url,"language":language,"library":library})).await?;document(&d,format)},
         Command::Cite{doi,style}=>{let v:Value=client.post("/v1/cite",&json!({"doi":doi,"format":style})).await?;

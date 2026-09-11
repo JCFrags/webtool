@@ -152,6 +152,49 @@ The installer runs the release build for installation. Keep binaries, data and
 smoke artifacts outside Git. Full tests and optional integration checks remain
 manual. See docs/STATUS.md for the bounded installed two-client proof and limits.
 
+## Everyday text output
+
+The default view uses readable entries for `saved`, `library list/items`, jobs
+and crawl results. Library create/add give concise confirmations. Full IDs, URLs
+and available dates remain copyable. Job warnings stay on stderr alongside crawl
+progress; text results retain state, counts, limits, errors and saved IDs.
+
+`extract code`, `tables`, `links` and `outline` show the selected material rather
+than its JSON wrapper. Block extracts retain their source locations. Link records
+have no individual source positions, and the output says so instead of guessing.
+Document reading separates headings, prose, fenced code, tables and captions.
+Code lines are not wrapped or prefixed. Tabs and whitespace are retained; terminal
+control characters are visibly escaped in human views, not in stored data.
+
+Rectangular ASCII tables use an aligned grid when it fits 88 columns. Headers are
+labeled only when source flags identify them. Wide, ragged, merged, multiline,
+tabbed or non-ASCII tables use labeled rows/cells with explicit header/span values.
+Empty cells and zero values remain visible. Supplemental tables keep their label.
+No terminal-width detection, color, pager, TUI or interactive behavior is involved.
+
+`--format json` and `jsonl` keep their existing schemas and framing. Markdown
+exports are unchanged. Other structured extracts still use their existing output.
+Piping into `head` exits quietly on a closed stdout pipe; unrelated errors still
+fail normally.
+
+Before, `library items install-shared` included JSON fields (excerpt):
+
+```text
+"title": "shared.txt",
+"url": "upload:shared.txt",
+```
+
+After (excerpt):
+
+```text
+shared.txt
+  ID: 4ed73eb0f9d58b9aab56b01561c1c1b3c593bcbeab9d8a13313f89ee0926fe20
+  Source: upload:shared.txt
+```
+
+This is the bounded everyday presentation pass before a clearly labeled alpha,
+not a published release or a claim of general extraction accuracy.
+
 ## Read and search
 
 ```sh

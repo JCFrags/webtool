@@ -3,6 +3,87 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Milestone 10: readable everyday text CLI
+
+Verified September 10, 2026, feat/readable-cli-output, issue #19 / PR #20.
+PR #18 squash-merged at its authorized unchanged head with green CI and
+--match-head-commit. Main merge: d75ab5f. Issue #17 closed.
+
+### Presentation and actual proof
+
+- Added a small CLI presentation module for saved/library entries, confirmations,
+  jobs and selected extracts. Protocol plain rendering separates headings/prose,
+  fenced code, tables, quotes and captions. No retrieval/parser changes.
+- Full IDs, URLs and available source/date fields remain untruncated. Jobs expose
+  actual state, visited/saved/failed counts, configured limits, saved IDs and errors.
+  Warning counts are visible, with details/progress on stderr.
+- Tables use an 88-column ASCII grid only for fitting rectangular single-line cells
+  with compatible source header flags. Other tables use labeled cells preserving
+  row/column spans, header flags, empty cells, zero and multiline values. Non-ASCII
+  and tabbed cells use this conservative fallback rather than guessing display width.
+  Supplemental-table labels remain. Code is never wrapped or line-prefixed.
+- `cargo build --locked -p webtool-cli` passed. Existing unused-anyhow warning remains.
+  The only local release build/install was scripts/install-local.sh --client-only,
+  which passed in 13.42s. Installed /home/mainpc/.local/bin/webtool matches the release
+  output and its valid updated installation receipt.
+- Inspected library items for install-shared: title shared.txt, full saved ID, upload
+  URL, original retrieval timestamp and warning count. README has a short actual
+  before/after excerpt replacing the former default JSON fields.
+- Inspected existing finished crawl 71debce3-5c1f-4dcc-85d6-2d6b69e0ed8f. It retains
+  state Partial, not Complete: 3 visited, 3 saved, 0 failed, limits 3 pages/depth 1,
+  all three full IDs and six warning details on stderr. This is the only existing
+  job. No new crawl was started to manufacture a Complete-state example.
+- Read saved Rust Book HTML ID
+  `04f9b1ba3433f1c3203cacc1bbb7d51ff0213686dfb1112cfe6e416c85eadded`.
+  Inspected ordinary prose/headings, 16 code blocks and two tables. All retained
+  code strings occur unchanged in both read and code-extract text; no indentation
+  repair or wrapping was applied. Tables aligned and labeled actual header rows.
+- New document/code JSON parsed equal to old installed-client responses. Table
+  JSONL parsed equal to old table JSON and retained exactly one-line framing.
+  Machine serializers, stored schemas and Markdown export implementation are unchanged.
+- One `read ID | head -n 5` returned pipeline statuses 0/0 without a broken-pipe
+  error. Existing extraction warnings remained on stderr.
+- No public requests, fixtures, suites, benchmarks, broad lint or command matrix.
+  Wider/ragged/merged/empty-cell presentation branches, link/outline rendering and
+  mutation confirmations were source-inspected, not separately exercised. No
+  library/job mutations or extra documents were created for this milestone.
+
+### Unchanged server and limits
+
+The installed server was not rebuilt, replaced or restarted. PID 102510 and its
+process-start identity remained unchanged. One listener remains at 127.0.0.1:8420.
+Doctor still reports server build 984376ed71b695c53f720c6ab8896ba310a37d11. The server
+binary, server installation receipt, runtime/media-config.toml and SQLite database
+hashes match the pre-work snapshot. Helper configuration was not changed or used
+for retrieval. Client-only installation preserved the server installation receipt.
+
+No concrete blocker. This is a bounded everyday presentation pass, not broad
+format/extraction validation or a published alpha. Markdown display escapes terminal
+controls; Markdown export bytes remain unaffected. No new formats, short IDs,
+search changes, dependency upgrades or CI changes.
+
+### Commands and retained evidence
+
+All smoke output and before/after comparisons are in ignored runtime/readable-proof/.
+The installed CLI contains source checkpoint fa2a68c09a01b03eb7108a64ca28c2f3c61227a5;
+later documentation-only commits do not require another installation.
+
+```sh
+CLI=/home/mainpc/.local/bin/webtool
+ID=04f9b1ba3433f1c3203cacc1bbb7d51ff0213686dfb1112cfe6e416c85eadded
+"$CLI" library items install-shared
+"$CLI" jobs 71debce3-5c1f-4dcc-85d6-2d6b69e0ed8f
+"$CLI" read "$ID"
+"$CLI" extract "$ID" code
+"$CLI" extract "$ID" tables
+"$CLI" --format json read "$ID"
+"$CLI" --format jsonl extract "$ID" tables
+"$CLI" read "$ID" | head -n 5
+```
+
+These use existing saved data. Do not repeat successful proof steps or restart the
+server for this presentation change. Prior installation/startup commands remain below.
+
 ## Milestone 9: installable client and shared-server setup
 
 Verified September 10, 2026. Issue #17, PR #18, branch feat/install-connect.
