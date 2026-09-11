@@ -1,0 +1,8 @@
+mac 0.1.1
+
+The published crate README identifies Jonathan Reem as the primary author and
+maintainer. The published Cargo manifest declares MIT/Apache-2.0, and the README
+states "MIT/Apache-2.0, like rust itself." Neither the checksum-pinned crate nor
+the upstream repository supplies a separate copyright notice or root license
+file. The accompanying files provide the complete generic terms referenced by
+the published materials.

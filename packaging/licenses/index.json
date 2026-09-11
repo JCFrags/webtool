@@ -1,0 +1,363 @@
+{
+  "packages": {
+    "alloc-stdlib-0.2.4": {
+      "files": [
+        "alloc-stdlib/LICENSE"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/dropbox/rust-alloc-no-stdlib/ae42d22078b98549e987d2f03d12df7b984fde47/LICENSE"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The file is byte-identical to the license at the separately pinned alloc-stdlib 0.3.0 revision."
+      ]
+    },
+    "alloc-stdlib-0.3.0": {
+      "files": [
+        "alloc-stdlib/LICENSE"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/dropbox/rust-alloc-no-stdlib/0a81fd6928ea3b33c8cd484aa4575d50ffb98012/LICENSE"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The file is byte-identical to the license at the separately pinned alloc-stdlib 0.2.4 revision."
+      ]
+    },
+    "html-to-markdown-rs-3.12.3": {
+      "files": [
+        "html-to-markdown-rs-3.12.3/LICENSE",
+        "html-to-markdown-rs-3.12.3/ATTRIBUTIONS.md"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/xberg-io/html-to-markdown/d7b6acf1befc01a22b2d468e8f2cef3a94d66f93/LICENSE",
+        "https://raw.githubusercontent.com/xberg-io/html-to-markdown/d7b6acf1befc01a22b2d468e8f2cef3a94d66f93/ATTRIBUTIONS.md"
+      ],
+      "status": "recovered",
+      "notes": [
+        "ATTRIBUTIONS.md covers the vendored markup5ever_rcdom code that the published crate identifies in source headers."
+      ]
+    },
+    "outlook-pst-1.2.0": {
+      "files": [
+        "outlook-pst/LICENSE"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/microsoft/outlook-pst-rs/1397836e73b690dbb09663f66056012fced45ff9/LICENSE"
+      ],
+      "status": "recovered",
+      "notes": []
+    },
+    "phf-0.10.1": {
+      "files": [
+        "phf-0.10/LICENSE"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/sfackler/rust-phf/bed01538ae576876f11189d541875d228acef9e8/LICENSE"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The shared file is byte-identical at both pinned rust-phf revisions represented here."
+      ]
+    },
+    "phf_codegen-0.10.0": {
+      "files": [
+        "phf-0.10/LICENSE"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/sfackler/rust-phf/3ea14b2166553ad6e7b9afe7244144f5d661b6c6/LICENSE"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The shared file is byte-identical at both pinned rust-phf revisions represented here."
+      ]
+    },
+    "phf_generator-0.10.0": {
+      "files": [
+        "phf-0.10/LICENSE"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/sfackler/rust-phf/3ea14b2166553ad6e7b9afe7244144f5d661b6c6/LICENSE"
+      ],
+      "status": "recovered",
+      "notes": []
+    },
+    "phf_shared-0.10.0": {
+      "files": [
+        "phf-0.10/LICENSE"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/sfackler/rust-phf/3ea14b2166553ad6e7b9afe7244144f5d661b6c6/LICENSE"
+      ],
+      "status": "recovered",
+      "notes": []
+    },
+    "profiling-1.0.18": {
+      "files": [
+        "profiling/LICENSE-APACHE",
+        "profiling/LICENSE-MIT"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/aclysma/profiling/8271551172eb6fa4cba47369aedd93790c623df9/LICENSE-APACHE",
+        "https://raw.githubusercontent.com/aclysma/profiling/8271551172eb6fa4cba47369aedd93790c623df9/LICENSE-MIT"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The README mentions an OFL font in the upstream examples, but that font is not present in the downloaded crate package."
+      ]
+    },
+    "pulp-wasm-simd-flag-0.1.1": {
+      "files": [
+        "pulp-wasm-simd-flag-0.1.1/LICENSE"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/sarah-quinones/pulp/5eb07fd7b68edf0a5e19f71737d315f72a510295/LICENSE"
+      ],
+      "status": "recovered",
+      "notes": [
+        "Copied byte-for-byte from the locally downloaded pulp 0.22.3 sibling package, whose .cargo_vcs_info.json records the same repository revision."
+      ]
+    },
+    "qcms-0.3.0": {
+      "files": [
+        "qcms/COPYING"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/FirefoxGraphics/qcms/5ba6ed804b59273afc37794d5b04d27fb8835e48/COPYING"
+      ],
+      "status": "recovered",
+      "notes": [
+        "Copyright and MIT grant headers are also retained in the packaged qcms source files."
+      ]
+    },
+    "roman-numerals-rs-3.1.0": {
+      "files": [
+        "roman-numerals-rs/LICENCE.rst"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/AA-Turner/roman-numerals/ec81337f99d8b557a6fce10f674c054050551444/LICENCE.rst"
+      ],
+      "status": "recovered",
+      "notes": [
+        "This file contains the complete 0BSD and CC0-1.0 alternatives and the project copyright statement."
+      ]
+    },
+    "selectors-0.25.0": {
+      "files": [
+        "selectors/MPL-2.0.txt"
+      ],
+      "origins": [
+        "Generic system license provenance: Fedora glycin-loaders package, /usr/share/licenses/glycin-loaders/LICENSE-MPL-2.0"
+      ],
+      "status": "terms-only",
+      "notes": [
+        "This supplies only the complete MPL-2.0 terms. It does not resolve the required Covered Source availability or recipient notice."
+      ]
+    },
+    "selectors-0.33.0": {
+      "files": [
+        "selectors/MPL-2.0.txt"
+      ],
+      "origins": [
+        "Generic system license provenance: Fedora glycin-loaders package, /usr/share/licenses/glycin-loaders/LICENSE-MPL-2.0"
+      ],
+      "status": "terms-only",
+      "notes": [
+        "This supplies only the complete MPL-2.0 terms. It does not resolve the required Covered Source availability or recipient notice."
+      ]
+    },
+    "servo_arc-0.3.0": {
+      "files": [
+        "servo_arc-0.3/LICENSE-APACHE",
+        "servo_arc-0.3/LICENSE-MIT",
+        "servo_arc-0.3/COPYRIGHT-source-header.txt"
+      ],
+      "origins": [
+        "Generic terms provenance: locally downloaded servo_arc 0.4.3 sibling package at rust-stylo revision f319793c6989dba83994fbd10d560b21ad4a0c85",
+        "https://static.crates.io/crates/servo_arc/servo_arc-0.3.0.crate (archive member lib.rs lines 1-9)"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The 0.3.0 source header records Copyright 2012-2014 The Rust Project Developers and the MIT/Apache-2.0 choice. Complete generic terms and the exact source notice satisfy the available notice evidence; no revision-exact root filename is required."
+      ]
+    },
+    "typst-syntax-0.15.1": {
+      "files": [
+        "typst-0.15.1/LICENSE",
+        "typst-0.15.1/NOTICE"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/typst/typst/9dfd3a08500b7896045f907433cf7b4b02434fad/LICENSE",
+        "https://raw.githubusercontent.com/typst/typst/9dfd3a08500b7896045f907433cf7b4b02434fad/NOTICE"
+      ],
+      "status": "recovered",
+      "notes": [
+        "NOTICE includes attribution for the Rust-derived path and token-set implementations."
+      ]
+    },
+    "typst-timing-0.15.1": {
+      "files": [
+        "typst-0.15.1/LICENSE",
+        "typst-0.15.1/NOTICE"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/typst/typst/9dfd3a08500b7896045f907433cf7b4b02434fad/LICENSE",
+        "https://raw.githubusercontent.com/typst/typst/9dfd3a08500b7896045f907433cf7b4b02434fad/NOTICE"
+      ],
+      "status": "recovered",
+      "notes": []
+    },
+    "typst-utils-0.15.1": {
+      "files": [
+        "typst-0.15.1/LICENSE",
+        "typst-0.15.1/NOTICE"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/typst/typst/9dfd3a08500b7896045f907433cf7b4b02434fad/LICENSE",
+        "https://raw.githubusercontent.com/typst/typst/9dfd3a08500b7896045f907433cf7b4b02434fad/NOTICE"
+      ],
+      "status": "recovered",
+      "notes": [
+        "NOTICE includes the LLVM Apache-2.0-with-LLVM-exceptions attribution referenced by typst-utils/src/scalar.rs."
+      ]
+    },
+    "xberg-1.1.1": {
+      "files": [
+        "xberg-1.1.1/LICENSE",
+        "xberg-1.1.1/ATTRIBUTIONS.md",
+        "xberg-1.1.1/THIRD_PARTY_LICENSES.md"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/xberg-io/xberg/20083328ae6df0db01c031d04a4014b51bb2cf09/LICENSE",
+        "https://raw.githubusercontent.com/xberg-io/xberg/20083328ae6df0db01c031d04a4014b51bb2cf09/ATTRIBUTIONS.md",
+        "https://raw.githubusercontent.com/xberg-io/xberg/20083328ae6df0db01c031d04a4014b51bb2cf09/THIRD_PARTY_LICENSES.md"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The crate .cargo_vcs_info.json marks its source dirty. These files are exact at the recorded revision, but no byte-identity claim is made for the dirty crate snapshot.",
+        "The test-only BERT tokenizer vocabulary is intentionally not included here and will not be placed in the project source allowlist."
+      ]
+    },
+    "zune-inflate-0.2.54": {
+      "files": [
+        "zune-inflate/LICENSE.md",
+        "zune-inflate/LICENSE-ZLIB",
+        "zune-inflate/LICENSE-APACHE-2.0",
+        "zune-inflate/LICENSE-MIT",
+        "zune-inflate/LIBDEFLATE-COPYING",
+        "zune-inflate/LIBDEFLATE-ATTRIBUTION.md"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/etemesi254/zune-image/69502ce83fdfecdd0beefd677e2abb3781b29d98/LICENSE.md",
+        "https://raw.githubusercontent.com/etemesi254/zune-image/69502ce83fdfecdd0beefd677e2abb3781b29d98/LICENSE-ZLIB",
+        "Generic system license provenance: Fedora kf6-karchive package, /usr/share/licenses/kf6-karchive/Apache-2.0.txt",
+        "Generic system license provenance: Fedora linux-firmware package, /usr/share/licenses/linux-firmware/MIT",
+        "https://raw.githubusercontent.com/ebiggers/libdeflate/275aa5141db6eda3587214e0f1d3a134768f557d/COPYING",
+        "https://github.com/ebiggers/libdeflate/blob/92e6a0db9fa848d742f9eb286c92afc60f2c3dda/lib/deflate_decompress.c",
+        "https://github.com/ebiggers/libdeflate/blob/92e6a0db9fa848d742f9eb286c92afc60f2c3dda/lib/crc32_tables.h",
+        "https://github.com/ebiggers/libdeflate/blob/92e6a0db9fa848d742f9eb286c92afc60f2c3dda/lib/crc32.c"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The exact zune-image revision files provide its copyright/grant notice and Zlib terms; complete generic Apache-2.0 and MIT terms supplement their references.",
+        "LIBDEFLATE-ATTRIBUTION.md identifies five affected files and records the pinned observed libdeflate comparison revision, file hashes and retrieval date. The original adaptation revision remains unknown. LIBDEFLATE-COPYING preserves the expressly implicated Eric Biggers MIT notice from a pinned upstream snapshot without claiming that snapshot was the port origin."
+      ]
+    },
+    "mac-0.1.1": {
+      "files": [
+        "mac-0.1.1/LICENSE-APACHE",
+        "mac-0.1.1/LICENSE-MIT",
+        "mac-0.1.1/NOTICE-source-metadata.txt"
+      ],
+      "origins": [
+        "Generic complete terms: Apache License 2.0, https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "Generic complete terms: Rust project MIT license, https://raw.githubusercontent.com/rust-lang/rust/master/LICENSE-MIT",
+        "https://static.crates.io/crates/mac/mac-0.1.1.crate (Cargo.toml and README.md)"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The published crate and upstream repository supply the license choice and author statement but no root license files. Generic complete terms and all supplied notices are retained; the absent filename is not itself an incompatibility."
+      ]
+    },
+    "mathemascii-0.4.0": {
+      "files": [
+        "mathemascii-0.4.0/LICENSE-APACHE",
+        "mathemascii-0.4.0/NOTICE-source-metadata.txt"
+      ],
+      "origins": [
+        "Generic complete terms: Apache License 2.0, https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "https://static.crates.io/crates/mathemascii/mathemascii-0.4.0.crate (Cargo.toml, Cargo.toml.orig and .cargo_vcs_info.json)"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The published crate and recorded upstream tree declare Apache-2.0 but supply no root LICENSE or NOTICE. Complete terms and the supplied author/license metadata are retained."
+      ]
+    },
+    "simd_helpers-0.1.0": {
+      "files": [
+        "simd_helpers-0.1.0/LICENSE-MIT"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/lu-zero/simd_helpers/master/LICENSE"
+      ],
+      "status": "recovered",
+      "notes": [
+        "This generic upstream origin supplies the complete MIT terms and Copyright (c) 2019 Luca Barbato for the checksum-pinned crate, whose recorded revision lacks a root license file."
+      ]
+    },
+    "metadata-search-engine-rs-0.3.1": {
+      "files": [
+        "metadata-search-engine-rs-0.3.1/LICENSE-MIT",
+        "metadata-search-engine-rs-0.3.1/NOTICE-source-metadata.txt",
+        "metadata-search-engine-rs-0.3.1/LICENSE-AGPL-3.0",
+        "metadata-search-engine-rs-0.3.1/SEARXNG-ATTRIBUTION.md"
+      ],
+      "origins": [
+        "Generic MIT terms: https://raw.githubusercontent.com/rust-lang/rust/master/LICENSE-MIT",
+        "https://static.crates.io/crates/metadata-search-engine-rs/metadata-search-engine-rs-0.3.1.crate (Cargo.toml, Cargo.toml.orig and CHANGELOG.md)",
+        "https://raw.githubusercontent.com/searxng/searxng/931fd9787b1517d88af2876175d8c31b03e11671/LICENSE",
+        "https://github.com/searxng/searxng/blob/931fd9787b1517d88af2876175d8c31b03e11671/searx/engines/sogou_images.py",
+        "https://github.com/searxng/searxng/blob/931fd9787b1517d88af2876175d8c31b03e11671/searx/engines/bing_images.py",
+        "https://github.com/searxng/searxng/blob/13eec44b65d19dedddfd85755ed2adab2a22187c/searx/engines/google_images.py",
+        "https://github.com/searxng/searxng/blob/931fd9787b1517d88af2876175d8c31b03e11671/searx/result_types/image.py",
+        "https://github.com/searxng/searxng/blob/931fd9787b1517d88af2876175d8c31b03e11671/searx/result_types/_base.py"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The crate is compiled through webtool-engine’s default web-search feature. Its image adapters are included in the crate but are not exposed by webtool’s ordinary web-search interface.",
+        "Complete generic MIT terms and the published author/license statement cover the remainder without inventing a copyright notice.",
+        "SEARXNG-ATTRIBUTION.md identifies five affected published-crate files, gives a changed-file notice for version 0.3.1 dated 2026-08-07, and pins the observed comparison snapshots and hashes. The original port revisions remain unknown. The adapted portions are treated as AGPL-3.0-or-later despite the crate manifest’s MIT-only declaration."
+      ]
+    },
+    "fxhash-0.2.1": {
+      "files": [
+        "fxhash-0.2.1/LICENSE-APACHE",
+        "fxhash-0.2.1/LICENSE-MIT",
+        "fxhash-0.2.1/COPYRIGHT-source-header.txt"
+      ],
+      "origins": [
+        "Generic complete terms: Apache License 2.0, https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "Generic MIT terms: https://raw.githubusercontent.com/rust-lang/rust/master/LICENSE-MIT",
+        "https://static.crates.io/crates/fxhash/fxhash-0.2.1.crate (archive member lib.rs lines 1-9)"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The MIT file combines complete generic terms with the exact Copyright 2015 The Rust Project Developers notice from the checksum-pinned source. The exact dual-license header is also retained separately."
+      ]
+    },
+    "profiling-procmacros-1.0.18": {
+      "files": [
+        "profiling/LICENSE-APACHE",
+        "profiling/LICENSE-MIT"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/aclysma/profiling/8271551172eb6fa4cba47369aedd93790c623df9/LICENSE-APACHE",
+        "https://raw.githubusercontent.com/aclysma/profiling/8271551172eb6fa4cba47369aedd93790c623df9/LICENSE-MIT"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The procedural-macro crate records the same repository revision as profiling 1.0.18 and shares these root license files. It is a build-time macro enabled by profiling’s default feature."
+      ]
+    }
+  }
+}

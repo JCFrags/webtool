@@ -1,0 +1,11 @@
+metadata-search-engine-rs 0.3.1
+
+The checksum-pinned published crate identifies "ml" as its author and declares
+MIT in Cargo.toml and Cargo.toml.orig. Its changelog dates version 0.3.1 to
+2026-08-07. Neither the published crate nor its corresponding upstream tag
+supplies a separate root license file or copyright notice. LICENSE-MIT provides
+the complete generic MIT terms without inventing a copyright statement.
+
+The MIT declaration applies only to portions for which the crate publisher can
+grant those terms. SearXNG-derived portions identified in
+SEARXNG-ATTRIBUTION.md remain under AGPL-3.0-or-later.

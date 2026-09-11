@@ -7,44 +7,49 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current milestone: readable everyday CLI output
+## Current milestone: corrected local alpha candidate
 
-Work on feat/readable-cli-output, issue #19, PR #20. PR #18 squash-merged at
-requested head 7feae35e12dab16c808a638b7c1b4559baa5bf29 with green CI and the
-match-head guard. Main merge: d75ab5f. Issue #17 closed.
+Continue chore/alpha-packaging, issue #21, PR #22. No new branch/issue, feature
+work, dependency upgrades, API/data changes, CI changes, merge, tag or publication.
+The user authorized restoring ONLY the unchanged installed server with its existing
+config/data. It is running again. Check current identity before any service action;
+never signal the stale historical PID. Do not install or start candidate binaries.
 
-Presentation only: crates/cli/src/presentation.rs and protocol plain rendering.
-Keep explicit JSON/JSONL schemas/framing, Markdown exports, stored data and parser
-behavior unchanged. Use readable listings/confirmations/jobs and selected extracts.
-Never wrap/prefix code lines, truncate IDs/URLs or infer source headers/locations.
-Small rectangular ASCII tables fit an 88-column grid; all other tables use labeled
-cells preserving spans, empty/multiline values and source header flags. Preserve
-supplemental labels and warnings/progress on stderr. Escape terminal controls in
-human views only. No framework, colors, pager, prompts, TUI or new dependencies.
+Original runtime/dist archives remain superseded evidence. Use the small packager
+with --out-dir runtime/dist/candidate-2/; collisions must fail within that directory.
+Commit corrected notices, SOURCE-ACCESS and packaging code before the single
+incremental native release build. Package binaries and Git source from that exact
+checkpoint. No suites, retrieval/ingestion corpus, benchmarks or platform matrix.
+Check hashes, unpacked versions, packaged doctor and one existing saved read.
+Candidate-2 build/source is 33ad146a9d456d4f653da00c2ae298446cdf4f31. Checksums,
+versions, exact-source inspection, doctor and saved read passed; generated material
+gaps are zero. See STATUS for the bounded technical/distribution evidence. Mark
+ready only on that evidence, never as authorization to merge or publish.
 
-Build CLI only with cargo build --locked -p webtool-cli. Verify one existing
-library listing, the terminal Partial job, and the saved Rust Book chapter's
-code/tables. Compare JSON content and check one pipe into head. Do not create a
-new Complete job just to replace the existing terminal Partial evidence.
-No suites, fixtures, public requests, benchmarks, broad lint or command matrix.
-Install once with scripts/install-local.sh --client-only. Preserve receipts and
-leave the installed server/process/config/helpers/database untouched. Do not
-rebuild the server to change its reported commit. Existing single CI build stays.
+Cargo.lock checksums identify authoritative published dependency archives. The
+packager verifies extracted inputs against them; a dirty upstream Git snapshot
+alone is not incompatibility. Recover source headers and demonstrably applicable
+attribution files, not just LICENSE basenames. Native offline cargo metadata needs
+--filter-platform matching the Rust host. Generic terms must not be labeled
+revision-exact. Enumerated concerns, affected files, scopes, evidence and remedies
+live in packaging/licenses/concerns.json; only unresolved records block. Use actual
+compiler-artifact inventory for this build: 492 packages, not all 543 native resolved
+packages. Do not infer that every resolved dependency was compiled or linked.
+SOURCE-ACCESS.md gives exact source locations, checksums, no-Git build commands,
+MPL Covered Source and AGPL access/availability duties. No future-source promise.
+Do not bundle raw crate test-model payloads or claim Cargo.lock is complete source.
 
-Update README, AGENTS and STATUS with evidence and a short before/after example.
-Mark ready after proof; do not merge or publish. This project remains unrelated
-to Pi/Glance/Chrono and Terminal Agent Browser release coordination; direct those
-requests to their owning worker.
+This project is unrelated to Pi/Glance/Chrono and Terminal Agent Browser release
+coordination. Direct those requests to their owning worker.
 
 ## Confirmed local caption setup
 
 Official PyPI helper installed with `uv tool install 'yt-dlp[default]' --index-url
 https://pypi.org/simple`: yt-dlp 2026.08.19 and EJS 0.8.0. Existing Node v24.18.0
 satisfies documented Node >=22; no new runtime or ffmpeg is needed for this path.
-Machine helper settings live in ignored runtime/media-config.toml. Installed
-startup: `/home/mainpc/.local/bin/webtoold --config
-/home/mainpc/Projects/webtool/runtime/media-config.toml --data-dir
-/home/mainpc/Projects/webtool/data`. Use these absolute paths outside the checkout.
+Machine helper settings live in ignored runtime/media-config.toml. Generic
+startup: `webtoold --config /absolute/path/server.toml --data-dir
+/absolute/path/existing-data`. Use the intended absolute paths outside the checkout.
 
 One live 19-second video passed with six provided English cues. Nonfatal yt-dlp
 impersonation warnings remain visible; do not install extra dependencies only to

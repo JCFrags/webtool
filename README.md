@@ -6,6 +6,17 @@ There is no TUI, alternate screen, browser-control interface, or default LLM wor
 
 ## Delivery status
 
+The `0.1.0-alpha.1` packages are local candidates, not published or installed.
+See [alpha notes](docs/ALPHA.md), [source access](docs/SOURCE-ACCESS.md),
+[third-party records](docs/THIRD-PARTY.md), and [artifact evidence](docs/STATUS.md).
+The installed server was restored without replacement. Earlier packaged doctor
+and saved-read failures were connection refusal; both passed after restoration.
+Candidate-2 passes checksums, unpacked versions, doctor and one saved read, with
+zero unresolved bounded material gaps. Build/source: 33ad146a9d456d4f653da00c2ae298446cdf4f31.
+Use `scripts/package-local.sh --out-dir runtime/dist/candidate-2/` from a clean
+committed checkpoint; existing outputs are never overwritten. Distribution still
+requires the documented source-access/availability conditions, not future promises.
+
 The normal server now includes native PDF text reading through pinned Xberg.
 A two-page public PDF passed URL read, local ingestion, page-location checks,
 phrase finding, and byte-identical original export. Default HTML nested code and

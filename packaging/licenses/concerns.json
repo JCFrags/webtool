@@ -1,0 +1,147 @@
+{
+  "records": [
+    {
+      "package": "mac",
+      "version": "0.1.1",
+      "affected_files": [
+        "all published crate source files"
+      ],
+      "scope": "shipped code through futf, html5ever, and tendril",
+      "evidence": "Cargo.lock checksum c41e0c4fef86961ac6d6f8a82609f55f31b05e4fce149ac5710e439df7619ba4; published Cargo.toml declares MIT/Apache-2.0; published README identifies the primary author and repeats the license choice; neither the crate nor upstream repository supplies root license files.",
+      "missing_obligation": "Complete MIT and Apache-2.0 terms were absent from the published crate; no separate upstream copyright notice was supplied.",
+      "remedy": "Bundled complete generic MIT and Apache-2.0 terms and preserved the author/license statements supplied by the published crate in NOTICE-source-metadata.txt.",
+      "resolved": true
+    },
+    {
+      "package": "mathemascii",
+      "version": "0.4.0",
+      "affected_files": [
+        "all published crate source files"
+      ],
+      "scope": "optional document conversion module pulled through xberg; present in the native resolved build graph",
+      "evidence": "Cargo.lock checksum 5edd9e0cc9e4404ea4e2b9da76dc78c6193516ac3f9276c7151e7e2e87eae24f; published Cargo.toml and Cargo.toml.orig declare Apache-2.0; no root LICENSE or NOTICE is present in the crate or its recorded upstream revision.",
+      "missing_obligation": "Complete Apache-2.0 terms were absent from the published crate.",
+      "remedy": "Bundled complete Apache-2.0 terms and a source-metadata notice. No upstream NOTICE file exists to reproduce.",
+      "resolved": true
+    },
+    {
+      "package": "simd_helpers",
+      "version": "0.1.0",
+      "affected_files": [
+        "src/lib.rs"
+      ],
+      "scope": "build-time procedural macro used by shipped rav1e code",
+      "evidence": "Cargo.lock checksum 95890f873bec569a0362c235787f3aca6e1e887302ba4840839bcc6459c42da6; published manifests declare MIT; upstream LICENSE identifies Copyright (c) 2019 Luca Barbato.",
+      "missing_obligation": "The published crate omitted the upstream MIT copyright and permission notice.",
+      "remedy": "Recovered the complete upstream MIT notice from https://github.com/lu-zero/simd_helpers/blob/master/LICENSE.",
+      "resolved": true
+    },
+    {
+      "package": "metadata-search-engine-rs",
+      "version": "0.3.1",
+      "affected_files": [
+        "src/engines/sogou_images.rs",
+        "src/engines/bing_images.rs",
+        "src/engines/google_images.rs",
+        "src/models.rs",
+        "src/aggregator.rs"
+      ],
+      "scope": "compiled default host web-search dependency; its image adapters are included in the crate but are not exposed by webtool's ordinary web-search interface",
+      "evidence": "Cargo.lock checksum 7d13eab71e3c3afe4891f765d2a7ee4fd368bbd547a822c05df769803a730143; webtool-engine enables web-search by default and the candidate build log compiled this crate. The published changelog calls sogou_images.rs a port of SearXNG. Bounded comparison against pinned SearXNG revision 931fd9787b1517d88af2876175d8c31b03e11671 and historical Google comparison revision 13eec44b65d19dedddfd85755ed2adab2a22187c found matching request parameters, selectors, JSON fields, result mappings, Google Go user agent/internal API behavior, image-result fields, and image hash behavior. The corresponding SearXNG files carry SPDX-License-Identifier: AGPL-3.0-or-later, while the crate manifest declares MIT. Comparison file hashes are recorded in SEARXNG-ATTRIBUTION.md; the original port revisions remain unknown.",
+      "missing_obligation": "The published crate omitted complete MIT terms for its remainder and omitted SearXNG attribution, AGPL-3.0-or-later terms for adapted portions, changed-file identification, and source directions.",
+      "remedy": "Bundled complete generic MIT terms and the supplied author/license statement without inventing copyright. SEARXNG-ATTRIBUTION.md identifies affected files and changed/adapted scope for version 0.3.1 dated 2026-08-07, applies AGPL-3.0-or-later to those portions, and pins the observed comparison sources and hashes without claiming unknown original port revisions. Complete AGPLv3 terms and project source-access directions accompany it.",
+      "resolved": true
+    },
+    {
+      "package": "fxhash",
+      "version": "0.2.1",
+      "affected_files": [
+        "lib.rs"
+      ],
+      "scope": "shipped code through selectors 0.25.0",
+      "evidence": "Cargo.lock checksum c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c; lib.rs carries Copyright 2015 The Rust Project Developers and an MIT/Apache-2.0 choice.",
+      "missing_obligation": "Complete MIT and Apache-2.0 terms were absent; the Rust Project copyright notice had to remain attached to the MIT grant.",
+      "remedy": "Preserved the exact source header and bundled complete MIT terms with its copyright notice plus complete Apache-2.0 terms.",
+      "resolved": true
+    },
+    {
+      "package": "servo_arc",
+      "version": "0.3.0",
+      "affected_files": [
+        "lib.rs"
+      ],
+      "scope": "shipped code through selectors 0.25.0",
+      "evidence": "Cargo.lock checksum d036d71a959e00c77a63538b90a6c2390969f9772b096ea837205c6bd0491a44; lib.rs carries Copyright 2012-2014 The Rust Project Developers and an MIT/Apache-2.0 choice.",
+      "missing_obligation": "Complete MIT and Apache-2.0 terms were absent from the published crate archive.",
+      "remedy": "Preserved the exact published-crate source header and bundled complete generic MIT and Apache-2.0 terms. A missing root filename is not treated as a license conflict.",
+      "resolved": true
+    },
+    {
+      "package": "profiling-procmacros",
+      "version": "1.0.18",
+      "affected_files": [
+        "src/lib.rs"
+      ],
+      "scope": "build-time procedural macro enabled by profiling's default feature and used by shipped rav1e code",
+      "evidence": "Cargo.lock checksum 4488a4a36b9a4ba6b9334a32a39971f77c1436ec82c38707bce707699cc3bbcb; .cargo_vcs_info.json records the same upstream revision as profiling 1.0.18; the published README and manifest declare MIT OR Apache-2.0.",
+      "missing_obligation": "The procedural-macro crate omitted the workspace root MIT and Apache-2.0 files from its published archive.",
+      "remedy": "The exact shared upstream revision's LICENSE-MIT and LICENSE-APACHE files were already recovered under packaging/licenses/profiling and are now indexed for profiling-procmacros.",
+      "resolved": true
+    },
+    {
+      "package": "zune-inflate",
+      "version": "0.2.54",
+      "affected_files": [
+        "src/constants.rs",
+        "src/utils.rs",
+        "src/decoder.rs",
+        "src/crc/crc_tables.rs",
+        "src/crc.rs"
+      ],
+      "scope": "shipped DEFLATE decoder code",
+      "evidence": "Cargo.lock checksum 73ab332fe2f6680068f3582b16a24f90ad7096d5d39b974d1c0aff0125116f02; README says the implementation is heavily based on libdeflate; direct comparison against pinned observed libdeflate revision 92e6a0db9fa848d742f9eb286c92afc60f2c3dda finds matching table constants, entry layouts, table-builder structure and text; crc_tables.rs expressly identifies Eric Biggers\u2019 libdeflate. Comparison file hashes are recorded in LIBDEFLATE-ATTRIBUTION.md; the original adaptation revision remains unknown.",
+      "missing_obligation": "The libdeflate-derived scope and libdeflate MIT copyright and permission notice were not identified in the recovered zune-inflate materials.",
+      "remedy": "Bundled the expressly implicated Eric Biggers MIT copyright and permission notice from pinned libdeflate revision 275aa5141db6eda3587214e0f1d3a134768f557d and added exact affected-file attribution. The attribution pins the observed comparison revision and hashes while explicitly not claiming an unknown original adaptation revision. MIT is one of zune-inflate\u2019s declared alternatives.",
+      "resolved": true
+    },
+    {
+      "package": "selectors",
+      "version": "0.25.0",
+      "affected_files": [
+        "all MPL-2.0 source files in the published selectors crate"
+      ],
+      "scope": "host HTML selector implementation; unmodified published source",
+      "evidence": "Cargo.lock SHA256 4eb30575f3638fc8f6815f448d50cb1a2e255b0897985c8c59f4d37b72a07b06; declared MPL-2.0 and retained source notices. Registry API confirms this version and exact download path.",
+      "missing_obligation": "Complete MPL terms and explicit reasonable, timely Covered Source access directions were missing.",
+      "remedy": "Complete MPL text is bundled. SOURCE-ACCESS.md lists the exact registry source archive URL and checksum for this version and requires preservation of notices and equivalent no-charge copying access.",
+      "resolved": true
+    },
+    {
+      "package": "selectors",
+      "version": "0.33.0",
+      "affected_files": [
+        "all MPL-2.0 source files in the published selectors crate"
+      ],
+      "scope": "host HTML selector implementation; unmodified published source",
+      "evidence": "Cargo.lock SHA256 feef350c36147532e1b79ea5c1f3791373e61cbd9a6a2615413b3807bb164fb7; declared MPL-2.0 and retained source notices. Registry API confirms this version and exact download path.",
+      "missing_obligation": "Complete MPL terms and explicit reasonable, timely Covered Source access directions were missing.",
+      "remedy": "Complete MPL text is bundled. SOURCE-ACCESS.md lists the exact registry source archive URL and checksum for this version and requires preservation of notices and equivalent no-charge copying access.",
+      "resolved": true
+    },
+    {
+      "package": "xberg",
+      "version": "1.1.1",
+      "affected_files": [
+        ".cargo_vcs_info.json",
+        "src/extraction/docx/parser.rs",
+        "src/extraction/pptx/mod.rs",
+        "src/chunking/text_splitter/mod.rs"
+      ],
+      "scope": "host document extraction dependency; default configured PDF/Office-related features, not OCR/ONNX integrations",
+      "evidence": "Cargo.lock SHA256 8d88afb006b949d6de97555cb528437726bc4aa2c641c618d3b1c536828a9804; all extracted package files match the verified published archive. Recorded dirty upstream snapshot does not replace this source authority.",
+      "missing_obligation": "Published package omitted vendored-code attribution documents; the dirty marker alone did not establish a license conflict.",
+      "remedy": "Recovered LICENSE, ATTRIBUTIONS.md and THIRD_PARTY_LICENSES.md with recorded origins. SOURCE-ACCESS.md identifies the authoritative checksum-pinned crate, not an asserted byte-identical Git tree.",
+      "resolved": true
+    }
+  ]
+}
