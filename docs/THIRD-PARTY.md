@@ -19,6 +19,13 @@ text, not approval of a package's complete provenance.
 
 ## Bounded remediation status
 
+Candidate-2's actual inventory observes 492 packages. simd_helpers,
+profiling-procmacros and zune-inflate were not observed in that build. The role
+classifications below and in concern records describe dependency relationships,
+not proof of linkage. Their recovered notices remain in the project-source archive;
+binary notice collection follows the actual compiler-artifact inventory.
+
+
 `packaging/licenses/concerns.json` is the machine-readable review record. Its
 records distinguish shipped code, build-time procedural macros, optional modules
 and unbundled libraries. The bounded records currently have no unresolved notice

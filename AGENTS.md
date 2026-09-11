@@ -21,7 +21,10 @@ Commit corrected notices, SOURCE-ACCESS and packaging code before the single
 incremental native release build. Package binaries and Git source from that exact
 checkpoint. No suites, retrieval/ingestion corpus, benchmarks or platform matrix.
 Check hashes, unpacked versions, packaged doctor and one existing saved read.
-Mark ready only if technical packaging and distribution evidence both support it.
+Candidate-2 build/source is 33ad146a9d456d4f653da00c2ae298446cdf4f31. Checksums,
+versions, exact-source inspection, doctor and saved read passed; generated material
+gaps are zero. See STATUS for the bounded technical/distribution evidence. Mark
+ready only on that evidence, never as authorization to merge or publish.
 
 Cargo.lock checksums identify authoritative published dependency archives. The
 packager verifies extracted inputs against them; a dirty upstream Git snapshot
@@ -29,7 +32,9 @@ alone is not incompatibility. Recover source headers and demonstrably applicable
 attribution files, not just LICENSE basenames. Native offline cargo metadata needs
 --filter-platform matching the Rust host. Generic terms must not be labeled
 revision-exact. Enumerated concerns, affected files, scopes, evidence and remedies
-live in packaging/licenses/concerns.json; only unresolved records block.
+live in packaging/licenses/concerns.json; only unresolved records block. Use actual
+compiler-artifact inventory for this build: 492 packages, not all 543 native resolved
+packages. Do not infer that every resolved dependency was compiled or linked.
 SOURCE-ACCESS.md gives exact source locations, checksums, no-Git build commands,
 MPL Covered Source and AGPL access/availability duties. No future-source promise.
 Do not bundle raw crate test-model payloads or claim Cargo.lock is complete source.

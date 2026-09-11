@@ -9,6 +9,66 @@ The original archives below are superseded local evidence and remain unchanged.
 Continue issue #21 / PR #22 on chore/alpha-packaging from 100172ee. No new issue,
 branch, feature, dependency change, installation, merge, tag or publication.
 
+### Candidate-2 results
+
+Artifact build/source SHA: `33ad146a9d456d4f653da00c2ae298446cdf4f31`.
+Build-checkpoint CI passed, run 34566822304. The single incremental locked native
+release build passed in 47.94s with the existing unused-import warnings. The
+corrected script assembled all archives without an assembly retry or rebuild.
+
+Files under ignored `runtime/dist/candidate-2/`:
+
+| Archive | Bytes | SHA256 |
+|---|---:|---|
+| webtool-0.1.0-alpha.1-x86_64-unknown-linux-gnu-client.tar.gz | 3901567 | 79bf7f8a6ff73a1e94c33971ea31300017c5822eb449a725ca7a9f43af0b405e |
+| webtool-0.1.0-alpha.1-x86_64-unknown-linux-gnu-host.tar.gz | 24340902 | 2443c9920e727db2ac3fca1d650326c9987bd0fab87a0d4be4207447c0788a1b |
+| webtool-0.1.0-alpha.1-source.tar.gz | 598601 | b3c2bfed4cfabded3d13ea4fb6495d6a4bff4a61cf0ae356641b7c986df74533 |
+
+Technical packaging readiness: passed. SHA256SUMS verifies all three archives.
+Both unpacked binaries report 0.1.0-alpha.1. Packaged doctor and the existing saved
+read exit 0 against the installed server. The retained source-mapping warning is
+unchanged. All 78 allowlisted Git files, including the corrected packaging script,
+match the build checkpoint byte for byte. BUILD-INFO.json is identical in all
+archives, and its binary hashes match the unpacked executables. No source file was
+changed to manufacture provenance. SOURCE-ACCESS.md has resolved commit/target
+references and explicit URLs/checksums for all seven observed MPL packages.
+
+The runtime dependency inventory contains 492 observed registry packages.
+LOCKED-SOURCES.json lists all 827 locked registry archives, including unused
+optional/other-platform entries. simd_helpers, profiling-procmacros and zune-inflate
+were not observed in this build. Their concern records describe their dependency
+roles conservatively, not a verified linked-code map. Their recovered notices
+remain in the exact project-source archive. The binary packages include notices
+for observed dependencies. An initial inspection assertion incorrectly expected
+an unobserved dependency's notice in the binary packages; the remaining check was
+corrected to follow the actual inventory. No package rebuild was needed.
+
+Distribution readiness for the bounded milestone: supported, with zero unresolved
+generated material gaps. Eleven concern records identify files, scope, evidence,
+missing obligations and applied remedies. Applicable SearXNG AGPL terms and changed
+file notices are retained, not overridden by the search crate's MIT declaration.
+libdeflate's applicable MIT attribution is retained in source supplements. Original
+port revisions remain unknown; pinned comparison revisions are identified honestly,
+not asserted as the port origin. This is not general legal clearance.
+
+The exact project revision is publicly accessible, and selectors registry APIs
+confirm both source versions/download paths and lock checksums. All required build
+archives and extracted files passed local checksum comparison. Distribution must
+keep equivalent source access available as SOURCE-ACCESS.md requires. No publication
+point was created, and no future source bundle is promised. Network deployments
+must offer source for their actual deployed version, not blindly reuse alpha links.
+
+The host requires GLIBC_2.43 and OpenSSL 3; the CLI requires GLIBC_2.34 and OpenSSL 3.
+Rust: 1.98.0, Fedora 1.98.0-1.fc44, native x86_64-unknown-linux-gnu. No portability,
+static-linking or reproducible-binary claim. A no-Git source build is documented,
+not an additional build proof. Old archives still pass their original checksums.
+
+The restored installed server's PID/start identity and all post-restoration file
+hashes, including the database, remain unchanged after candidate-2 checks. No
+candidate installation/startup, new ingestion, provider request, suite, benchmark,
+merge, release tag or publication occurred. PR #22 may be marked ready on this
+bounded evidence; the issue remains open until an authorized merge.
+
 ### Restored local use
 
 The user superseded the no-start restriction for the unchanged installed server
@@ -44,7 +104,7 @@ access and continuing availability; this is not a promise of a future bundle.
 The source archive contains the corrected packaging script at the binary build
 checkpoint. Concerns and remedies are enumerated in packaging/licenses/concerns.json,
 not an unconditional publication blocker. Technical and distribution results are
-recorded separately after the candidate-2 build.
+recorded separately above.
 
 ## Milestone 11: local alpha candidates
 
