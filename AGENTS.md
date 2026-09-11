@@ -7,24 +7,36 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current milestone: corrected local alpha candidate
+## Current milestone: reliable, clean read
 
-Continue chore/alpha-packaging, issue #21, PR #22. No new branch/issue, feature
-work, dependency upgrades, API/data changes, CI changes, merge, tag or publication.
-The user authorized restoring ONLY the unchanged installed server with its existing
-config/data. It is running again. Check current identity before any service action;
-never signal the stale historical PID. Do not install or start candidate binaries.
+Issue #23, branch `feat/read-quality`, from updated main. Read quality is the
+sole active priority. See [ROADMAP.md](docs/ROADMAP.md) for the preserved backlog.
+Use one linked draft PR. Keep search, providers, ranking, configuration, dependency
+pins, API/data schemas, CI and published alpha tags/assets unchanged. No packaging.
 
-Original runtime/dist archives remain superseded evidence. Use the small packager
-with --out-dir runtime/dist/candidate-2/; collisions must fail within that directory.
-Commit corrected notices, SOURCE-ACCESS and packaging code before the single
-incremental native release build. Package binaries and Git source from that exact
-checkpoint. No suites, retrieval/ingestion corpus, benchmarks or platform matrix.
-Check hashes, unpacked versions, packaged doctor and one existing saved read.
-Candidate-2 build/source is 33ad146a9d456d4f653da00c2ae298446cdf4f31. Checksums,
-versions, exact-source inspection, doctor and saved read passed; generated material
-gaps are zero. See STATUS for the bounded technical/distribution evidence. Mark
-ready only on that evidence, never as authorization to merge or publish.
+Inspect retained raw HTML and intermediate extraction before changing the existing
+selector. Separate displayed main content from all-page link discovery. Preserve
+short substantive pages, discussion replies, code, tables, references and captions.
+Add compact default reading and `read --details` without changing JSON or originals.
+Auto ordinary web reads may try configured Lightpanda once after HTTP only on
+missing-content or JavaScript-shell evidence. Do not bypass denials, challenges,
+limits or network errors. Keep explicit choices, native routes and crawl explicit.
+
+Use debug builds and only the Rust Book Data Types chapter plus the JavaScript
+quote page for proof. Reuse saved inputs for presentation work. No suites, fixture
+framework, broad corpus or benchmarks. After proof, install CLI/server once with
+the existing installer and preserve previous binaries/receipts for rollback.
+Verify current process identity before each service action. Restart only this
+project's server with its existing absolute config/data paths. Keep libraries,
+helpers and client settings. Mark ready after the two-page proof; do not merge.
+
+## Published alpha provenance
+
+`v0.1.0-alpha.1` is published from exact build/source
+`33ad146a9d456d4f653da00c2ae298446cdf4f31`. PR #22 merged as `ce023cd`.
+Candidate-2 checksums, versions, exact-source inspection, doctor and saved read
+passed with zero unresolved bounded material gaps. Retain the original and
+candidate-2 artifacts unchanged. See STATUS for historical evidence.
 
 Cargo.lock checksums identify authoritative published dependency archives. The
 packager verifies extracted inputs against them; a dirty upstream Git snapshot
