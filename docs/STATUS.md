@@ -3,6 +3,49 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Milestone 11 continuation: candidate-2
+
+The original archives below are superseded local evidence and remain unchanged.
+Continue issue #21 / PR #22 on chore/alpha-packaging from 100172ee. No new issue,
+branch, feature, dependency change, installation, merge, tag or publication.
+
+### Restored local use
+
+The user superseded the no-start restriction for the unchanged installed server
+only. No webtoold process or port 8420 listener existed. The installed binary was
+started from /tmp with the existing absolute config/data paths, appending to the
+existing runtime/webtoold.log and replacing the stale runtime/webtoold.pid record.
+No signal was sent to the stale PID. Actual PID: 18184, started September 11, 2026
+at 05:22:24 UTC. It owns 127.0.0.1:8420 and reports installed build
+984376ed71b695c53f720c6ab8896ba310a37d11, not an alpha candidate.
+
+Only the two failed original-candidate steps were retried: doctor and the saved
+read both exited 0. The read returned the existing Rust Book "Data Types" document,
+ID 04f9b1ba3433f1c3203cacc1bbb7d51ff0213686dfb1112cfe6e416c85eadded, with its retained
+source-mapping warning. Connection refusal was not a demonstrated client defect.
+The existing database contains 18 documents, seven libraries and one job. Its
+file hash differs from the earlier milestone baseline; no byte-unchanged claim
+is made across startup. A post-restoration baseline records current hashes and
+process identity for candidate-2 preservation checks. Binaries, receipts, helpers,
+config and client-settings presence still match the original baseline.
+
+### Corrected packaging scope
+
+The packager accepts --out-dir runtime/dist/candidate-2/ and refuses collisions.
+It checks published archive checksums and extracted dependency files against the
+committed Cargo.lock, not .cargo-checksum.json or an upstream Git dirtiness flag.
+All 543 native resolved registry archives and their extracted files passed this
+comparison before the corrected build. Normal features and API/data versions stay.
+
+SOURCE-ACCESS.md supplies exact source pointers, locked download URLs/checksums,
+MPL Covered Source locations, no-Git build instructions, AGPL section 6(d) access
+and section 13 network-source duties. Separately hosted sources require equivalent
+access and continuing availability; this is not a promise of a future bundle.
+The source archive contains the corrected packaging script at the binary build
+checkpoint. Concerns and remedies are enumerated in packaging/licenses/concerns.json,
+not an unconditional publication blocker. Technical and distribution results are
+recorded separately after the candidate-2 build.
+
 ## Milestone 11: local alpha candidates
 
 September 11, 2026 UTC. Issue #21 / draft PR #22, chore/alpha-packaging.

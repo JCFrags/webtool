@@ -8,8 +8,8 @@ no release has been approved or published.
 
 Use `sha256sum -c SHA256SUMS` beside the three archives before unpacking them.
 Unpack each archive into a fresh directory with `tar -xzf ARCHIVE.tar.gz`.
-Keep LICENSE, COPYING, THIRD-PARTY.md, the license directory and BUILD-INFO.json
-with each binary. No install, service startup or shell-profile changes are automatic.
+Keep LICENSE, COPYING, THIRD-PARTY.md, SOURCE-ACCESS.md, the license directory,
+source indexes and BUILD-INFO.json with each binary. No install, service startup or shell-profile changes are automatic.
 
 Client archive:
 
@@ -49,7 +49,9 @@ Only the current native Linux architecture is packaged. Consult BUILD-INFO.json
 for the exact Rust toolchain, target, build commit, build platform, ELF interpreter,
 needed shared-library names and required symbol versions for each binary.
 These binaries are dynamically linked. Both candidate binaries need the reported
-OpenSSL 3, glibc, loader and GCC runtime libraries.
+OpenSSL 3, glibc, loader and GCC runtime libraries. The native host requires
+GLIBC_2.43 symbols; the CLI requires GLIBC_2.34 symbols. These are not portable
+binaries for older glibc systems.
 Runtime shared-library packages and certificate trust must be supplied by the OS.
 No static-linking, broad Linux portability or reproducible-binary claim is made.
 No other distribution, architecture or physical-machine LAN connection was tested.
@@ -77,26 +79,34 @@ were tested, not connectivity from another physical machine.
 
 The original AGPL notice is retained in LICENSE; complete AGPL v3 terms are in
 COPYING. No warranty. Third-party licenses remain applicable. Read THIRD-PARTY.md,
-THIRD-PARTY.json and PUBLICATION-BLOCKERS.txt before any distribution.
+THIRD-PARTY.json, LICENSE-CONCERNS.json and PUBLICATION-BLOCKERS.txt before any
+distribution. SOURCE-ACCESS.md gives the exact project revision/download, locked
+dependency URLs/checksums, explicit MPL Covered Source locations and source-build
+instructions. Retain source notices. Cargo.lock alone is not complete source.
 
 The source archive contains an allowlisted exact project Git snapshot, Cargo.lock,
 build/install/package scripts and license materials. Dependency source URLs and
 checksums are recorded in THIRD-PARTY.json, including build-only dependencies.
-Dependency source archives are not bundled: some contain test-only model payloads
-or other materials outside this package scope. Complete corresponding-source
-availability remains a publication condition, not an implied complete source offer.
+Dependency sources are available separately at the exact public registry URLs.
+Their archived bytes and extracted build inputs are checked against Cargo.lock
+before the build. Raw dependency archives are not bundled because they can include
+excluded test-only models. See SOURCE-ACCESS.md for the source-access set, required
+equivalent copying access and the distributor's continuing availability duty.
 The archive omits private working state and development history documents.
 BUILD-INFO.json identifies the actual build checkpoint; later documentation-only
 commits need not change the binaries.
 
-To build the project sources, use the recorded Rust toolchain, a C toolchain and
-required native development libraries, then `cargo build --locked --release
--p webtool-cli -p webtool-server`. Cargo normally obtains locked dependencies from
-the registry at the URLs/checksums in THIRD-PARTY.json. No offline restoration
-or second source-build proof was run. A source checkout without Git reports an
-unknown server build commit rather than inventing one.
+Build the unpacked project outside any Git checkout with the recorded Rust
+and native development tools, using `cargo build --locked --release
+-p webtool-cli -p webtool-server`. No .git directory is required. Without Git,
+the rebuilt server reports an unknown commit; do not manufacture provenance.
+No second source build or offline restoration proof is claimed.
 
-Before distribution, resolve recorded notice gaps and provide recipients with the
-matching source archive alongside the binaries. Remote users of a modified AGPL
-server must be offered its corresponding source as required by section 13. The
-candidate manifest and repository link are not a waiver of those obligations.
+For AGPL section 6(d) distribution, provide clear directions beside the binaries
+to equivalent no-additional-charge copying access for the exact project and
+required dependency sources. Separate hosting does not transfer the distributor's
+availability obligation. For a modified server, prominently offer every remote
+user the deployed version's corresponding source under section 13. SOURCE-ACCESS.md
+explains these conditions and MPL source access; it is not a future written offer.
+Resolve genuinely unresolved records before distribution. These instructions do
+not authorize publication or establish access for another deployed version.

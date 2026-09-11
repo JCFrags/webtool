@@ -1,0 +1,6 @@
+mathemascii 0.4.0
+
+The checksum-pinned published crate identifies Nadir Fejzic as its author and
+declares Apache-2.0 in Cargo.toml and Cargo.toml.orig. The crate and its recorded
+upstream revision contain no root LICENSE or NOTICE file. The accompanying file
+provides the complete Apache License 2.0 terms declared by the crate.

@@ -176,9 +176,9 @@
         "Generic terms provenance: locally downloaded servo_arc 0.4.3 sibling package at rust-stylo revision f319793c6989dba83994fbd10d560b21ad4a0c85",
         "https://static.crates.io/crates/servo_arc/servo_arc-0.3.0.crate (archive member lib.rs lines 1-9)"
       ],
-      "status": "terms-only",
+      "status": "recovered",
       "notes": [
-        "The 0.3.0 source header records Copyright 2012-2014 The Rust Project Developers and the MIT/Apache-2.0 choice, but its recorded Servo revision did not expose retrievable root license files. These are complete generic terms, not claimed as revision-exact files."
+        "The 0.3.0 source header records Copyright 2012-2014 The Rust Project Developers and the MIT/Apache-2.0 choice. Complete generic terms and the exact source notice satisfy the available notice evidence; no revision-exact root filename is required."
       ]
     },
     "typst-syntax-0.15.1": {
@@ -243,18 +243,120 @@
         "zune-inflate/LICENSE.md",
         "zune-inflate/LICENSE-ZLIB",
         "zune-inflate/LICENSE-APACHE-2.0",
-        "zune-inflate/LICENSE-MIT"
+        "zune-inflate/LICENSE-MIT",
+        "zune-inflate/LIBDEFLATE-COPYING",
+        "zune-inflate/LIBDEFLATE-ATTRIBUTION.md"
       ],
       "origins": [
         "https://raw.githubusercontent.com/etemesi254/zune-image/69502ce83fdfecdd0beefd677e2abb3781b29d98/LICENSE.md",
         "https://raw.githubusercontent.com/etemesi254/zune-image/69502ce83fdfecdd0beefd677e2abb3781b29d98/LICENSE-ZLIB",
         "Generic system license provenance: Fedora kf6-karchive package, /usr/share/licenses/kf6-karchive/Apache-2.0.txt",
-        "Generic system license provenance: Fedora linux-firmware package, /usr/share/licenses/linux-firmware/MIT"
+        "Generic system license provenance: Fedora linux-firmware package, /usr/share/licenses/linux-firmware/MIT",
+        "https://raw.githubusercontent.com/ebiggers/libdeflate/275aa5141db6eda3587214e0f1d3a134768f557d/COPYING",
+        "https://github.com/ebiggers/libdeflate/blob/92e6a0db9fa848d742f9eb286c92afc60f2c3dda/lib/deflate_decompress.c",
+        "https://github.com/ebiggers/libdeflate/blob/92e6a0db9fa848d742f9eb286c92afc60f2c3dda/lib/crc32_tables.h",
+        "https://github.com/ebiggers/libdeflate/blob/92e6a0db9fa848d742f9eb286c92afc60f2c3dda/lib/crc32.c"
       ],
       "status": "recovered",
       "notes": [
-        "The exact revision files provide the zune-image copyright/grant notice and Zlib terms; complete generic Apache-2.0 and MIT terms supplement their references.",
-        "README states that the implementation is heavily based on Eric Biggers' libdeflate but gives no source revision or copied scope. This provenance remains unresolved."
+        "The exact zune-image revision files provide its copyright/grant notice and Zlib terms; complete generic Apache-2.0 and MIT terms supplement their references.",
+        "LIBDEFLATE-ATTRIBUTION.md identifies five affected files and records the pinned observed libdeflate comparison revision, file hashes and retrieval date. The original adaptation revision remains unknown. LIBDEFLATE-COPYING preserves the expressly implicated Eric Biggers MIT notice from a pinned upstream snapshot without claiming that snapshot was the port origin."
+      ]
+    },
+    "mac-0.1.1": {
+      "files": [
+        "mac-0.1.1/LICENSE-APACHE",
+        "mac-0.1.1/LICENSE-MIT",
+        "mac-0.1.1/NOTICE-source-metadata.txt"
+      ],
+      "origins": [
+        "Generic complete terms: Apache License 2.0, https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "Generic complete terms: Rust project MIT license, https://raw.githubusercontent.com/rust-lang/rust/master/LICENSE-MIT",
+        "https://static.crates.io/crates/mac/mac-0.1.1.crate (Cargo.toml and README.md)"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The published crate and upstream repository supply the license choice and author statement but no root license files. Generic complete terms and all supplied notices are retained; the absent filename is not itself an incompatibility."
+      ]
+    },
+    "mathemascii-0.4.0": {
+      "files": [
+        "mathemascii-0.4.0/LICENSE-APACHE",
+        "mathemascii-0.4.0/NOTICE-source-metadata.txt"
+      ],
+      "origins": [
+        "Generic complete terms: Apache License 2.0, https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "https://static.crates.io/crates/mathemascii/mathemascii-0.4.0.crate (Cargo.toml, Cargo.toml.orig and .cargo_vcs_info.json)"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The published crate and recorded upstream tree declare Apache-2.0 but supply no root LICENSE or NOTICE. Complete terms and the supplied author/license metadata are retained."
+      ]
+    },
+    "simd_helpers-0.1.0": {
+      "files": [
+        "simd_helpers-0.1.0/LICENSE-MIT"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/lu-zero/simd_helpers/master/LICENSE"
+      ],
+      "status": "recovered",
+      "notes": [
+        "This generic upstream origin supplies the complete MIT terms and Copyright (c) 2019 Luca Barbato for the checksum-pinned crate, whose recorded revision lacks a root license file."
+      ]
+    },
+    "metadata-search-engine-rs-0.3.1": {
+      "files": [
+        "metadata-search-engine-rs-0.3.1/LICENSE-MIT",
+        "metadata-search-engine-rs-0.3.1/NOTICE-source-metadata.txt",
+        "metadata-search-engine-rs-0.3.1/LICENSE-AGPL-3.0",
+        "metadata-search-engine-rs-0.3.1/SEARXNG-ATTRIBUTION.md"
+      ],
+      "origins": [
+        "Generic MIT terms: https://raw.githubusercontent.com/rust-lang/rust/master/LICENSE-MIT",
+        "https://static.crates.io/crates/metadata-search-engine-rs/metadata-search-engine-rs-0.3.1.crate (Cargo.toml, Cargo.toml.orig and CHANGELOG.md)",
+        "https://raw.githubusercontent.com/searxng/searxng/931fd9787b1517d88af2876175d8c31b03e11671/LICENSE",
+        "https://github.com/searxng/searxng/blob/931fd9787b1517d88af2876175d8c31b03e11671/searx/engines/sogou_images.py",
+        "https://github.com/searxng/searxng/blob/931fd9787b1517d88af2876175d8c31b03e11671/searx/engines/bing_images.py",
+        "https://github.com/searxng/searxng/blob/13eec44b65d19dedddfd85755ed2adab2a22187c/searx/engines/google_images.py",
+        "https://github.com/searxng/searxng/blob/931fd9787b1517d88af2876175d8c31b03e11671/searx/result_types/image.py",
+        "https://github.com/searxng/searxng/blob/931fd9787b1517d88af2876175d8c31b03e11671/searx/result_types/_base.py"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The crate is compiled through webtool-engine’s default web-search feature. Its image adapters are included in the crate but are not exposed by webtool’s ordinary web-search interface.",
+        "Complete generic MIT terms and the published author/license statement cover the remainder without inventing a copyright notice.",
+        "SEARXNG-ATTRIBUTION.md identifies five affected published-crate files, gives a changed-file notice for version 0.3.1 dated 2026-08-07, and pins the observed comparison snapshots and hashes. The original port revisions remain unknown. The adapted portions are treated as AGPL-3.0-or-later despite the crate manifest’s MIT-only declaration."
+      ]
+    },
+    "fxhash-0.2.1": {
+      "files": [
+        "fxhash-0.2.1/LICENSE-APACHE",
+        "fxhash-0.2.1/LICENSE-MIT",
+        "fxhash-0.2.1/COPYRIGHT-source-header.txt"
+      ],
+      "origins": [
+        "Generic complete terms: Apache License 2.0, https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "Generic MIT terms: https://raw.githubusercontent.com/rust-lang/rust/master/LICENSE-MIT",
+        "https://static.crates.io/crates/fxhash/fxhash-0.2.1.crate (archive member lib.rs lines 1-9)"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The MIT file combines complete generic terms with the exact Copyright 2015 The Rust Project Developers notice from the checksum-pinned source. The exact dual-license header is also retained separately."
+      ]
+    },
+    "profiling-procmacros-1.0.18": {
+      "files": [
+        "profiling/LICENSE-APACHE",
+        "profiling/LICENSE-MIT"
+      ],
+      "origins": [
+        "https://raw.githubusercontent.com/aclysma/profiling/8271551172eb6fa4cba47369aedd93790c623df9/LICENSE-APACHE",
+        "https://raw.githubusercontent.com/aclysma/profiling/8271551172eb6fa4cba47369aedd93790c623df9/LICENSE-MIT"
+      ],
+      "status": "recovered",
+      "notes": [
+        "The procedural-macro crate records the same repository revision as profiling 1.0.18 and shares these root license files. It is a build-time macro enabled by profiling’s default feature."
       ]
     }
   }

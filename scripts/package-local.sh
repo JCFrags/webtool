@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Native Linux candidates only. No installation, server startup or publication.
 set -euo pipefail
-[[ $# = 0 ]] || { echo "Usage: $0" >&2; exit 2; }
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
-exec python3 - <<'PY'
-import hashlib, io, json, os, pathlib, platform, re, subprocess, tarfile, tempfile, tomllib
+exec python3 - "$@" <<'PY'
+import argparse, hashlib, io, json, os, pathlib, platform, re, subprocess, tarfile, tempfile, tomllib
 from datetime import datetime, timezone
 root = pathlib.Path.cwd()
+parser = argparse.ArgumentParser(prog='scripts/package-local.sh', description='Build and package a clean native Linux candidate; no installation.')
+parser.add_argument('--out-dir', default='runtime/dist', help='output directory, relative to the checkout or absolute')
+args = parser.parse_args()
 def run(*args, **kwargs):
     return subprocess.check_output(args, cwd=root, text=True, **kwargs).strip()
 def digest(path):
@@ -23,18 +25,35 @@ if platform.system() != 'Linux' or '-linux-' not in target:
     raise SystemExit('This script supports only the native Linux Rust host target.')
 if any(os.environ.get(k) for k in ('RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'CARGO_BUILD_TARGET')):
     raise SystemExit('Unset custom Rust flags/target before producing the default native candidate.')
-dist = root / 'runtime/dist'
+dist = (root / args.out_dir).resolve()
 dist.mkdir(parents=True, exist_ok=True)
 stem = f'webtool-{version}-{target}'
 names = [f'{stem}-client.tar.gz', f'{stem}-host.tar.gz', f'webtool-{version}-source.tar.gz', 'SHA256SUMS']
 if any((dist / n).exists() or (dist / n).is_symlink() for n in names):
-    raise SystemExit('Output filename already exists; preserve it and choose a separate checkout for another candidate.')
+    raise SystemExit('Output filename already exists; preserve it and choose another --out-dir.')
 lock = dist / '.packaging-lock'
 lock.mkdir()  # A concurrent packager must refuse, not share output ownership.
 try:
     with tempfile.TemporaryDirectory(prefix='alpha-stage-', dir=root / 'runtime') as temporary:
         stage = pathlib.Path(temporary)
         metadata = json.loads(run('cargo', 'metadata', '--locked', '--offline', '--format-version', '1', '--filter-platform', target))
+        locked = {(p['name'], p['version'], p.get('source')): p.get('checksum')
+                  for p in tomllib.loads((root / 'Cargo.lock').read_text())['package']}
+        # Check the published archive and extracted build inputs, not VCS dirtiness.
+        for p in metadata['packages']:
+            if p['source'] is None: continue
+            base = pathlib.Path(p['manifest_path']).parent
+            cache = base.parent.parent.parent / 'cache' / base.parent.name / (base.name + '.crate')
+            if digest(cache) != locked[(p['name'], p['version'], p['source'])]:
+                raise SystemExit('Locked source checksum mismatch: ' + base.name)
+            with tarfile.open(cache) as source:
+                for member in source.getmembers():
+                    if member.isfile():
+                        relative = pathlib.PurePosixPath(member.name).parts[1:]
+                        if '..' in relative or not relative:
+                            raise SystemExit('Unsafe dependency source path: ' + member.name)
+                        if base.joinpath(*relative).read_bytes() != source.extractfile(member).read():
+                            raise SystemExit('Extracted build input differs from published source: ' + member.name)
         cargo_home = pathlib.Path(os.environ.get('CARGO_HOME', pathlib.Path.home() / '.cargo')).resolve()
         env = dict(os.environ, RUSTFLAGS=f'--remap-path-prefix={root}=/webtool --remap-path-prefix={cargo_home}=/cargo')
         command = ['cargo', 'build', '--locked', '--offline', '--release', '--target', target,
@@ -52,13 +71,16 @@ try:
         common['README.md'] = root / 'docs/ALPHA.md'
         common['THIRD-PARTY.md'] = root / 'docs/THIRD-PARTY.md'
         supplements = json.loads((root / 'packaging/licenses/index.json').read_text())['packages']
-        inventory, blockers = [], ["Dependency corresponding-source availability and attribution issues in THIRD-PARTY.md remain unresolved; project source archive is not a complete dependency source offer."]
+        concerns = json.loads((root / 'packaging/licenses/concerns.json').read_text())
+        inventory, blockers = [], []
+        for concern in concerns['records']:
+            if not concern['resolved']:
+                blockers.append(f"{concern['package']} {concern['version']}: {concern['missing_obligation']} Remedy: {concern['remedy']}")
         for p in sorted(packages, key=lambda p: (p['name'], p['version'])):
             base = pathlib.Path(p['manifest_path']).parent
             key = p['name'] + '-' + p['version']
             cache = base.parent.parent.parent / 'cache' / base.parent.name / (key + '.crate')
-            checksum = next(x['checksum'] for x in tomllib.loads((root / 'Cargo.lock').read_text())['package']
-                            if x['name'] == p['name'] and x['version'] == p['version'] and x.get('source') == p['source'])
+            checksum = locked[(p['name'], p['version'], p['source'])]
             if not cache.is_file() or digest(cache) != checksum:
                 raise SystemExit('Missing or mismatched locked source archive: ' + key)
             notices = []
@@ -73,14 +95,14 @@ try:
                     name = 'licenses/supplements/' + relative
                     common[name] = root / 'packaging/licenses' / relative
                     notices.append(name)
-                if supplement['status'] != 'recovered':
-                    blockers.append(key + ': ' + ' '.join(supplement['notes']))
             if not notices:
-                blockers.append(key + ': no named license/notice file in the published crate; inspect the pinned registry source and THIRD-PARTY.md before distribution.')
+                blockers.append(key + ': no applicable license text or attribution material collected for this build dependency; recover the required material before distribution.')
             inventory.append({'name': p['name'], 'version': p['version'], 'license_expression': p['license'],
                               'source_url': f"https://crates.io/api/v1/crates/{p['name']}/{p['version']}/download", 'source_archive_sha256': checksum,
                               'upstream_repository': p.get('repository'), 'notice_files': notices,
-                              'supplement': supplement})
+                              'supplement': supplement,
+                              'features': next(n['features'] for n in metadata['resolve']['nodes'] if n['id'] == p['id']),
+                              'observed_target_kinds': sorted({kind for a in artifacts if a.get('reason') == 'compiler-artifact' and a['package_id'] == p['id'] for kind in a['target']['kind']})})
         rust_docs = pathlib.Path(run('rustc', '--print', 'sysroot')) / 'share/doc/rust'
         rust_copyright = rust_docs / 'COPYRIGHT-library.html'
         if rust_copyright.is_file():
@@ -90,8 +112,21 @@ try:
         else:
             blockers.append('Rust standard-library copyright/license material missing from this toolchain installation.')
         inventory_file = stage / 'THIRD-PARTY.json'
-        inventory_file.write_text(json.dumps({'scope': 'Packages observed in the native build, including build-only/proc-macro dependencies; not a per-binary link map.', 'packages': inventory}, indent=2) + '\n')
+        inventory_file.write_text(json.dumps({'scope': 'Packages observed in the native build, including build-only/proc-macro dependencies; not a per-binary link map. License expressions are manifest declarations, not overrides of file-specific terms; consult supplements and LICENSE-CONCERNS.json.', 'packages': inventory}, indent=2) + '\n')
         common[inventory_file.name] = inventory_file
+        common['LICENSE-CONCERNS.json'] = root / 'packaging/licenses/concerns.json'
+        locked_sources = stage / 'LOCKED-SOURCES.json'
+        locked_sources.write_text(json.dumps([{'name': p['name'], 'version': p['version'], 'sha256': p['checksum'],
+            'source_url': f"https://crates.io/api/v1/crates/{p['name']}/{p['version']}/download"}
+            for p in tomllib.loads((root / 'Cargo.lock').read_text())['package'] if p.get('source', '').startswith('registry+')], indent=2) + '\n')
+        common[locked_sources.name] = locked_sources
+        access = (root / 'docs/SOURCE-ACCESS.md').read_text()
+        mpl = '\n'.join(f"- {p['name']} {p['version']}: {p['source_url']}\n  SHA256: {p['source_archive_sha256']}" for p in inventory if 'MPL' in (p['license_expression'] or ''))
+        for key, value in {'@SOURCE_SHA@': sha, '@SOURCE_ARCHIVE@': names[2], '@TARGET@': target, '@MPL_SOURCES@': mpl}.items():
+            access = access.replace(key, value)
+        access_file = stage / 'SOURCE-ACCESS.md'
+        access_file.write_text(access)
+        common[access_file.name] = access_file
         blocker_file = stage / 'PUBLICATION-BLOCKERS.txt'
         blocker_file.write_text('LOCAL CANDIDATES: no publication authorized.\nCheck THIRD-PARTY.md and resolve the following material gaps before distribution:\n' + '\n'.join(blockers) + '\n')
         common[blocker_file.name] = blocker_file
@@ -119,7 +154,7 @@ try:
         common[info_file.name] = info_file
         # Source paths are an explicit Git allowlist, not a working-directory tar.
         allow = ['Cargo.toml', 'Cargo.lock', 'LICENSE', 'COPYING', 'config.example.toml', 'crates',
-                 'scripts/install-local.sh', 'scripts/package-local.sh', 'docs/ALPHA.md', 'docs/THIRD-PARTY.md', 'packaging/licenses']
+                 'scripts/install-local.sh', 'scripts/package-local.sh', 'docs/ALPHA.md', 'docs/THIRD-PARTY.md', 'docs/SOURCE-ACCESS.md', 'packaging/licenses']
         source_files = {}
         for record in run('git', 'ls-tree', '-r', sha, '--', *allow).splitlines():
             metadata_line, name = record.split('\t', 1)
@@ -143,7 +178,7 @@ try:
                     tar.addfile(member, io.BytesIO(data))
         archive(names[0], stem + '-client', dict(common, webtool=binaries['webtool']))
         archive(names[1], stem + '-host', dict(common, webtoold=binaries['webtoold'], **{'config.example.toml': root / 'config.example.toml'}))
-        source_extra = {n: p for n, p in common.items() if n not in ('LICENSE', 'COPYING', 'README.md', 'THIRD-PARTY.md')}
+        source_extra = {n: p for n, p in common.items() if n not in ('LICENSE', 'COPYING')}
         archive(names[2], f'webtool-{version}-source', source_extra, source_files)
         with (dist / 'SHA256SUMS').open('x') as sums:
             for name in names[:3]:

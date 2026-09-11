@@ -7,31 +7,33 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current milestone: local alpha candidates
+## Current milestone: corrected local alpha candidate
 
-Work on chore/alpha-packaging, issue #21, PR #22. PR #20 merged at its authorized
-unchanged head with green CI and --match-head-commit. Main merge: 6a99b00.
-Issue #19 closed. Features are frozen at 0.1.0-alpha.1. No dependency upgrades,
-API/schema changes, CI changes, installation, server startup, merge, tag or release.
+Continue chore/alpha-packaging, issue #21, PR #22. No new branch/issue, feature
+work, dependency upgrades, API/data changes, CI changes, merge, tag or publication.
+The user authorized restoring ONLY the unchanged installed server with its existing
+config/data. It is running again. Check current identity before any service action;
+never signal the stale historical PID. Do not install or start candidate binaries.
 
-The single locked native release build succeeded at ec909cc6da5c7ba6e90f960d0b11070804e18d00.
-Assembly then failed on an absent Cargo cache .cargo-checksum.json. Only assembly
-was retried using Cargo.lock checksums and a conservative native dependency
-inventory. The script now uses lockfile checksums. No binary rebuild followed.
-Existing archives/source retain the build checkpoint, including its old script.
-Do not claim that a later packaging correction was compiled into those binaries.
+Original runtime/dist archives remain superseded evidence. Use the small packager
+with --out-dir runtime/dist/candidate-2/; collisions must fail within that directory.
+Commit corrected notices, SOURCE-ACCESS and packaging code before the single
+incremental native release build. Package binaries and Git source from that exact
+checkpoint. No suites, retrieval/ingestion corpus, benchmarks or platform matrix.
+Check hashes, unpacked versions, packaged doctor and one existing saved read.
+Mark ready only if technical packaging and distribution evidence both support it.
 
-See docs/STATUS.md for artifact hashes and failed server-dependent proof, and
-read docs/THIRD-PARTY.md plus packaging/licenses/index.json before distribution.
-Keep the PR draft while proof and publication blockers remain. Recover exact
-attribution files, not just LICENSE basenames. Native offline cargo metadata
-needs --filter-platform matching the Rust host to avoid unrelated target caches.
-Do not bundle raw dependency archives: they can contain excluded test-only models.
+Cargo.lock checksums identify authoritative published dependency archives. The
+packager verifies extracted inputs against them; a dirty upstream Git snapshot
+alone is not incompatibility. Recover source headers and demonstrably applicable
+attribution files, not just LICENSE basenames. Native offline cargo metadata needs
+--filter-platform matching the Rust host. Generic terms must not be labeled
+revision-exact. Enumerated concerns, affected files, scopes, evidence and remedies
+live in packaging/licenses/concerns.json; only unresolved records block.
+SOURCE-ACCESS.md gives exact source locations, checksums, no-Git build commands,
+MPL Covered Source and AGPL access/availability duties. No future-source promise.
+Do not bundle raw crate test-model payloads or claim Cargo.lock is complete source.
 
-The server was absent before packaging. Do not use historical PID records as proof
-of a live process. Both installed binaries, receipts, helper hashes, client settings,
-config and database were preserved. Do not start a server to hide the proof gap.
-No suites, new retrieval/ingestion, benchmarks or platform matrix are authorized.
 This project is unrelated to Pi/Glance/Chrono and Terminal Agent Browser release
 coordination. Direct those requests to their owning worker.
 
