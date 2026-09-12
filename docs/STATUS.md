@@ -40,13 +40,35 @@ print-footer container. The text renderer exposed routine cell diagnostics.
 - Normal locked CLI/server builds passed. No tests, suites, benchmarks, dependency
   changes, public refetch campaign or new fixture framework ran. The unused
   `HashMap` import warning is unchanged. Private evidence is in
-  `runtime/table-footer/`. Local installation of this follow-up is pending.
+  `runtime/table-footer/`. Saved JSON was byte-identical through the new CLI.
+
+The follow-up is installed from clean source
+`dc290a7e427a35daa6db3dfd516b743b0d205e04`, with source CI `34665231455` passed.
+The installer ran once for this follow-up; Cargo reported a 1m 02s release build.
+Both installed binaries match build outputs and their receipts. Previous binaries
+and receipts remain in `runtime/table-footer/rollback/`. After fresh idle,
+process/start, command and binary-hash checks, the old server stopped gracefully.
+The installed server is PID `108376`, start ticks `7315828`; doctor reports the
+exact clean build above. Absolute config/data paths and the existing log/PID
+convention are preserved. Libraries, client/server settings and helper hashes
+remain unchanged.
+
+An installed ordinary `webtool read https://en.wikipedia.org/wiki/Chemistry`
+returned HTTP 200 with renderer `http`, Auto requested and no recovery attempt.
+Saved ID: `8be67eba6491d662e59307bb2111b3aae817ac4941fb5aec18cb5cf1879b7a2b`.
+The fresh source produced 300 blocks, all 32 headings and 1,392 discovered links.
+Navigation and print footers are absent. Its 676,125-byte original export matches
+its recorded hash. This is a newer source snapshot than the 675,132-byte retained
+input used for before/after comparison, not evidence that two links were lost.
+The installed old-snapshot table view matches the verified debug result.
 
 Limits: grids still use 88 columns and do not estimate Unicode display width.
-Complex row spans use explicit compact annotations. Source-generated stylesheet
-error notices in the Chemistry page remain visible. This is not general table,
-layout, footnote or chrome-exclusion validation. The original two-page results
-below remain historical evidence for the initial read-quality change.
+Complex row spans use explicit compact annotations. The retained source includes
+stylesheet error notices; these are absent from the fresh source. The reader does
+not blindly delete source error messages. This is not general table, layout,
+footnote or chrome-exclusion validation. No merge, release or alpha-asset change
+occurred. Later documentation does not require another installation. The original
+two-page results below remain historical evidence for the initial change.
 
 ### Implementation and focused proof
 

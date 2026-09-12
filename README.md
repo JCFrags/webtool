@@ -17,9 +17,9 @@ The sole active milestone is [reliable, clean read](docs/ROADMAP.md), issue #23
 and PR #24. Read-quality changes are separate from the published alpha. Search,
 providers, ranking, configuration, and deferred features stay unchanged.
 The branch implementation is installed locally for testing, from clean build
-`ec91d969ded528273de2b294068a2263c38acba9`. The installed two-page check passed:
-Rust Book stayed HTTP-only; the quote page used Lightpanda once and then cached.
-The PR is not merged. See STATUS for the exact proof and remaining limits.
+`dc290a7e427a35daa6db3dfd516b743b0d205e04`. The initial two-page check passed.
+The table/footer follow-up passed retained-source checks and an installed ordinary
+Chemistry read. The PR is not merged. See STATUS for exact proof and remaining limits.
 
 The normal server now includes native PDF text reading through pinned Xberg.
 A two-page public PDF passed URL read, local ingestion, page-location checks,

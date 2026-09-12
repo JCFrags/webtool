@@ -4,9 +4,9 @@
 
 Issue [#23](https://github.com/JCFrags/webtool/issues/23), PR
 [#24](https://github.com/JCFrags/webtool/pull/24), branch `feat/read-quality`.
-The initial two-page workflow is verified and installed locally. User feedback
-approved a focused table-display, cell-boundary and footer/navigation follow-up
-using the retained Chemistry page. Remote acceptance is pending; no other deferred
+The initial two-page workflow and the user-approved table/footer follow-up are
+verified and installed locally. The follow-up used retained Chemistry input and
+one fresh installed ordinary read. Remote acceptance is pending; no other deferred
 area becomes active.
 
 - Select coherent main content without losing substantive sections, code, tables, references, captions, or discussion replies.

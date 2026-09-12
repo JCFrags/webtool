@@ -36,10 +36,13 @@ actions. Restart only this project's server with its existing absolute config/da
 paths. Keep libraries, helpers and client settings. Return PR #24 to ready after
 verification; do not merge or publish.
 
-The initial installed build is `ec91d969ded528273de2b294068a2263c38acba9`.
-Static reading stayed HTTP-only, JavaScript used Lightpanda once, and a cached
-repeat used no helper. The table/footer follow-up stays within read quality,
-not a new backlog priority. See STATUS for IDs, rollback and exact limitations.
+The table/footer follow-up is verified and installed from clean build
+`dc290a7e427a35daa6db3dfd516b743b0d205e04`. Doctor confirmed the running build.
+The retained Chemistry proof preserved all headings and links. Installed ordinary
+Chemistry read stayed HTTP-only and excluded navigation/print footers. The initial
+Rust Book/JavaScript proof remains historical evidence. Do not repeat installation
+for final documentation or start another backlog priority. See STATUS for IDs,
+rollback and exact limitations.
 
 ## Published alpha provenance
 
