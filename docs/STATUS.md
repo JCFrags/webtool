@@ -3,6 +3,89 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Milestone 12: reliable, clean read
+
+Issue [#23](https://github.com/JCFrags/webtool/issues/23), PR
+[#24](https://github.com/JCFrags/webtool/pull/24), branch `feat/read-quality`.
+Started from updated main `ce023cd`. The sole active priority and deferred work
+are in [ROADMAP.md](ROADMAP.md). No search, provider, ranking, configuration,
+dependency, API/data-version, CI, packaging, tag, or release changes.
+
+### Implementation and focused proof
+
+- Inspected the retained Rust Book HTTP input and quote-page HTTP/DOM inputs,
+  plus rs-trafilatura's intermediate HTML/text before changing selection.
+  The Rust page has navigation outside its main content. The quote HTTP source
+  has quote data only inside a script that writes the cards. Old ordinary read
+  failed with no structured HTML, not a network or access-denial error.
+- HTML uses the existing extractor with standard thresholds, no recall-first or
+  internal fallback mode, and no separately appended article comments. Upstream
+  Forum selection treats replies as content. Short content is not rejected by
+  an arbitrary reader length floor. Links stay independent for map/crawl/extract.
+- Default text has a compact header and one full saved ID. `read --details` shows
+  block IDs, selectors, retrieval/original metadata and full mapping diagnostics.
+  Default output omits link inventories and image URLs. Exact code, table cells,
+  source page numbers and caption times remain. JSON schemas and Markdown exports
+  are unchanged; interactive Markdown has a separate clean renderer.
+- Parser identity is `rs-trafilatura/0.2.2+main-content/5`. Selected inline text is
+  grouped without restoring removed subtrees. The extractor's HTML joined quote
+  and author text even where its text view retained whitespace. Unique whitespace-
+  only matches and matching original inline boundaries repair that defect without
+  replacing paragraphs or changing their order. Missing MathML notation is marked
+  as source-required; retained originals remain complete.
+- Auto ordinary web reads use HTTP first, with at most one configured Lightpanda
+  attempt after missing-content or combined shell evidence. HTTP errors, access
+  denials, challenges and limits are not browser retries. Rendered login/challenge/
+  loading-only content is rejected. Useful HTTP partial content survives failure
+  with a warning. Existing semaphores and one overall HTTP-plus-helper deadline
+  bound the operation; there is no recursive read or second extractor.
+- Normal locked CLI/server debug builds passed. The existing unused HashMap import
+  warning remains. The final quote-spacing correction passed against the retained
+  DOM, without another public request. Failed spacing checks were corrected at the
+  actual extraction boundary, not with global markup stripping.
+- Ordinary Rust Book Data Types read passed with no observed server child/helper
+  process and metadata renderer `http`, recovery false. All 16 code payloads and
+  both table matrices exactly matched the historical saved document. All 33 table
+  cells remain in the default output. The raw 44,687-byte HTTP input is unchanged.
+- Ordinary `https://quotes.toscrape.com/js/` read passed with one observed Lightpanda
+  process, actual HTTP 200 and ten quotes in 21 blocks. Login, navigation and footer
+  text are absent. Separate artifacts retain the initial 5,808-byte HTTP response
+  and 8,986-byte DOM. Metadata identifies the accepted renderer and selection reason.
+- Both original exports matched retained objects byte for byte. JSON parsed with
+  unchanged top-level schema. Historical saved IDs remain readable; a saved static
+  JSON response through the new client matched the previous client byte for byte.
+  Details/default output were inspected. No all-page link discovery was removed.
+
+Private proof and before/after outputs are under ignored `runtime/read-quality/`.
+Rollback copies of both installed binaries and matching checksum receipts are in
+`runtime/read-quality/rollback/`, alongside a consistent pre-restart database copy.
+Only this project's verified server was switched to the debug build, with its
+existing absolute config/data paths. Installation and active-build verification
+are pending at this implementation checkpoint.
+
+### Limits and check-scope deviation
+
+Only the two specified public pages are the live acceptance corpus. General forum,
+short-page, cookie/widget, challenge, failure, and MathML coverage is not established
+by this proof. They follow the inspected selection/guard paths, not a new campaign.
+Superscript/list/Markdown fidelity, broader layout and application completeness
+remain limited. Chromium and fastCRW were not exercised. See the preserved roadmap.
+
+A worker exceeded the no-suite instruction. Two filtered `cargo test` attempts
+(default and no-default-features) failed on an existing integration-test `Job`
+initializer missing `failed`. A later library-only run passed five existing HTML
+unit tests. It also attempted synthetic conversion/encoding checks. Further worker
+checks were stopped; tests were not changed and these runs are not milestone
+acceptance evidence. The worker removed its task-owned test/synthetic artifacts.
+The required acceptance remains the normal build and the real two-page workflow.
+
+## Published alpha baseline
+
+PR #22 merged as `ce023cd`; issue #21 closed. `v0.1.0-alpha.1` is published with
+its tag at exact artifact build `33ad146a9d456d4f653da00c2ae298446cdf4f31`.
+The release and candidate-2 files remain unchanged. Historical milestone sections
+below describe their status at the time, not a pending publication instruction.
+
 ## Milestone 11 continuation: candidate-2
 
 The original archives below are superseded local evidence and remain unchanged.

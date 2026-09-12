@@ -9,10 +9,13 @@ Do not introduce a TUI, permission hierarchy, quality profiles, or distributed j
 
 ## Current milestone: reliable, clean read
 
-Issue #23, branch `feat/read-quality`, from updated main. Read quality is the
+Issue #23, PR #24, branch `feat/read-quality`, from updated main. Read quality is the
 sole active priority. See [ROADMAP.md](docs/ROADMAP.md) for the preserved backlog.
 Use one linked draft PR. Keep search, providers, ranking, configuration, dependency
 pins, API/data schemas, CI and published alpha tags/assets unchanged. No packaging.
+Use the normal locked CLI/server build, not `cargo test` as a compilation shortcut.
+The existing integration-test `Job` initializer lacks `failed`; fixing that test
+belongs outside this milestone. Keep diagnostic inputs under ignored `runtime/`.
 
 Inspect retained raw HTML and intermediate extraction before changing the existing
 selector. Separate displayed main content from all-page link discovery. Preserve
@@ -86,7 +89,7 @@ The Python scripts are development checks, not application components.
 ## Deferred optional integration boundaries
 
 Xberg 1.1.1's existing APIs compiled with the committed lockfile; no dependency
-change was needed. Default search and HTML integrations remain unchanged.
+change was needed. Default search integration and dependency pins remain unchanged.
 OCR/ONNX model readiness and fastCRW APIs still require separate work. Do not
 upgrade the search dependency from =0.3.1 (0.3.2 creates a search-tui cycle).
 
@@ -109,13 +112,21 @@ Do not import upstream CLI, server, cache, authentication, or unrelated agent fe
 
 ## Known implementation gaps
 
-Default extraction passed the bounded nested-code/merged-table smoke and one live
-Rust Book chapter. This is not general extraction-quality validation.
-source-blocks/3 walks only selected containers and preserves their direct text;
-split prose runs stay derived. The public JavaScript quote page exposed dropped
-selected div/span text; the fix does not restore original container subtrees.
-Unique original pre/table matches recover code text/language and table cells.
-Do not substitute an entire original list or quote to recover descendants.
+HTML parser `rs-trafilatura/0.2.2+main-content/5` uses the existing extractor's
+standard selection thresholds, without recall-first or internal fallback mode.
+Article comments are not appended. The extractor's Forum profile preserves replies
+as main content; wider discussion coverage is not verified. All-page links stay
+independent of displayed blocks. Explicit CSS bypasses ordinary chrome filtering.
+Do not remove a substantive section merely because its class says related/social.
+
+Walk only selected containers. Preserve inline runs and structural boundaries.
+The extractor's HTML can join inline text even when its text view retains spaces.
+Recover whitespace only from a unique match with identical non-whitespace text,
+or a matching original inline quotation boundary. Never add whole original
+subtrees or substitute paragraphs to repair fragments. Code and table payloads
+come from unique original element matches. Keep derived mappings explicit.
+MathML uses a supplied TeX annotation or a source-required marker, not flattened
+operator text. This is not general extraction-quality or math validation.
 Non-UTF-8 decoding is absent.
 Markdown parsing implements a limited block reader, not full CommonMark.
 HTML table nesting, list hierarchy, inline link placement, and mathematical fidelity need stronger fixtures.
@@ -142,6 +153,14 @@ DOM originals and selectors are snapshot-relative, never original HTTP responses
 Null/unknown navigation remains explicit. Local JS code/table/base-link/export and
 public quote extraction passed; public fragments remain derived. Readiness is not
 application completeness. Helpers remain process-per-request with bounded resources.
+Auto ordinary web reads use HTTP first, then at most one configured Lightpanda
+attempt for typed missing content or combined application-shell evidence. The
+overall read deadline includes queueing; recovery does not recursively acquire
+read locks. Preserve useful HTTP partial content on browser failure. Reject login,
+challenge and loading-only output. Keep actual renderer/base/locations and separate
+HTTP/DOM artifacts in metadata. `http-lightpanda-recovery/1` versions routing cache
+identity; old saved IDs are not rewritten. Explicit renderers/selectors, native
+GitHub/arXiv/caption routes and HTTP-only crawling remain separate.
 Chromium's historical timeout is unresolved; fastCRW is still unverified. Do not
 change browser binaries/config in place and assume cached results describe them.
 

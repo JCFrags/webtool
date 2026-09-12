@@ -1,5 +1,5 @@
 //! One content selector, followed by structural conversion and verified source matching.
-use std::collections::{HashMap,HashSet};
+use std::{collections::{HashMap,HashSet},error::Error,fmt};
 use anyhow::{anyhow,bail,Result};
 use scraper::{ElementRef,Html,Selector};
 use serde_json::json;
@@ -7,7 +7,22 @@ use url::Url;
 use webtool_protocol::*;
 use super::Parsed;
 
-pub const PARSER:&str="rs-trafilatura/0.2.2+source-blocks/3";
+pub const PARSER:&str="rs-trafilatura/0.2.2+main-content/5";
+
+/// A stable signal that ordinary Auto reads may use for one rendered retry.
+/// Parse, encoding, network, and explicit-selector failures are not this error.
+#[derive(Debug)]
+pub struct MissingContent {
+    pub code: &'static str,
+    message: &'static str,
+}
+impl MissingContent {
+    fn new(code: &'static str, message: &'static str) -> Self { Self { code, message } }
+}
+impl fmt::Display for MissingContent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str(self.message) }
+}
+impl Error for MissingContent {}
 
 fn selector(s:&str)->Result<Selector>{Selector::parse(s).map_err(|e|anyhow!("invalid CSS selector: {e:?}"))}
 fn normalized(s:&str)->String{s.split_whitespace().collect::<Vec<_>>().join(" ")}
@@ -25,9 +40,39 @@ fn path(e:ElementRef<'_>)->String{
 fn ignored(e:ElementRef<'_>)->bool{
     e.ancestors().filter_map(ElementRef::wrap).any(|a|matches!(a.value().name(),"script"|"style"|"noscript"|"template"))
 }
-const BLOCKS: &str = "h1,h2,h3,h4,h5,h6,p,pre,table,li,blockquote,img,math";
+const BLOCKS: &str = "h1,h2,h3,h4,h5,h6,p,pre,table,li,dt,dd,blockquote,img,figcaption,math";
 fn is_block(e: ElementRef<'_>) -> bool {
     BLOCKS.split(',').any(|tag| tag == e.value().name())
+}
+fn is_inline(e: ElementRef<'_>) -> bool {
+    matches!(e.value().name(), "a"|"abbr"|"b"|"bdi"|"bdo"|"cite"|"data"|"del"|"em"|"i"|"ins"|"kbd"|"mark"|"q"|"ruby"|"s"|"samp"|"small"|"span"|"strong"|"sub"|"sup"|"time"|"u"|"var"|"wbr")
+}
+fn chrome_hint(e: ElementRef<'_>) -> bool {
+    e.ancestors().filter_map(ElementRef::wrap).any(|a| {
+        if matches!(a.value().name(), "html"|"body") { return false; }
+        if matches!(a.value().name(), "nav"|"footer") { return true; }
+        if a.value().attr("role").is_some_and(|role| matches!(role.to_ascii_lowercase().as_str(), "navigation"|"contentinfo")) { return true; }
+        let tokens:HashSet<String>=[a.value().attr("id"), a.value().attr("class")].into_iter().flatten()
+            .flat_map(|value| value.to_ascii_lowercase().split(|c:char| !c.is_ascii_alphanumeric()).map(str::to_owned).collect::<Vec<_>>()).collect();
+        // A section about cookies, social systems, or related work is content.
+        // Require widget structure as well as a label before excluding it.
+        let linked=a.select(&Selector::parse("a[href]").expect("constant selector"))
+            .map(text).collect::<String>().chars().count();
+        let length=text(a).chars().count().max(1);
+        let link_widget=linked.saturating_mul(2)>length;
+        let cookie_widget=(tokens.contains("cookie")||tokens.contains("consent"))
+            && (a.value().attr("role")==Some("dialog")||tokens.contains("banner")||tokens.contains("modal"));
+        let related_widget=tokens.contains("related")
+            && (tokens.contains("posts")||tokens.contains("articles")||tokens.contains("stories"));
+        cookie_widget || (link_widget && (tokens.contains("navbar")||tokens.contains("navigation")
+            ||tokens.contains("pagination")||tokens.contains("recommendations")||related_widget))
+    })
+}
+fn link_only_chrome(e: ElementRef<'_>) -> bool {
+    if !matches!(e.value().name(), "p"|"li") { return false; }
+    let value=normalized(&text(e)).to_ascii_lowercase();
+    let labels=["login","log in","sign in","sign up","menu"];
+    labels.contains(&value.as_str()) && e.select(&Selector::parse("a").expect("constant selector")).next().is_some()
 }
 type Origins<'a> = HashMap<(String, String), Vec<ElementRef<'a>>>;
 
@@ -51,6 +96,7 @@ fn prose(e: ElementRef<'_>, value: String) -> Content {
         "h1"|"h2"|"h3"|"h4"|"h5"|"h6" => Content::Heading { level:e.value().name().as_bytes()[1]-b'0', text:value },
         "li" => Content::ListItem { text:value, ordered:e.parent().and_then(ElementRef::wrap).is_some_and(|n|n.value().name()=="ol") },
         "blockquote" => Content::Quote { text:value },
+        "figcaption" => Content::Caption { text:value },
         _ => Content::Paragraph { text:value },
     }
 }
@@ -63,18 +109,32 @@ fn flush_run(e: ElementRef<'_>, run: &mut String, p: &mut Parsed, unmapped: &mut
         p.push(prose(e, value), Locator::Derived { index:p.blocks.len()+1 });
     }
 }
-fn emit(e: ElementRef<'_>, origins: &Origins<'_>, base: Option<&Url>, p: &mut Parsed, unmapped: &mut usize) -> Result<()> {
+fn emit(e: ElementRef<'_>, origins: &Origins<'_>, base: Option<&Url>, filter_chrome: bool, p: &mut Parsed, unmapped: &mut usize) -> Result<()> {
     if ignored(e) || matches!(e.value().name(), "script"|"style"|"noscript"|"template") { return Ok(()); }
     if !is_block(e) {
-        // Selected transparent containers can hold readable text directly (e.g.
-        // JavaScript-created div/span cards). Do not discard it or restore any
-        // unselected original subtree. Fragment locations remain derived.
+        // Keep inline descendants in one prose run. Structural transparent
+        // containers remain boundaries, so repeated cards keep source order.
         let mut run = String::new();
         for child in e.children() {
             if let Some(t) = child.value().as_text() { run.push_str(t); }
             else if let Some(child) = ElementRef::wrap(child) {
-                flush_run(e, &mut run, p, unmapped);
-                emit(child, origins, base, p, unmapped)?;
+                if matches!(child.value().name(), "script"|"style"|"noscript"|"template") { continue; }
+                if is_inline(child) {
+                    let mut inline_parts=Vec::new();
+                    parts(child,&mut inline_parts);
+                    for part in inline_parts {
+                        match part {
+                            Part::Text(value)=>run.push_str(&value),
+                            Part::Block(block)=>{
+                                flush_run(e,&mut run,p,unmapped);
+                                emit(block,origins,base,filter_chrome,p,unmapped)?;
+                            },
+                        }
+                    }
+                } else {
+                    flush_run(e, &mut run, p, unmapped);
+                    emit(child, origins, base, filter_chrome, p, unmapped)?;
+                }
             }
         }
         flush_run(e, &mut run, p, unmapped);
@@ -91,7 +151,7 @@ fn emit(e: ElementRef<'_>, origins: &Origins<'_>, base: Option<&Url>, p: &mut Pa
                     Part::Text(t) => run.push_str(&t),
                     Part::Block(child) => {
                         flush_run(e, &mut run, p, unmapped);
-                        emit(child, origins, base, p, unmapped)?;
+                        emit(child, origins, base, filter_chrome, p, unmapped)?;
                     }
                 }
             }
@@ -103,6 +163,7 @@ fn emit(e: ElementRef<'_>, origins: &Origins<'_>, base: Option<&Url>, p: &mut Pa
     if normalized(&raw).is_empty() && tag!="img" { return Ok(()); }
     let origin = origins.get(&(tag.to_owned(), normalized(&raw)))
         .and_then(|v| if v.len()==1 { v.first().copied() } else { None });
+    if filter_chrome && origin.is_some_and(|original| chrome_hint(original) || link_only_chrome(original)) { return Ok(()); }
     let locator = if let Some(original) = origin { Locator::Html { selector:path(original) } }
         else { *unmapped+=1; Locator::Derived { index:p.blocks.len()+1 } };
     let content = match tag {
@@ -132,7 +193,15 @@ fn emit(e: ElementRef<'_>, origins: &Origins<'_>, base: Option<&Url>, p: &mut Pa
             let Some(url) = absolute(base, e.value().attr("src").unwrap_or("")) else { return Ok(()); };
             Content::Image { url, alt:e.value().attr("alt").unwrap_or("").into() }
         },
-        "math" => Content::Math { text:e.html() },
+        "math" => {
+            let math=origin.unwrap_or(e);
+            let tex=math.select(&selector("annotation")?).find_map(|annotation| {
+                annotation.value().attr("encoding")
+                    .filter(|encoding| encoding.to_ascii_lowercase().contains("tex"))
+                    .map(|_| text(annotation).trim().to_owned())
+            }).filter(|value| !value.is_empty());
+            Content::Math { text:tex.unwrap_or_else(||"[MathML source required; see retained original]".into()) }
+        },
         _ => prose(e, normalized(&raw)),
     };
     p.push(content, locator);
@@ -164,27 +233,35 @@ pub fn parse(bytes:&[u8],url:&str,explicit:Option<&str>)->Result<Parsed>{
     let title=original.select(&selector("title")?).next().map(text).unwrap_or_else(||url.into());
     let mut p=Parsed::new(&normalized(&title),PARSER);
     p.links=links(source,url);
+    let mut readable_text:Option<String>=None;
     let selected=if let Some(css)=explicit{
-        p.parser="explicit-css+source-blocks/3".into();
+        p.parser="explicit-css+source-blocks/4".into();
         let found=original.select(&selector(css)?).map(|n|n.html()).collect::<Vec<_>>();
         if found.is_empty(){bail!("CSS selector matched no elements");}found.join("\n")
     }else{
         #[cfg(feature="web-extraction")]
         {
+            // Standard thresholds guide this extractor's selection but do not
+            // reject a short result. Keep internal fallback disabled, so short
+            // substantive pages survive without a recall ladder. The extractor's
+            // Forum profile overrides include_comments when replies are the main
+            // discussion; article comments remain separate and are not appended.
             let options=rs_trafilatura::Options{
-                include_comments:true,include_tables:true,include_images:true,include_links:true,
-                include_formatting:true,output_markdown:false,favor_recall:true,deduplicate:false,
-                min_extracted_size:1,min_extracted_len:1,min_output_size:1,
-                use_fallback_extraction:false,url:Some(url.into()),..Default::default()
+                include_comments:false,include_tables:true,include_images:true,include_links:true,
+                include_formatting:true,output_markdown:false,favor_precision:false,favor_recall:false,
+                deduplicate:false,use_fallback_extraction:false,url:Some(url.into()),
+                ..Default::default()
             };
             let r=rs_trafilatura::extract_with_options(source,&options).map_err(|e|anyhow!("HTML extraction failed: {e}"))?;
+            readable_text=Some(r.content_text);
             if let Some(t)=r.metadata.title{p.title=t;}
             p.metadata=json!({"extractor_estimated_quality":r.extraction_quality,"quality_estimate_is_not_validation":true});
             if r.extraction_quality<0.8{p.warnings.push(Warning::new("low_extractor_estimate","The extractor estimates low confidence. Inspect the retained original."));}
-            if let Some(comments)=r.comments_text {
-                if !comments.trim().is_empty(){p.metadata["comments_text"]=json!(comments);}
-            }
-            r.content_html.ok_or_else(||anyhow!("extractor returned no structured HTML; use an explicit CSS selector to read the original structure"))?
+            for warning in r.warnings{p.warnings.push(Warning::new("html_extraction_warning",warning));}
+            r.content_html.ok_or_else(||MissingContent::new(
+                "html_no_structured_content",
+                "extractor returned no structured HTML; the page may require JavaScript or an explicit selector",
+            ))?
         }
         #[cfg(not(feature="web-extraction"))]
         {bail!("HTML content selection requires the web-extraction feature or an explicit selector");}
@@ -198,19 +275,64 @@ pub fn parse(bytes:&[u8],url:&str,explicit:Option<&str>)->Result<Parsed>{
     let cleaned=Html::parse_fragment(&selected);
     let base=Url::parse(url).ok();
     let mut unmapped=0;
-    emit(cleaned.root_element(), &origins, base.as_ref(), &mut p, &mut unmapped)?;
-    if p.blocks.is_empty(){bail!("no readable blocks found; the page may require JavaScript or an explicit selector");}
-    if unmapped>0{p.warnings.push(Warning::new("approximate_source_mapping",format!("{unmapped} blocks could not be mapped uniquely to an original HTML element.")));}
-    if let Some(comments)=p.metadata.get("comments_text").and_then(|v|v.as_str()).map(str::to_owned){
-        p.push(Content::Paragraph{text:comments},Locator::Derived{index:p.blocks.len()+1});
-        p.warnings.push(Warning::new("comment_locations_derived","Extracted comments have no exact original element mapping."));
+    emit(cleaned.root_element(), &origins, base.as_ref(), explicit.is_none(), &mut p, &mut unmapped)?;
+    if let Some(readable)=readable_text {
+        // The extractor's HTML serializer can join adjacent inline nodes even
+        // when its text view keeps their spacing. Recover whitespace only from
+        // a unique complete line with identical non-whitespace characters.
+        // Never replace a subtree, add a paragraph, or alter code/table/math.
+        let key=|value:&str|value.chars().filter(|c|!c.is_whitespace()).collect::<String>();
+        let mut lines:HashMap<String,HashSet<String>>=HashMap::new();
+        for line in readable.lines().map(normalized).filter(|line|!line.is_empty()) {
+            lines.entry(key(&line)).or_default().insert(line);
+        }
+        // The text view can omit a short final card. Also retain a whitespace
+        // boundary between adjacent original quotation/attribution inline nodes.
+        // Only a matching selected run can use it, never unselected descendants.
+        for element in original.select(&selector("div,p,li,blockquote,figcaption")?) {
+            if ignored(element){continue;}
+            let mut run=String::new();let mut spaced=false;
+            let mut record=|run:&mut String,spaced:&mut bool|{
+                if *spaced{let line=normalized(run);lines.entry(key(&line)).or_default().insert(line);}
+                run.clear();*spaced=false;
+            };
+            for child in element.children(){
+                if let Some(value)=child.value().as_text(){run.push_str(value);}
+                else if let Some(child)=ElementRef::wrap(child){
+                    if is_inline(child){
+                        let value=text(child);
+                        if run.ends_with(['”','»','"'])&&value.chars().next().is_some_and(char::is_alphanumeric){run.push(' ');spaced=true;}
+                        run.push_str(&value);
+                    }else{record(&mut run,&mut spaced);}
+                }
+            }
+            record(&mut run,&mut spaced);
+        }
+        for (index,block) in p.blocks.iter_mut().enumerate() {
+            let value=match &mut block.content {
+                Content::Paragraph{text}|Content::Heading{text,..}|Content::Quote{text}|Content::ListItem{text,..}|Content::Caption{text}=>text,
+                _=>continue,
+            };
+            if let Some(recovered)=lines.get(&key(value)).filter(|matches|matches.len()==1).and_then(|matches|matches.iter().next()) {
+                if value!=recovered {
+                    *value=recovered.clone();
+                    if !matches!(block.locator,Locator::Derived{..}){unmapped+=1;}
+                    block.locator=Locator::Derived{index:index+1};
+                }
+            }
+        }
     }
+    if p.blocks.is_empty(){
+        if explicit.is_some(){bail!("no readable blocks found for the explicit CSS selector");}
+        return Err(MissingContent::new(
+            "html_no_readable_blocks",
+            "no readable blocks found; the page may require JavaScript or an explicit selector",
+        ).into());
+    }
+    if unmapped>0{p.warnings.push(Warning::new("approximate_source_mapping",format!("{unmapped} blocks could not be mapped uniquely to an original HTML element.")));}
     let raw_tables=original.select(&selector("main table,article table")?).count();
     let kept_tables=p.blocks.iter().filter(|b|matches!(b.content,Content::Table{..})).count();
     if raw_tables>kept_tables{p.warnings.push(Warning::new("table_coverage_gap",format!("The source main content contains {raw_tables} tables, but extraction retained {kept_tables}.")));}
-    if source.contains("id=\"root\"")||source.contains("id=\"__next\"") {
-        p.warnings.push(Warning::new("dynamic_content_possible","This page may add content with JavaScript. HTTP extraction does not establish rendered completeness."));
-    }
     Ok(p)
 }
 pub fn select_original(source:&str,css:&str)->Result<Vec<serde_json::Value>>{
