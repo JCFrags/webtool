@@ -3,6 +3,189 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Milestone 12: reliable, clean read
+
+Issue [#23](https://github.com/JCFrags/webtool/issues/23), PR
+[#24](https://github.com/JCFrags/webtool/pull/24), branch `feat/read-quality`.
+Started from updated main `ce023cd`. The sole active priority and deferred work
+are in [ROADMAP.md](ROADMAP.md). No search, provider, ranking, configuration,
+dependency, API/data-version, CI, packaging, tag, or release changes.
+
+### Table and footer follow-up
+
+User feedback approved this focused follow-up on the same issue, branch and PR.
+The saved Chemistry source and its intermediate extraction confirmed that the
+selector lost navigation wrappers, omitted some cell list entries, and left a
+print-footer container. The text renderer exposed routine cell diagnostics.
+
+- Parser `main-content/6` removes navigation/page-footer landmarks and named footer
+  containers from a selection copy before extraction. Article-scoped footers and
+  endnotes remain eligible. Original bytes, explicit selectors and all-page links
+  remain independent. Explicit CSS is now `source-blocks/5`.
+- Cell conversion preserves list-item, paragraph and line-break boundaries. It does
+  not guess missing values or restore unselected subtrees.
+- Text grids support multiline ASCII cells, row headers and horizontal spans up
+  to 88 columns. Uncertain widths and geometry use compact rows and real labels,
+  not `Cell / End cell` dumps. Markdown exports and machine schemas are unchanged.
+- Retained Chemistry changed from 310 to 304 blocks. The authority-control box and
+  print footer are absent. All 32 headings and 1,394 links are preserved, including
+  the Notes, References and Bibliography headings. Its chemical-substance caption
+  table remains. The retained original still matches its recorded SHA-256.
+- Explicit selection of the original authority table keeps every National/Other
+  entry, including the previously omitted labels, with separate lines and the
+  two-column heading. This does not rewrite the old saved table.
+- The debug CLI displayed the old saved table through the new compact renderer.
+  The production reader/renderer was invoked on the retained inputs. Rust Book
+  retained all 16 code blocks, both table payloads and its link records unchanged.
+- Normal locked CLI/server builds passed. No tests, suites, benchmarks, dependency
+  changes, public refetch campaign or new fixture framework ran. The unused
+  `HashMap` import warning is unchanged. Private evidence is in
+  `runtime/table-footer/`. Saved JSON was byte-identical through the new CLI.
+
+The follow-up is installed from clean source
+`dc290a7e427a35daa6db3dfd516b743b0d205e04`, with source CI `34665231455` passed.
+The installer ran once for this follow-up; Cargo reported a 1m 02s release build.
+Both installed binaries match build outputs and their receipts. Previous binaries
+and receipts remain in `runtime/table-footer/rollback/`. After fresh idle,
+process/start, command and binary-hash checks, the old server stopped gracefully.
+The installed server is PID `108376`, start ticks `7315828`; doctor reports the
+exact clean build above. Absolute config/data paths and the existing log/PID
+convention are preserved. Libraries, client/server settings and helper hashes
+remain unchanged.
+
+An installed ordinary `webtool read https://en.wikipedia.org/wiki/Chemistry`
+returned HTTP 200 with renderer `http`, Auto requested and no recovery attempt.
+Saved ID: `8be67eba6491d662e59307bb2111b3aae817ac4941fb5aec18cb5cf1879b7a2b`.
+The fresh source produced 300 blocks, all 32 headings and 1,392 discovered links.
+Navigation and print footers are absent. Its 676,125-byte original export matches
+its recorded hash. This is a newer source snapshot than the 675,132-byte retained
+input used for before/after comparison, not evidence that two links were lost.
+The installed old-snapshot table view matches the verified debug result.
+
+Limits: grids still use 88 columns and do not estimate Unicode display width.
+Complex row spans use explicit compact annotations. The retained source includes
+stylesheet error notices; these are absent from the fresh source. The reader does
+not blindly delete source error messages. This is not general table, layout,
+footnote or chrome-exclusion validation. No merge, release or alpha-asset change
+occurred. Later documentation does not require another installation. The original
+two-page results below remain historical evidence for the initial change.
+
+### Implementation and focused proof
+
+- Inspected the retained Rust Book HTTP input and quote-page HTTP/DOM inputs,
+  plus rs-trafilatura's intermediate HTML/text before changing selection.
+  The Rust page has navigation outside its main content. The quote HTTP source
+  has quote data only inside a script that writes the cards. Old ordinary read
+  failed with no structured HTML, not a network or access-denial error.
+- HTML uses the existing extractor with standard thresholds, no recall-first or
+  internal fallback mode, and no separately appended article comments. Upstream
+  Forum selection treats replies as content. Short content is not rejected by
+  an arbitrary reader length floor. Links stay independent for map/crawl/extract.
+- Default text has a compact header and one full saved ID. `read --details` shows
+  block IDs, selectors, retrieval/original metadata and full mapping diagnostics.
+  Default output omits link inventories and image URLs. Exact code, table cells,
+  source page numbers and caption times remain. JSON schemas and Markdown exports
+  are unchanged; interactive Markdown has a separate clean renderer.
+- Parser identity is `rs-trafilatura/0.2.2+main-content/5`. Selected inline text is
+  grouped without restoring removed subtrees. The extractor's HTML joined quote
+  and author text even where its text view retained whitespace. Unique whitespace-
+  only matches and matching original inline boundaries repair that defect without
+  replacing paragraphs or changing their order. Missing MathML notation is marked
+  as source-required; retained originals remain complete.
+- Auto ordinary web reads use HTTP first, with at most one configured Lightpanda
+  attempt after missing-content or combined shell evidence. HTTP errors, access
+  denials, challenges and limits are not browser retries. Rendered login/challenge/
+  loading-only content is rejected. Useful HTTP partial content survives failure
+  with a warning. Existing semaphores and one overall HTTP-plus-helper deadline
+  bound the operation; there is no recursive read or second extractor.
+- Normal locked CLI/server debug builds passed. The existing unused HashMap import
+  warning remains. The final quote-spacing correction passed against the retained
+  DOM, without another public request. Failed spacing checks were corrected at the
+  actual extraction boundary, not with global markup stripping.
+- Ordinary Rust Book Data Types read passed with no observed server child/helper
+  process and metadata renderer `http`, recovery false. All 16 code payloads and
+  both table matrices exactly matched the historical saved document. All 33 table
+  cells remain in the default output. The raw 44,687-byte HTTP input is unchanged.
+- Ordinary `https://quotes.toscrape.com/js/` read passed with one observed Lightpanda
+  process, actual HTTP 200 and ten quotes in 21 blocks. Login, navigation and footer
+  text are absent. Separate artifacts retain the initial 5,808-byte HTTP response
+  and 8,986-byte DOM. Metadata identifies the accepted renderer and selection reason.
+- Both original exports matched retained objects byte for byte. JSON parsed with
+  unchanged top-level schema. Historical saved IDs remain readable; a saved static
+  JSON response through the new client matched the previous client byte for byte.
+  Details/default output were inspected. No all-page link discovery was removed.
+
+Private proof and before/after outputs are under ignored `runtime/read-quality/`.
+Rollback copies of both installed binaries and matching checksum receipts are in
+`runtime/read-quality/rollback/`, alongside a consistent pre-restart database copy.
+Only this project's verified server was switched to the debug build, with its
+existing absolute config/data paths.
+
+### Installed result
+
+Verified September 12, 2026 UTC (September 11 local). Clean implementation/build
+checkpoint: `ec91d969ded528273de2b294068a2263c38acba9`. Its CI build passed,
+run `34661312947`. The existing installer ran once and built both optimized
+binaries in 54.95 seconds. Matching receipts and installed-versus-build hashes
+passed for `$HOME/.local/bin/webtool` and `$HOME/.local/bin/webtoold`.
+
+After a fresh process/start/command and inactive-job check, only the verified
+debug server was stopped gracefully. The installed server runs as PID `2955793`,
+process start ticks `6872195`, on `127.0.0.1:8420`. Doctor reports the exact clean
+build SHA above. Config/data arguments remain absolute and select the existing
+deployment. No system service, helper replacement, or client-setting write occurred.
+
+Installed ordinary-read activation checks used the same two pages:
+
+- Static ID: `3701d469abca8c8616bc76acf1a62f35b80827deda754e35d25934b37dad08b0`.
+  Renderer HTTP, zero browser children, exact 16 code/two table payloads, and
+  unchanged all-page link records compared with the baseline.
+- JavaScript ID: `e50ac8e331de3e2d639127573628100d139d6e510f6ad8650c259d79bd41c172`.
+  One observed Lightpanda child. All ten quotes remain, with corrected quote/author
+  spacing and explicit HTTP/DOM provenance. Parser is main-content/5.
+- A second ordinary JavaScript read reused the identical saved ID and output,
+  printed the cache notice, and created no browser child or recovery-attempt log.
+- Final original hashes match the already verified exports. JSON schemas,
+  library records, helper hashes, server configuration and client settings remain
+  preserved. Historical snapshots were not rewritten.
+
+The source implementation is installed, but the PR remains unmerged. Later
+handoff documentation does not require another install. No alpha asset was
+changed. The previous user testing pane no longer exists; no replacement pane
+was created or unrelated shell modified. Use the installed CLI, not an unpacked
+alpha path. Rollback needs the previous binaries and matching receipts, not a
+routine database restore that would remove new saved documents.
+
+```sh
+webtool doctor
+webtool read https://doc.rust-lang.org/book/ch03-02-data-types.html
+webtool read https://quotes.toscrape.com/js/
+webtool read https://quotes.toscrape.com/js/ --details
+```
+
+### Limits and check-scope deviation
+
+Only the two specified public pages are the live acceptance corpus. General forum,
+short-page, cookie/widget, challenge, failure, and MathML coverage is not established
+by this proof. They follow the inspected selection/guard paths, not a new campaign.
+Superscript/list/Markdown fidelity, broader layout and application completeness
+remain limited. Chromium and fastCRW were not exercised. See the preserved roadmap.
+
+A worker exceeded the no-suite instruction. Two filtered `cargo test` attempts
+(default and no-default-features) failed on an existing integration-test `Job`
+initializer missing `failed`. A later library-only run passed five existing HTML
+unit tests. It also attempted synthetic conversion/encoding checks. Further worker
+checks were stopped; tests were not changed and these runs are not milestone
+acceptance evidence. The worker removed its task-owned test/synthetic artifacts.
+The required acceptance remains the normal build and the real two-page workflow.
+
+## Published alpha baseline
+
+PR #22 merged as `ce023cd`; issue #21 closed. `v0.1.0-alpha.1` is published with
+its tag at exact artifact build `33ad146a9d456d4f653da00c2ae298446cdf4f31`.
+The release and candidate-2 files remain unchanged. Historical milestone sections
+below describe their status at the time, not a pending publication instruction.
+
 ## Milestone 11 continuation: candidate-2
 
 The original archives below are superseded local evidence and remain unchanged.

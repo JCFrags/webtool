@@ -7,24 +7,50 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current milestone: corrected local alpha candidate
+## Current milestone: reliable, clean read
 
-Continue chore/alpha-packaging, issue #21, PR #22. No new branch/issue, feature
-work, dependency upgrades, API/data changes, CI changes, merge, tag or publication.
-The user authorized restoring ONLY the unchanged installed server with its existing
-config/data. It is running again. Check current identity before any service action;
-never signal the stale historical PID. Do not install or start candidate binaries.
+Issue #23, PR #24, branch `feat/read-quality`, from updated main. Read quality is the
+sole active priority. See [ROADMAP.md](docs/ROADMAP.md) for the preserved backlog.
+Use one linked draft PR. Keep search, providers, ranking, configuration, dependency
+pins, API/data schemas, CI and published alpha tags/assets unchanged. No packaging.
+Use the normal locked CLI/server build, not `cargo test` as a compilation shortcut.
+The existing integration-test `Job` initializer lacks `failed`; fixing that test
+belongs outside this milestone. Keep diagnostic inputs under ignored `runtime/`.
 
-Original runtime/dist archives remain superseded evidence. Use the small packager
-with --out-dir runtime/dist/candidate-2/; collisions must fail within that directory.
-Commit corrected notices, SOURCE-ACCESS and packaging code before the single
-incremental native release build. Package binaries and Git source from that exact
-checkpoint. No suites, retrieval/ingestion corpus, benchmarks or platform matrix.
-Check hashes, unpacked versions, packaged doctor and one existing saved read.
-Candidate-2 build/source is 33ad146a9d456d4f653da00c2ae298446cdf4f31. Checksums,
-versions, exact-source inspection, doctor and saved read passed; generated material
-gaps are zero. See STATUS for the bounded technical/distribution evidence. Mark
-ready only on that evidence, never as authorization to merge or publish.
+Inspect retained raw HTML and intermediate extraction before changing the existing
+selector. Separate displayed main content from all-page link discovery. Preserve
+short substantive pages, discussion replies, code, tables, references and captions.
+Add compact default reading and `read --details` without changing JSON or originals.
+Auto ordinary web reads may try configured Lightpanda once after HTTP only on
+missing-content or JavaScript-shell evidence. Do not bypass denials, challenges,
+limits or network errors. Keep explicit choices, native routes and crawl explicit.
+
+The initial Rust Book and JavaScript two-page proof is complete. The user approved
+a focused follow-up for table display, cell boundaries and footer/navigation
+selection. Use the retained Chemistry page and saved table inputs, with bounded
+excerpts. Preserve article references and independent link discovery. No suites,
+fixture framework, broad corpus or benchmarks. Use debug builds, then one installer
+run for this follow-up after the focused proof. Preserve previous binaries and
+matching receipts for rollback. Verify current process identity before service
+actions. Restart only this project's server with its existing absolute config/data
+paths. Keep libraries, helpers and client settings. Return PR #24 to ready after
+verification; do not merge or publish.
+
+The table/footer follow-up is verified and installed from clean build
+`dc290a7e427a35daa6db3dfd516b743b0d205e04`. Doctor confirmed the running build.
+The retained Chemistry proof preserved all headings and links. Installed ordinary
+Chemistry read stayed HTTP-only and excluded navigation/print footers. The initial
+Rust Book/JavaScript proof remains historical evidence. Do not repeat installation
+for final documentation or start another backlog priority. See STATUS for IDs,
+rollback and exact limitations.
+
+## Published alpha provenance
+
+`v0.1.0-alpha.1` is published from exact build/source
+`33ad146a9d456d4f653da00c2ae298446cdf4f31`. PR #22 merged as `ce023cd`.
+Candidate-2 checksums, versions, exact-source inspection, doctor and saved read
+passed with zero unresolved bounded material gaps. Retain the original and
+candidate-2 artifacts unchanged. See STATUS for historical evidence.
 
 Cargo.lock checksums identify authoritative published dependency archives. The
 packager verifies extracted inputs against them; a dirty upstream Git snapshot
@@ -74,7 +100,7 @@ The Python scripts are development checks, not application components.
 ## Deferred optional integration boundaries
 
 Xberg 1.1.1's existing APIs compiled with the committed lockfile; no dependency
-change was needed. Default search and HTML integrations remain unchanged.
+change was needed. Default search integration and dependency pins remain unchanged.
 OCR/ONNX model readiness and fastCRW APIs still require separate work. Do not
 upgrade the search dependency from =0.3.1 (0.3.2 creates a search-tui cycle).
 
@@ -97,16 +123,45 @@ Do not import upstream CLI, server, cache, authentication, or unrelated agent fe
 
 ## Known implementation gaps
 
-Default extraction passed the bounded nested-code/merged-table smoke and one live
-Rust Book chapter. This is not general extraction-quality validation.
-source-blocks/3 walks only selected containers and preserves their direct text;
-split prose runs stay derived. The public JavaScript quote page exposed dropped
-selected div/span text; the fix does not restore original container subtrees.
-Unique original pre/table matches recover code text/language and table cells.
-Do not substitute an entire original list or quote to recover descendants.
+HTML parser `rs-trafilatura/0.2.2+main-content/6` uses the existing extractor's
+standard selection thresholds, without recall-first or internal fallback mode.
+Article comments are not appended. The extractor's Forum profile preserves replies
+as main content; wider discussion coverage is not verified. All-page links stay
+independent of displayed blocks. Page navigation and footer landmarks are removed
+from the selection copy before their wrappers can be lost. Article-scoped footers
+and endnotes remain eligible for content selection. Explicit CSS bypasses ordinary
+chrome filtering. Do not remove a substantive section merely because its class
+says related/social.
+
+Walk only selected containers. Preserve inline runs and structural boundaries.
+The extractor's HTML can join inline text even when its text view retains spaces.
+Recover whitespace only from a unique match with identical non-whitespace text,
+or a matching original inline quotation boundary. Never add whole original
+subtrees or substitute paragraphs to repair fragments. Code and table payloads
+come from unique original element matches. Keep derived mappings explicit.
+MathML uses a supplied TeX annotation or a source-required marker, not flattened
+operator text. This is not general extraction-quality or math validation.
 Non-UTF-8 decoding is absent.
 Markdown parsing implements a limited block reader, not full CommonMark.
 HTML table nesting, list hierarchy, inline link placement, and mathematical fidelity need stronger fixtures.
+
+Text and Markdown share saved table cell values. Text grids support multiline
+ASCII cells and horizontal spans within 88 columns; uncertain widths or row spans
+use compact nonaligned rows. Markdown still uses raw HTML for merged tables, not
+a rendered preview. Cell conversion preserves list-item and br boundaries instead
+of concatenating their text. Explicit CSS uses source-blocks/5 and retains access
+to complete original tables, including excluded navigation regions.
+
+For table defects, compare retained original list-item boundaries with saved rows
+before changing presentation. The Chemistry authority-control footer contained
+joined list items and omitted entries despite retained row/cell spans. Its original
+`role="navigation"` wrapper disappeared during extraction, so post-extraction
+filtering could not identify it. Remove such landmarks from the selection copy
+first. A correct row matrix does not establish content fidelity, and unmatched
+selected tables can still reflect upstream omissions. Do not restore guessed
+values or whole unselected subtrees. Inspect a saved original without a network
+refresh. A block-range JSON read still includes the document link list; project
+only the blocks when bounded output is needed.
 
 The Xberg adapter preserves upstream page text as paragraphs and keeps table
 matrices accessible via extract. Parser revision is source-blocks/2. Default
@@ -130,6 +185,14 @@ DOM originals and selectors are snapshot-relative, never original HTTP responses
 Null/unknown navigation remains explicit. Local JS code/table/base-link/export and
 public quote extraction passed; public fragments remain derived. Readiness is not
 application completeness. Helpers remain process-per-request with bounded resources.
+Auto ordinary web reads use HTTP first, then at most one configured Lightpanda
+attempt for typed missing content or combined application-shell evidence. The
+overall read deadline includes queueing; recovery does not recursively acquire
+read locks. Preserve useful HTTP partial content on browser failure. Reject login,
+challenge and loading-only output. Keep actual renderer/base/locations and separate
+HTTP/DOM artifacts in metadata. `http-lightpanda-recovery/1` versions routing cache
+identity; old saved IDs are not rewritten. Explicit renderers/selectors, native
+GitHub/arXiv/caption routes and HTTP-only crawling remain separate.
 Chromium's historical timeout is unresolved; fastCRW is still unverified. Do not
 change browser binaries/config in place and assume cached results describe them.
 

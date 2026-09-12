@@ -1,6 +1,6 @@
 //! A conventional, pipe-friendly CLI. No alternate screen, mouse handling, or TUI runtime.
 use std::{io::{self,Read,Write},path::PathBuf,process::ExitCode,time::Duration};
-use anyhow::{anyhow,bail,Context,Result};
+use anyhow::{bail,Context,Result};
 use clap::{Parser,Subcommand,ValueEnum};
 use serde::{de::DeserializeOwned,Serialize};
 use serde_json::{json,Value};
@@ -37,7 +37,9 @@ enum Command{
     Read{source:String,#[arg(long)]refresh:bool,#[arg(long,value_enum,default_value="auto")]renderer:Browser,
         #[arg(long,default_value="en")]language:String,
         #[arg(long)]selector:Option<String>,#[arg(long)]library:Option<String>,#[arg(long)]actor:Option<String>,
-        #[arg(long)]start_block:Option<usize>,#[arg(long)]end_block:Option<usize>,#[arg(long)]page:Option<usize>},
+        #[arg(long)]start_block:Option<usize>,#[arg(long)]end_block:Option<usize>,#[arg(long)]page:Option<usize>,
+        /// Show retrieval metadata, block IDs, and source locations.
+        #[arg(long)]details:bool},
     /// Upload a local file. Use '-' for stdin and --name to identify its format.
     Ingest{file:PathBuf,#[arg(long)]name:Option<String>,#[arg(long)]library:Option<String>,#[arg(long)]actor:Option<String>,#[arg(long)]selector:Option<String>},
     /// Find literal text, or a regex, in a saved document or URL.
@@ -122,14 +124,38 @@ fn output<T:Serialize>(value:&T,format:Output)->Result<()>{
     let text=if matches!(format,Output::Jsonl){serde_json::to_string(value)?}else{serde_json::to_string_pretty(value)?};
     stdout(&format!("{text}\n"))
 }
-fn warnings(items:&[Warning]){for w in items{eprintln!("{}",render::terminal_safe(&format!("Warning [{}]: {}",w.code,w.message)));}}
-fn document(d:&Document,format:Output)->Result<()>{
-    warnings(&d.warnings);
-    match format{Output::Text=>stdout(&render::plain(d)),Output::Markdown=>stdout(&render::terminal_safe(&render::markdown(d))),_=>output(d,format)}
+fn warning_is_mapping_or_provenance(w:&Warning)->bool{
+    matches!(w.code.as_str(),"approximate_source_mapping"|"document_location_unavailable"
+        |"rendered_dom_snapshot"|"comment_locations_derived")
+}
+fn warnings(items:&[Warning],details:bool){
+    if details{
+        for w in items{eprintln!("{}",render::terminal_safe(&format!("Warning [{}]: {}",w.code,w.message)));}
+        return;
+    }
+    let diagnostics:Vec<&Warning>=items.iter().filter(|w|warning_is_mapping_or_provenance(w)).collect();
+    for w in items.iter().filter(|w|!warning_is_mapping_or_provenance(w)){
+        eprintln!("{}",render::terminal_safe(&format!("Warning [{}]: {}",w.code,w.message)));
+    }
+    if diagnostics.len()==1{
+        let w=diagnostics[0];
+        eprintln!("{}",render::terminal_safe(&format!("Warning [{}]: {}",w.code,w.message)));
+    }else if diagnostics.len()>1{
+        eprintln!("Warning: {} repeated source mapping/provenance diagnostics were condensed. Use read --details or --format json for full details.",diagnostics.len());
+    }
+}
+fn document(d:&Document,format:Output,details:bool,condense_warnings:bool)->Result<()>{
+    warnings(&d.warnings,details||!human(format)||!condense_warnings);
+    let text=match format{
+        Output::Text=>Some(if details{render::plain_details(d)}else{render::plain(d)}),
+        Output::Markdown=>Some(render::terminal_safe(&render::markdown_read(d,details))),
+        _=>None,
+    };
+    if let Some(text)=text{stdout(&text)}else{output(d,format)}
 }
 fn human(format:Output)->bool{matches!(format,Output::Text|Output::Markdown)}
 fn job_output(job:&Job,format:Output)->Result<()>{
-    warnings(&job.warnings);
+    warnings(&job.warnings,true);
     if human(format){stdout(&presentation::job(job))}else{output(job,format)}
 }
 fn excerpt(text:&str,start:usize,end:usize)->String{
@@ -181,7 +207,7 @@ async fn run(cli:Cli)->Result<()>{
         },
         Command::Search{query,limit,library}=>{
             let result:SearchResponse=client.post("/v1/search",&SearchRequest{query:query.join(" "),limit,library}).await?;
-            warnings(&result.warnings);
+            warnings(&result.warnings,true);
             if matches!(format,Output::Text|Output::Markdown){
                 for (i,r) in result.results.iter().enumerate(){
                     stdout(&render::terminal_safe(&format!("{}. {}\n   {}\n   {}\n   Providers: {}{}\n\n",i+1,r.title,r.url,
@@ -191,7 +217,7 @@ async fn run(cli:Cli)->Result<()>{
             }else{output(&result,format)?;}
             if result.results.is_empty()&&!result.warnings.is_empty(){bail!("search returned no results and reported provider warnings");}Ok(())
         },
-        Command::Read{source,refresh,renderer,language,selector,library,actor,start_block,end_block,page}=>{
+        Command::Read{source,refresh,renderer,language,selector,library,actor,start_block,end_block,page,details}=>{
             let mut d=if source.starts_with("https://")||source.starts_with("http://"){
                 let result:ReadResponse=client.post("/v1/read",&ReadRequest{url:source,refresh,renderer:renderer.into(),language,library,selector,actor}).await?;
                 if result.cached{eprintln!("Using saved extraction. Pass --refresh to retrieve again.");}result.document
@@ -209,7 +235,7 @@ async fn run(cli:Cli)->Result<()>{
                 if start==0||end<start||end>d.blocks.len(){bail!("invalid block range for {} blocks",d.blocks.len());}
                 d.blocks=d.blocks[start-1..end].to_vec();d.warnings.push(Warning::new("selected_blocks",format!("Showing only blocks {start} through {end}.")));
             }
-            document(&d,format)
+            document(&d,format,details,true)
         },
         Command::Ingest{file,name,library,actor,selector}=>{
             let bytes=input(&file)?;
@@ -217,7 +243,7 @@ async fn run(cli:Cli)->Result<()>{
             let mut form=reqwest::multipart::Form::new().part("file",reqwest::multipart::Part::bytes(bytes).file_name(name));
             if let Some(v)=library{form=form.text("library",v);}if let Some(v)=actor{form=form.text("actor",v);}if let Some(v)=selector{form=form.text("selector",v);}
             let response=client.http.post(format!("{}/v1/ingest",client.base)).multipart(form).send().await.with_context(||client.connection_error())?;
-            let d:Document=Client::decode(response).await?;document(&d,format)
+            let d:Document=Client::decode(response).await?;document(&d,format,false,false)
         },
         Command::Find{source,query,regex,ignore_case,limit}=>{
             let d=client.resolve(&source).await?;
@@ -235,7 +261,7 @@ async fn run(cli:Cli)->Result<()>{
         Command::Extract{source,kind,expression}=>{
             let d=client.resolve(&source).await?;let extract_kind:ExtractKind=kind.into();
             let result:ExtractResponse=client.post(&format!("/v1/documents/{}/extract",d.id),&ExtractRequest{kind:extract_kind.clone(),expression}).await?;
-            warnings(&result.warnings);
+            warnings(&result.warnings,true);
             if human(format){if let Some(text)=presentation::extract(&result,&extract_kind,&d)?{return stdout(&text);}}
             output(&result,format)
         },
@@ -273,9 +299,9 @@ async fn run(cli:Cli)->Result<()>{
                 if human(format){
                     if jobs.is_empty(){stdout("No jobs.\n")?;}
                     for job in &jobs{job_output(job,format)?;}Ok(())
-                }else{for job in &jobs{warnings(&job.warnings);}output(&jobs,format)}}
+                }else{for job in &jobs{warnings(&job.warnings,true);}output(&jobs,format)}}
         },
-        Command::Media{url,language,library}=>{let d:Document=client.post("/v1/media",&json!({"url":url,"language":language,"library":library})).await?;document(&d,format)},
+        Command::Media{url,language,library}=>{let d:Document=client.post("/v1/media",&json!({"url":url,"language":language,"library":library})).await?;document(&d,format,false,false)},
         Command::Cite{doi,style}=>{let v:Value=client.post("/v1/cite",&json!({"doi":doi,"format":style})).await?;
             if matches!(format,Output::Text|Output::Markdown){stdout(&format!("{}\n",render::terminal_safe(v["text"].as_str().context("citation response has no text")?)))}else{output(&v,format)}},
         Command::Export{document:source,kind,table,output:path,force}=>{
@@ -299,7 +325,7 @@ async fn run(cli:Cli)->Result<()>{
             for url in data.lines().map(str::trim).filter(|s|!s.is_empty()&&!s.starts_with('#')){
                 let result:Result<ReadResponse>=client.post("/v1/read",&ReadRequest{url:url.into(),refresh:false,renderer:Renderer::Auto,language:default_language(),library:library.clone(),selector:None,actor:None}).await;
                 match result{Ok(r)=>{
-                    if matches!(format,Output::Jsonl){output(&json!({"ok":true,"url":url,"document":r.document}),format)?;}else{document(&r.document,format)?;}
+                    if matches!(format,Output::Jsonl){output(&json!({"ok":true,"url":url,"document":r.document}),format)?;}else{document(&r.document,format,false,false)?;}
                 },Err(e)=>{errors+=1;
                     if matches!(format,Output::Jsonl){output(&json!({"ok":false,"url":url,"error":e.to_string()}),format)?;}else{eprintln!("{}: {e:#}",render::terminal_safe(url));}
                 }}
