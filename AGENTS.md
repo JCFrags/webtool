@@ -33,6 +33,12 @@ Verify current process identity before each service action. Restart only this
 project's server with its existing absolute config/data paths. Keep libraries,
 helpers and client settings. Mark ready after the two-page proof; do not merge.
 
+The two-page proof and one installation are complete. Installed build is
+`ec91d969ded528273de2b294068a2263c38acba9`; doctor verified the same running build.
+Static reading stayed HTTP-only, JavaScript used Lightpanda once, and a cached
+repeat used no helper. Do not repeat installation or start a new priority while
+this PR awaits acceptance. See STATUS for IDs, rollback and exact limitations.
+
 ## Published alpha provenance
 
 `v0.1.0-alpha.1` is published from exact build/source

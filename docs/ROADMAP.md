@@ -2,7 +2,10 @@
 
 ## Sole active priority: reliable, clean read
 
-Issue [#23](https://github.com/JCFrags/webtool/issues/23), branch `feat/read-quality`.
+Issue [#23](https://github.com/JCFrags/webtool/issues/23), PR
+[#24](https://github.com/JCFrags/webtool/pull/24), branch `feat/read-quality`.
+The two-page workflow is verified and installed locally. Remote acceptance is
+pending; no deferred area becomes active until a new milestone is approved.
 
 - Select coherent main content without losing substantive sections, code, tables, references, captions, or discussion replies.
 - Make ordinary read compact and readable. Keep provenance behind `--details`, full JSON, and retained originals.

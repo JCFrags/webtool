@@ -16,6 +16,10 @@ source-access and availability conditions. This is not general legal clearance.
 The sole active milestone is [reliable, clean read](docs/ROADMAP.md), issue #23
 and PR #24. Read-quality changes are separate from the published alpha. Search,
 providers, ranking, configuration, and deferred features stay unchanged.
+The branch implementation is installed locally for testing, from clean build
+`ec91d969ded528273de2b294068a2263c38acba9`. The installed two-page check passed:
+Rust Book stayed HTTP-only; the quote page used Lightpanda once and then cached.
+The PR is not merged. See STATUS for the exact proof and remaining limits.
 
 The normal server now includes native PDF text reading through pinned Xberg.
 A two-page public PDF passed URL read, local ingestion, page-location checks,
@@ -183,6 +187,20 @@ Code lines are not wrapped or prefixed. Tabs and whitespace are retained; termin
 control characters are visibly escaped in human views, not in stored data.
 Raw MathML is not displayed as prose. Equations without faithful available notation
 are marked as requiring the source, not flattened into an invented expression.
+
+Read example, with the old source locator abbreviated:
+
+````text
+Before: Code (rust) [b4 | HTML html:nth-of-type(1) > ...]
+```
+#![allow(unused)]
+
+After:
+```rust
+#![allow(unused)]
+````
+
+The code bytes are unchanged. The source locator is available with `--details`.
 
 Rectangular ASCII tables use an aligned grid when it fits 88 columns. Headers are
 labeled only when source flags identify them. Wide, ragged, merged, multiline,

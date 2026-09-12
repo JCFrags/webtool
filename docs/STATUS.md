@@ -60,8 +60,49 @@ Private proof and before/after outputs are under ignored `runtime/read-quality/`
 Rollback copies of both installed binaries and matching checksum receipts are in
 `runtime/read-quality/rollback/`, alongside a consistent pre-restart database copy.
 Only this project's verified server was switched to the debug build, with its
-existing absolute config/data paths. Installation and active-build verification
-are pending at this implementation checkpoint.
+existing absolute config/data paths.
+
+### Installed result
+
+Verified September 12, 2026 UTC (September 11 local). Clean implementation/build
+checkpoint: `ec91d969ded528273de2b294068a2263c38acba9`. Its CI build passed,
+run `34661312947`. The existing installer ran once and built both optimized
+binaries in 54.95 seconds. Matching receipts and installed-versus-build hashes
+passed for `$HOME/.local/bin/webtool` and `$HOME/.local/bin/webtoold`.
+
+After a fresh process/start/command and inactive-job check, only the verified
+debug server was stopped gracefully. The installed server runs as PID `2955793`,
+process start ticks `6872195`, on `127.0.0.1:8420`. Doctor reports the exact clean
+build SHA above. Config/data arguments remain absolute and select the existing
+deployment. No system service, helper replacement, or client-setting write occurred.
+
+Installed ordinary-read activation checks used the same two pages:
+
+- Static ID: `3701d469abca8c8616bc76acf1a62f35b80827deda754e35d25934b37dad08b0`.
+  Renderer HTTP, zero browser children, exact 16 code/two table payloads, and
+  unchanged all-page link records compared with the baseline.
+- JavaScript ID: `e50ac8e331de3e2d639127573628100d139d6e510f6ad8650c259d79bd41c172`.
+  One observed Lightpanda child. All ten quotes remain, with corrected quote/author
+  spacing and explicit HTTP/DOM provenance. Parser is main-content/5.
+- A second ordinary JavaScript read reused the identical saved ID and output,
+  printed the cache notice, and created no browser child or recovery-attempt log.
+- Final original hashes match the already verified exports. JSON schemas,
+  library records, helper hashes, server configuration and client settings remain
+  preserved. Historical snapshots were not rewritten.
+
+The source implementation is installed, but the PR remains unmerged. Later
+handoff documentation does not require another install. No alpha asset was
+changed. The previous user testing pane no longer exists; no replacement pane
+was created or unrelated shell modified. Use the installed CLI, not an unpacked
+alpha path. Rollback needs the previous binaries and matching receipts, not a
+routine database restore that would remove new saved documents.
+
+```sh
+webtool doctor
+webtool read https://doc.rust-lang.org/book/ch03-02-data-types.html
+webtool read https://quotes.toscrape.com/js/
+webtool read https://quotes.toscrape.com/js/ --details
+```
 
 ### Limits and check-scope deviation
 
