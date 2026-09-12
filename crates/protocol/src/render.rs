@@ -119,8 +119,6 @@ pub fn markdown_read(d:&Document,details:bool)->String{
 pub fn terminal_safe(s:&str)->String{
     s.chars().map(|c|if (c.is_control()&&c!='\n'&&c!='\t')||('\u{80}'..='\u{9f}').contains(&c){c.escape_unicode().to_string()}else{c.to_string()}).collect()
 }
-/// Conservative 88-column ASCII grid. Other cells use explicit row/cell labels
-/// so terminal character widths, tabs, line breaks and spans cannot misalign data.
 fn markdown_table(out:&mut String,rows:&[Vec<crate::Cell>]){
     if rows.is_empty(){return;}
     let width=rows[0].len();
@@ -158,35 +156,110 @@ fn source_group(locator:&Locator)->Option<String>{
     }
 }
 
-fn plain_table(rows:&[Vec<crate::Cell>])->String{
-    if rows.is_empty(){return "(no rows)\n".into();}
-    let columns=rows[0].len();
-    let header=columns>0 && rows[0].iter().all(|c|c.header);
-    let aligned=columns>0 && rows.iter().enumerate().all(|(i,row)|row.len()==columns && row.iter().all(|c|
-        c.row_span==1 && c.col_span==1 && c.text.is_ascii() && !c.text.chars().any(char::is_control)
-        && c.header==(i==0 && header)));
-    if aligned{
-        let widths:Vec<usize>=(0..columns).map(|i|rows.iter().map(|row|row[i].text.len()).max().unwrap_or(0)).collect();
-        if widths.iter().sum::<usize>()+3*columns+1<=88{
-            let border=format!("+{}+\n",widths.iter().map(|w|"-".repeat(w+2)).collect::<Vec<_>>().join("+"));
-            let mut out=String::new();
-            if header{out.push_str("First row: source header cells\n");}
-            out.push_str(&border);
-            for row in rows{
-                out.push('|');
-                for (cell,width) in row.iter().zip(&widths){out.push_str(&format!(" {:width$} |",cell.text,width=width));}
-                out.push('\n');out.push_str(&border);
-            }
-            return out;
+// Only lay out rows whose retained spans establish the same column count.
+fn table_columns(rows:&[Vec<crate::Cell>])->Option<usize>{
+    let mut columns=None;
+    for row in rows{
+        let width=row.iter().try_fold(0usize,|width,cell|{
+            if cell.row_span!=1 || cell.col_span==0{None}else{width.checked_add(cell.col_span)}
+        })?;
+        if width==0 || columns.is_some_and(|n|n!=width){return None;}
+        columns=Some(width);
+    }
+    columns
+}
+
+// Printable ASCII has a known terminal width. Keep source line breaks and use
+// a nonaligned view for other characters, controls, or tables wider than 88 columns.
+fn plain_table_grid(rows:&[Vec<crate::Cell>],columns:usize)->Option<String>{
+    const LIMIT:usize=88;
+    if columns>(LIMIT-1)/4{return None;}
+    let mut widths=vec![1usize;columns];
+    for row in rows{
+        let mut column=0;
+        for cell in row{
+            if !cell.text.bytes().all(|b|b==b'\n'||(b' '..=b'~').contains(&b)){return None;}
+            let width=cell.text.split('\n').map(str::len).max().unwrap_or(0);
+            if width>LIMIT-4{return None;}
+            if cell.col_span==1{widths[column]=widths[column].max(width);}
+            column+=cell.col_span;
         }
     }
-    let mut out=String::from("Labeled cells (no inferred column alignment):\n");
+    // Merged cells reuse the space otherwise occupied by internal separators.
+    for row in rows{
+        let mut column=0;
+        for cell in row{
+            let end=column+cell.col_span;
+            if cell.col_span>1{
+                let available=widths[column..end].iter().sum::<usize>()+3*(cell.col_span-1);
+                let needed=cell.text.split('\n').map(str::len).max().unwrap_or(0);
+                let extra=needed.saturating_sub(available);
+                for (i,width) in widths[column..end].iter_mut().enumerate(){
+                    *width+=extra/cell.col_span+usize::from(i<extra%cell.col_span);
+                }
+            }
+            column=end;
+        }
+    }
+    if widths.iter().sum::<usize>()+3*columns+1>LIMIT{return None;}
+    let border=format!("+{}+\n",widths.iter().map(|w|"-".repeat(w+2)).collect::<Vec<_>>().join("+"));
+    let header_border=border.replace('-',"=");
+    let mut out=border.clone();
+    for row in rows{
+        let lines:Vec<Vec<&str>>=row.iter().map(|cell|cell.text.split('\n').collect()).collect();
+        let height=lines.iter().map(Vec::len).max().unwrap_or(1);
+        for line in 0..height{
+            out.push('|');
+            let mut column=0;
+            for (cell,lines) in row.iter().zip(&lines){
+                let end=column+cell.col_span;
+                let width=widths[column..end].iter().sum::<usize>()+3*(cell.col_span-1);
+                let text=lines.get(line).copied().unwrap_or("");
+                out.push_str(&format!(" {text:width$} |"));
+                column=end;
+            }
+            out.push('\n');
+        }
+        out.push_str(if row.iter().all(|cell|cell.header){&header_border}else{&border});
+    }
+    Some(out)
+}
+
+fn plain_table_cell(cell:&crate::Cell,show_header:bool)->String{
+    let mut notes=Vec::new();
+    if show_header && cell.header{notes.push("header".into());}
+    if cell.row_span!=1{notes.push(format!("rowspan={}",cell.row_span));}
+    if cell.col_span!=1{notes.push(format!("colspan={}",cell.col_span));}
+    let text=if cell.text.is_empty(){"(empty)"}else{cell.text.as_str()};
+    if notes.is_empty(){text.into()}else{format!("[{}] {text}",notes.join(", "))}
+}
+
+fn plain_table(rows:&[Vec<crate::Cell>])->String{
+    if rows.is_empty(){return "(no rows)\n".into();}
+    let columns=table_columns(rows);
+    if let Some(columns)=columns{
+        if let Some(grid)=plain_table_grid(rows,columns){return grid;}
+    }
+    // A source row header can label its one value without padded columns.
+    // Other shapes keep separate rows and cells rather than inventing positions.
+    let row_labels=columns.is_some() && rows.iter().all(|row|
+        (row.len()==1 && row[0].header) || (row.len()==2 && row[0].header && !row[1].header));
+    let mut out=String::from("Table rows (not aligned):\n");
     for (r,row) in rows.iter().enumerate(){
-        out.push_str(&format!("Row {} ({} cells)\n",r+1,row.len()));
-        for (c,cell) in row.iter().enumerate(){
-            out.push_str(&format!("Cell {} [header={}, rowspan={}, colspan={}]{}\n",c+1,cell.header,cell.row_span,cell.col_span,if cell.text.is_empty(){" (empty)"}else{""}));
-            if !cell.text.is_empty(){out.push_str(&cell.text);if !cell.text.ends_with('\n'){out.push('\n');}}
-            out.push_str("End cell\n");
+        if r>0{out.push('\n');}
+        if row_labels{
+            out.push_str(&plain_table_cell(&row[0],false));
+            if row.len()==1{out.push('\n');}else{
+                out.push_str(":\n");
+                for line in plain_table_cell(&row[1],false).split('\n'){out.push_str(&format!("  {line}\n"));}
+            }
+        }else{
+            out.push_str(&format!("Row {}:{}\n",r+1,if row.is_empty(){" (no cells)"}else{""}));
+            for cell in row{
+                for (i,line) in plain_table_cell(cell,true).split('\n').enumerate(){
+                    out.push_str(if i==0{"  - "}else{"    "});out.push_str(line);out.push('\n');
+                }
+            }
         }
     }
     out

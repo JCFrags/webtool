@@ -11,6 +11,43 @@ Started from updated main `ce023cd`. The sole active priority and deferred work
 are in [ROADMAP.md](ROADMAP.md). No search, provider, ranking, configuration,
 dependency, API/data-version, CI, packaging, tag, or release changes.
 
+### Table and footer follow-up
+
+User feedback approved this focused follow-up on the same issue, branch and PR.
+The saved Chemistry source and its intermediate extraction confirmed that the
+selector lost navigation wrappers, omitted some cell list entries, and left a
+print-footer container. The text renderer exposed routine cell diagnostics.
+
+- Parser `main-content/6` removes navigation/page-footer landmarks and named footer
+  containers from a selection copy before extraction. Article-scoped footers and
+  endnotes remain eligible. Original bytes, explicit selectors and all-page links
+  remain independent. Explicit CSS is now `source-blocks/5`.
+- Cell conversion preserves list-item, paragraph and line-break boundaries. It does
+  not guess missing values or restore unselected subtrees.
+- Text grids support multiline ASCII cells, row headers and horizontal spans up
+  to 88 columns. Uncertain widths and geometry use compact rows and real labels,
+  not `Cell / End cell` dumps. Markdown exports and machine schemas are unchanged.
+- Retained Chemistry changed from 310 to 304 blocks. The authority-control box and
+  print footer are absent. All 32 headings and 1,394 links are preserved, including
+  the Notes, References and Bibliography headings. Its chemical-substance caption
+  table remains. The retained original still matches its recorded SHA-256.
+- Explicit selection of the original authority table keeps every National/Other
+  entry, including the previously omitted labels, with separate lines and the
+  two-column heading. This does not rewrite the old saved table.
+- The debug CLI displayed the old saved table through the new compact renderer.
+  The production reader/renderer was invoked on the retained inputs. Rust Book
+  retained all 16 code blocks, both table payloads and its link records unchanged.
+- Normal locked CLI/server builds passed. No tests, suites, benchmarks, dependency
+  changes, public refetch campaign or new fixture framework ran. The unused
+  `HashMap` import warning is unchanged. Private evidence is in
+  `runtime/table-footer/`. Local installation of this follow-up is pending.
+
+Limits: grids still use 88 columns and do not estimate Unicode display width.
+Complex row spans use explicit compact annotations. Source-generated stylesheet
+error notices in the Chemistry page remain visible. This is not general table,
+layout, footnote or chrome-exclusion validation. The original two-page results
+below remain historical evidence for the initial read-quality change.
+
 ### Implementation and focused proof
 
 - Inspected the retained Rust Book HTTP input and quote-page HTTP/DOM inputs,

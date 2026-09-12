@@ -25,19 +25,21 @@ Auto ordinary web reads may try configured Lightpanda once after HTTP only on
 missing-content or JavaScript-shell evidence. Do not bypass denials, challenges,
 limits or network errors. Keep explicit choices, native routes and crawl explicit.
 
-Use debug builds and only the Rust Book Data Types chapter plus the JavaScript
-quote page for proof. Reuse saved inputs for presentation work. No suites, fixture
-framework, broad corpus or benchmarks. After proof, install CLI/server once with
-the existing installer and preserve previous binaries/receipts for rollback.
-Verify current process identity before each service action. Restart only this
-project's server with its existing absolute config/data paths. Keep libraries,
-helpers and client settings. Mark ready after the two-page proof; do not merge.
+The initial Rust Book and JavaScript two-page proof is complete. The user approved
+a focused follow-up for table display, cell boundaries and footer/navigation
+selection. Use the retained Chemistry page and saved table inputs, with bounded
+excerpts. Preserve article references and independent link discovery. No suites,
+fixture framework, broad corpus or benchmarks. Use debug builds, then one installer
+run for this follow-up after the focused proof. Preserve previous binaries and
+matching receipts for rollback. Verify current process identity before service
+actions. Restart only this project's server with its existing absolute config/data
+paths. Keep libraries, helpers and client settings. Return PR #24 to ready after
+verification; do not merge or publish.
 
-The two-page proof and one installation are complete. Installed build is
-`ec91d969ded528273de2b294068a2263c38acba9`; doctor verified the same running build.
+The initial installed build is `ec91d969ded528273de2b294068a2263c38acba9`.
 Static reading stayed HTTP-only, JavaScript used Lightpanda once, and a cached
-repeat used no helper. Do not repeat installation or start a new priority while
-this PR awaits acceptance. See STATUS for IDs, rollback and exact limitations.
+repeat used no helper. The table/footer follow-up stays within read quality,
+not a new backlog priority. See STATUS for IDs, rollback and exact limitations.
 
 ## Published alpha provenance
 
@@ -118,12 +120,15 @@ Do not import upstream CLI, server, cache, authentication, or unrelated agent fe
 
 ## Known implementation gaps
 
-HTML parser `rs-trafilatura/0.2.2+main-content/5` uses the existing extractor's
+HTML parser `rs-trafilatura/0.2.2+main-content/6` uses the existing extractor's
 standard selection thresholds, without recall-first or internal fallback mode.
 Article comments are not appended. The extractor's Forum profile preserves replies
 as main content; wider discussion coverage is not verified. All-page links stay
-independent of displayed blocks. Explicit CSS bypasses ordinary chrome filtering.
-Do not remove a substantive section merely because its class says related/social.
+independent of displayed blocks. Page navigation and footer landmarks are removed
+from the selection copy before their wrappers can be lost. Article-scoped footers
+and endnotes remain eligible for content selection. Explicit CSS bypasses ordinary
+chrome filtering. Do not remove a substantive section merely because its class
+says related/social.
 
 Walk only selected containers. Preserve inline runs and structural boundaries.
 The extractor's HTML can join inline text even when its text view retains spaces.
@@ -136,6 +141,24 @@ operator text. This is not general extraction-quality or math validation.
 Non-UTF-8 decoding is absent.
 Markdown parsing implements a limited block reader, not full CommonMark.
 HTML table nesting, list hierarchy, inline link placement, and mathematical fidelity need stronger fixtures.
+
+Text and Markdown share saved table cell values. Text grids support multiline
+ASCII cells and horizontal spans within 88 columns; uncertain widths or row spans
+use compact nonaligned rows. Markdown still uses raw HTML for merged tables, not
+a rendered preview. Cell conversion preserves list-item and br boundaries instead
+of concatenating their text. Explicit CSS uses source-blocks/5 and retains access
+to complete original tables, including excluded navigation regions.
+
+For table defects, compare retained original list-item boundaries with saved rows
+before changing presentation. The Chemistry authority-control footer contained
+joined list items and omitted entries despite retained row/cell spans. Its original
+`role="navigation"` wrapper disappeared during extraction, so post-extraction
+filtering could not identify it. Remove such landmarks from the selection copy
+first. A correct row matrix does not establish content fidelity, and unmatched
+selected tables can still reflect upstream omissions. Do not restore guessed
+values or whole unselected subtrees. Inspect a saved original without a network
+refresh. A block-range JSON read still includes the document link list; project
+only the blocks when bounded output is needed.
 
 The Xberg adapter preserves upstream page text as paragraphs and keeps table
 matrices accessible via extract. Parser revision is source-blocks/2. Default

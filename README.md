@@ -202,11 +202,22 @@ After:
 
 The code bytes are unchanged. The source locator is available with `--details`.
 
-Rectangular ASCII tables use an aligned grid when it fits 88 columns. Headers are
-labeled only when source flags identify them. Wide, ragged, merged, multiline,
-tabbed or non-ASCII tables use labeled rows/cells with explicit header/span values.
-Empty cells and zero values remain visible. Supplemental tables keep their label.
-No terminal-width detection, color, pager, TUI or interactive behavior is involved.
+ASCII tables use aligned grids when they fit 88 columns, including multiline
+cells, row headers and horizontal spans. A full-width heading stays above its
+columns. Wider, non-ASCII or uncertain layouts use compact rows and source labels,
+not per-cell diagnostic dumps. Real spans, empty cells, zero values and supplemental
+table labels remain visible. No terminal-width detection, color, pager or TUI is
+involved.
+
+`webtool read URL --format markdown` prints Markdown source for that command.
+It does not save a default setting or render a Markdown preview. Merged tables
+use HTML inside Markdown to preserve their structure. Use `webtool export ID
+--kind markdown -o page.md` to save a file for a Markdown-aware application.
+
+Ordinary HTML reads exclude explicit navigation and page-footer landmarks before
+content selection. Originals and all-page links remain complete. Explicit CSS can
+still select those regions. Cell text preserves list-item and line-break boundaries;
+this does not establish complete table or layout fidelity.
 
 `--format json` and `jsonl` keep their existing schemas and framing. Markdown
 exports are unchanged. Other structured extracts still use their existing output.

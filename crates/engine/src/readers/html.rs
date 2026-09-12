@@ -7,7 +7,7 @@ use url::Url;
 use webtool_protocol::*;
 use super::Parsed;
 
-pub const PARSER:&str="rs-trafilatura/0.2.2+main-content/5";
+pub const PARSER:&str="rs-trafilatura/0.2.2+main-content/6";
 
 /// A stable signal that ordinary Auto reads may use for one rendered retry.
 /// Parse, encoding, network, and explicit-selector failures are not this error.
@@ -27,6 +27,40 @@ impl Error for MissingContent {}
 fn selector(s:&str)->Result<Selector>{Selector::parse(s).map_err(|e|anyhow!("invalid CSS selector: {e:?}"))}
 fn normalized(s:&str)->String{s.split_whitespace().collect::<Vec<_>>().join(" ")}
 fn text(e:ElementRef<'_>)->String{e.text().collect::<String>()}
+fn cell_text(e:ElementRef<'_>)->String{
+    fn boundary(out:&mut String){
+        while out.ends_with(' '){out.pop();}
+        if !out.is_empty()&&!out.ends_with('\n'){out.push('\n');}
+    }
+    fn walk(e:ElementRef<'_>,out:&mut String){
+        for child in e.children(){
+            if let Some(value)=child.value().as_text(){
+                // HTML whitespace collapses within inline text. Block and br
+                // boundaries below are explicit, not inferred word breaks.
+                for c in value.chars(){
+                    if c.is_whitespace(){
+                        if !out.is_empty()&&!out.ends_with([' ','\n']){out.push(' ');}
+                    }else{out.push(c);}
+                }
+            }else if let Some(child)=ElementRef::wrap(child){
+                let tag=child.value().name();
+                if matches!(tag,"script"|"style"|"noscript"|"template"){continue;}
+                if tag=="br"{
+                    while out.ends_with(' '){out.pop();}
+                    out.push('\n');
+                    continue;
+                }
+                let block=matches!(tag,"div"|"p"|"li"|"ul"|"ol"|"dl"|"dt"|"dd"|"pre"|"blockquote"|"table"|"tr"|"th"|"td");
+                if block{boundary(out);}
+                walk(child,out);
+                if block{boundary(out);}
+            }
+        }
+    }
+    let mut out=String::new();
+    walk(e,&mut out);
+    out.trim().to_owned()
+}
 fn path(e:ElementRef<'_>)->String{
     let mut result=Vec::new();
     for ancestor in std::iter::once(e).chain(e.ancestors().filter_map(ElementRef::wrap)){
@@ -47,11 +81,38 @@ fn is_block(e: ElementRef<'_>) -> bool {
 fn is_inline(e: ElementRef<'_>) -> bool {
     matches!(e.value().name(), "a"|"abbr"|"b"|"bdi"|"bdo"|"cite"|"data"|"del"|"em"|"i"|"ins"|"kbd"|"mark"|"q"|"ruby"|"s"|"samp"|"small"|"span"|"strong"|"sub"|"sup"|"time"|"u"|"var"|"wbr")
 }
+fn has_role(e:ElementRef<'_>,role:&str)->bool{
+    e.value().attr("role").is_some_and(|roles|roles.split_ascii_whitespace().any(|value|value.eq_ignore_ascii_case(role)))
+}
+fn chrome_landmark(e:ElementRef<'_>)->bool{
+    if e.value().name()=="nav"||has_role(e,"navigation")||has_role(e,"contentinfo"){return true;}
+    // Some pages use named containers instead of the footer element. Do not
+    // treat a prose heading or a link named "footer" as a page landmark.
+    let named_footer=matches!(e.value().name(),"div"|"aside"|"section")
+        &&[e.value().attr("id"),e.value().attr("class")].into_iter().flatten().any(|value|
+            value.to_ascii_lowercase().split(|c:char|!c.is_ascii_alphanumeric())
+                .any(|token|matches!(token,"footer"|"pagefooter"|"sitefooter"|"printfooter")));
+    // Article-scoped footers and endnotes can contain citations. Leave them to
+    // content selection rather than deleting them with page-level navigation.
+    (e.value().name()=="footer"||named_footer)&&!has_role(e,"doc-endnotes")
+        &&!e.ancestors().filter_map(ElementRef::wrap).any(|a|a.value().name()=="article"||has_role(a,"article")||has_role(a,"doc-endnotes"))
+}
+#[cfg(feature="web-extraction")]
+fn selection_source(original:&Html)->Result<String>{
+    let mut selection=original.clone();
+    let excluded=selection.select(&selector("nav,footer,[role],div[id],div[class],aside[id],aside[class],section[id],section[class]")?)
+        .filter(|e|chrome_landmark(*e)).map(|e|e.id()).collect::<Vec<_>>();
+    for id in excluded{
+        if let Some(mut node)=selection.tree.get_mut(id){node.detach();}
+    }
+    // Remove landmarks before the extractor discards their identifying wrappers.
+    // The original tree, source bytes, selectors, and all-page links stay intact.
+    Ok(selection.html())
+}
 fn chrome_hint(e: ElementRef<'_>) -> bool {
-    e.ancestors().filter_map(ElementRef::wrap).any(|a| {
+    std::iter::once(e).chain(e.ancestors().filter_map(ElementRef::wrap)).any(|a| {
         if matches!(a.value().name(), "html"|"body") { return false; }
-        if matches!(a.value().name(), "nav"|"footer") { return true; }
-        if a.value().attr("role").is_some_and(|role| matches!(role.to_ascii_lowercase().as_str(), "navigation"|"contentinfo")) { return true; }
+        if chrome_landmark(a) { return true; }
         let tokens:HashSet<String>=[a.value().attr("id"), a.value().attr("class")].into_iter().flatten()
             .flat_map(|value| value.to_ascii_lowercase().split(|c:char| !c.is_ascii_alphanumeric()).map(str::to_owned).collect::<Vec<_>>()).collect();
         // A section about cookies, social systems, or related work is content.
@@ -183,7 +244,7 @@ fn emit(e: ElementRef<'_>, origins: &Origins<'_>, base: Option<&Url>, filter_chr
                 .filter(|row| row.ancestors().filter_map(ElementRef::wrap).find(|a|a.value().name()=="table").is_some_and(|a|a.id()==table.id()))
                 .map(|row| row.select(&Selector::parse("th,td").expect("constant selector"))
                     .filter(|cell| cell.ancestors().filter_map(ElementRef::wrap).find(|a|a.value().name()=="tr").is_some_and(|a|a.id()==row.id()))
-                    .map(|cell| Cell { text:normalized(&text(cell)),
+                    .map(|cell| Cell { text:cell_text(cell),
                         row_span:cell.value().attr("rowspan").and_then(|s|s.parse().ok()).unwrap_or(1),
                         col_span:cell.value().attr("colspan").and_then(|s|s.parse().ok()).unwrap_or(1),
                         header:cell.value().name()=="th" }).collect()).collect();
@@ -235,7 +296,7 @@ pub fn parse(bytes:&[u8],url:&str,explicit:Option<&str>)->Result<Parsed>{
     p.links=links(source,url);
     let mut readable_text:Option<String>=None;
     let selected=if let Some(css)=explicit{
-        p.parser="explicit-css+source-blocks/4".into();
+        p.parser="explicit-css+source-blocks/5".into();
         let found=original.select(&selector(css)?).map(|n|n.html()).collect::<Vec<_>>();
         if found.is_empty(){bail!("CSS selector matched no elements");}found.join("\n")
     }else{
@@ -252,7 +313,8 @@ pub fn parse(bytes:&[u8],url:&str,explicit:Option<&str>)->Result<Parsed>{
                 deduplicate:false,use_fallback_extraction:false,url:Some(url.into()),
                 ..Default::default()
             };
-            let r=rs_trafilatura::extract_with_options(source,&options).map_err(|e|anyhow!("HTML extraction failed: {e}"))?;
+            let selection=selection_source(&original)?;
+            let r=rs_trafilatura::extract_with_options(&selection,&options).map_err(|e|anyhow!("HTML extraction failed: {e}"))?;
             readable_text=Some(r.content_text);
             if let Some(t)=r.metadata.title{p.title=t;}
             p.metadata=json!({"extractor_estimated_quality":r.extraction_quality,"quality_estimate_is_not_validation":true});
@@ -330,7 +392,8 @@ pub fn parse(bytes:&[u8],url:&str,explicit:Option<&str>)->Result<Parsed>{
         ).into());
     }
     if unmapped>0{p.warnings.push(Warning::new("approximate_source_mapping",format!("{unmapped} blocks could not be mapped uniquely to an original HTML element.")));}
-    let raw_tables=original.select(&selector("main table,article table")?).count();
+    let raw_tables=original.select(&selector("main table,article table")?)
+        .filter(|table|explicit.is_some()||!chrome_hint(*table)).count();
     let kept_tables=p.blocks.iter().filter(|b|matches!(b.content,Content::Table{..})).count();
     if raw_tables>kept_tables{p.warnings.push(Warning::new("table_coverage_gap",format!("The source main content contains {raw_tables} tables, but extraction retained {kept_tables}.")));}
     Ok(p)

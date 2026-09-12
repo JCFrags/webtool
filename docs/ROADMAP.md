@@ -4,13 +4,15 @@
 
 Issue [#23](https://github.com/JCFrags/webtool/issues/23), PR
 [#24](https://github.com/JCFrags/webtool/pull/24), branch `feat/read-quality`.
-The two-page workflow is verified and installed locally. Remote acceptance is
-pending; no deferred area becomes active until a new milestone is approved.
+The initial two-page workflow is verified and installed locally. User feedback
+approved a focused table-display, cell-boundary and footer/navigation follow-up
+using the retained Chemistry page. Remote acceptance is pending; no other deferred
+area becomes active.
 
 - Select coherent main content without losing substantive sections, code, tables, references, captions, or discussion replies.
 - Make ordinary read compact and readable. Keep provenance behind `--details`, full JSON, and retained originals.
 - Recover likely JavaScript shells with one bounded configured Lightpanda attempt after HTTP. Keep explicit renderer choices and native routes.
-- Verify the Rust Book Data Types chapter and JavaScript quote page, then install the working CLI/server with rollback.
+- Preserve the Rust Book and JavaScript proof. Verify the table/footer follow-up with retained sources, then install the update with rollback.
 
 Search, providers, ranking, and configuration stay unchanged. No new packaging,
 release, broad test corpus, benchmark, or deferred feature work belongs to this milestone.
