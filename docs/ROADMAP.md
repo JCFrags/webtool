@@ -7,7 +7,10 @@ and PR #24. Check provider HTML context before result conversion and ranking.
 Keep organic results, saved-library search, existing provider selection, ranking
 rules, configuration, dependency pins and read-quality improvements. Keep the
 PR unmerged. See [SEARCH.md](SEARCH.md) for the filtering boundary and limits.
-No other deferred search interface or backlog feature is approved.
+The focused checks and installed ordinary search passed. Both configured default
+providers returned results. The active clean build is
+`51b42fffd958eda9f988244290ca7e690c7aef67`. No other deferred search interface or
+backlog feature is approved. Do not repeat installation for final documentation.
 
 ## Preserved work: reliable, clean read
 

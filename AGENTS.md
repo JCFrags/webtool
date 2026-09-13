@@ -24,6 +24,12 @@ build and existing CI, then one supported installation with matching rollback
 binaries/receipts. Restart only the freshly verified, idle project server with
 its existing absolute config/data paths. Do not merge or publish.
 
+This follow-up is installed and verified from clean build
+`51b42fffd958eda9f988244290ca7e690c7aef67`. Doctor and the running process match.
+The installed ordinary search returned DuckDuckGo and Brave results. Focused
+paid/organic checks passed. Libraries, settings and helpers are preserved.
+Do not repeat installation for documentation or start other backlog work.
+
 ## Preserved milestone: reliable, clean read
 
 Issue #23, PR #24, branch `feat/read-quality`, from updated main. Read quality was

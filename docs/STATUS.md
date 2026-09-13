@@ -30,12 +30,36 @@ policy, source evidence and future-markup limits are in [SEARCH.md](SEARCH.md).
   in that check. Live Startpage and Yahoo behavior was not exercised.
 - The final standalone-badge check also preserves an `Ad` title inside the real
   title selector. That local check followed the live query and passed with the
-  same focused checks. Installation is pending at this checkpoint.
+  same focused checks.
 
-Private checks and rollback assets belong in `runtime/search-ads/`. The isolated
-debug server stopped gracefully. The installed server has not changed yet.
-No dependency pin, CI workflow, helper, setting, library, packaging, alpha tag or
-published asset changed. Historical read evidence below is unchanged.
+### Installed result
+
+Verified September 13, 2026 UTC (September 12 local). Clean source/build:
+`51b42fffd958eda9f988244290ca7e690c7aef67`. Source CI passed, run `34735467901`.
+The supported installer ran once and reported a 57.55-second release build.
+Both installed binaries match their build outputs and checksum receipts. After
+fresh process/start/hash, inactive-job, connection and helper checks, only the
+verified project server stopped gracefully. The new installed server is PID
+`281079`, start ticks `16615165`. Doctor reports the exact clean source above.
+The same absolute config/data paths and existing log/PID convention remain in use.
+
+The installed ordinary `webtool search laptops --limit 5` returned five results
+from both DuckDuckGo and Brave, with no warnings. The two shared organic URLs
+retained both provider names, while query-distinct Amazon URLs stayed separate.
+Merchant results and an editorial review remained. This was the same commercial
+query used for debug verification, not a search campaign. No Startpage or Yahoo
+live query was made. The earlier Brave 429 remains a separate debug observation.
+
+Libraries, client/server settings, helper hashes and the local-library search
+response match the baseline. Historical saved documents and read implementation
+are unchanged. Previous binaries and matching receipts remain in
+`runtime/search-ads/rollback/`. Rollback does not require restoring the database
+or removing documents saved after this update. Later documentation needs no new
+installation. The isolated debug server and research worker are closed.
+
+Private evidence is in `runtime/search-ads/`. No dependency pin, CI workflow,
+helper, setting, library, packaging, alpha tag or published asset changed. PR #24
+remains unmerged. Historical read evidence below is unchanged.
 
 ## Milestone 12: reliable, clean read
 

@@ -19,11 +19,11 @@ Provider selection, ranking rules, settings and dependency pins stay unchanged.
 This does not guarantee detection of concealed ads or unknown future markup.
 Other [roadmap](docs/ROADMAP.md) work remains deferred.
 
-The read-quality implementation remains installed from clean build
-`dc290a7e427a35daa6db3dfd516b743b0d205e04`. The initial two-page and table/footer
-checks passed. Search-ad filtering is implemented; its installation is pending
-at this checkpoint. The PR is not merged. These changes are separate from the
-published alpha. See STATUS for exact proof and remaining limits.
+Read improvements and search-ad filtering are installed from clean build
+`51b42fffd958eda9f988244290ca7e690c7aef67`. The installed CLI returned ordinary
+results from DuckDuckGo and Brave. Focused paid/organic checks passed. The PR is
+not merged. These changes are separate from the published alpha. See STATUS for
+exact proof and remaining limits.
 
 The normal server now includes native PDF text reading through pinned Xberg.
 A two-page public PDF passed URL read, local ingestion, page-location checks,
