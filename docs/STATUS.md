@@ -6,8 +6,8 @@ Bootstrap verified: September 10, 2026 UTC (September 9 local).
 ## Disclosure and overlay read follow-up
 
 The user approved another read-quality follow-up on `feat/read-quality`, PR #24.
-The implementation and bounded debug proof are complete. Installation is pending
-at this source checkpoint. Keep the PR unmerged and do not publish.
+The implementation, bounded proof and local installation are complete. Keep the
+PR unmerged and do not publish. See the PR checks for remote build status.
 
 Source inspection and a small diagnostic article identified three actual losses:
 
@@ -59,6 +59,32 @@ One diagnostic assertion initially expected a space that its direct source text
 did not contain. The reader correctly retained that absence. The bounded retry
 used an explicit source newline and verified recovery of that real whitespace,
 not insertion of a guessed separator. Both inputs remain in private evidence.
+
+### Installed result
+
+Verified September 13, 2026 UTC (September 12 local). Clean source/build:
+`c9ad49b6ecbbd9afde300cf24f335f8ccf2b9800`. The supported installer ran once and
+reported a 50.65-second release build. Installed binaries, release outputs and
+checksum receipts match. The guarded restart verified the old process/start/hash,
+no active jobs/connections/helpers and unchanged configuration/helper hashes before
+it stopped only the project server gracefully. The replacement uses the same
+absolute config/data paths and log/PID convention. Doctor and the running process
+identify the exact clean build above: PID `663021`, start ticks `16884587`.
+
+- Installed ordinary diagnostic ID:
+  `8ca5bd3cf9b8b642ce35aaf035bfa252a29b8d613cca1a5f8fce83264e7dcd8f`.
+  HTTP, recovery false, 14 blocks and three links. Its default CLI output is
+  byte-identical to the verified debug output. The 2,567-byte original export
+  matches the served input. The empty-panel warning remains on stderr.
+- Installed ordinary FDA ID:
+  `756bd3d21a927dabecbb5c89cd9b0d58d9c1ac0cc43cff5db790bcaa7e310870`.
+  HTTP, recovery false, 86 blocks and 96 links. All block payloads and headings
+  match the baseline. The original export contains 69,720 bytes.
+- The earlier saved FDA JSON is byte-identical through the installed client/server.
+  Libraries, client/server settings and helper hashes match the baseline. The
+  isolated debug server stopped. Rollback binaries and matching receipts remain
+  in `runtime/read-disclosures/rollback/`. No database restore is needed for this
+  code-only rollback. Later documentation needs no further installation.
 
 Private inputs, baseline output and CLI proof are in `runtime/read-disclosures/`.
 The user's exact problem URLs were requested but not supplied during this proof.

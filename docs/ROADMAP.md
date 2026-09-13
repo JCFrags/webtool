@@ -14,6 +14,11 @@ local installation with rollback. Keep the PR unmerged and do not publish. No
 automatic clicking, access-control bypass, lazy-panel fetching, parser ladder,
 new dependencies, search changes or broad corpus is approved.
 
+The bounded proof and installation are complete from clean build
+`c9ad49b6ecbbd9afde300cf24f335f8ccf2b9800`. The installed ordinary diagnostic and
+FDA reads used HTTP without recovery. Remote acceptance remains pending. Do not
+repeat installation for final documentation or start another backlog priority.
+
 ## Preserved follow-up: exclude search ads
 
 The user approved paid/sponsored search-result exclusion on the existing branch

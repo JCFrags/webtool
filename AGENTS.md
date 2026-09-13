@@ -19,6 +19,13 @@ Run the normal locked build, focused checks and practical ordinary reads. After
 proof, install once with rollback binaries/receipts and a freshly verified idle
 project-server restart using its existing absolute config/data paths.
 
+This follow-up is installed and verified from clean build
+`c9ad49b6ecbbd9afde300cf24f335f8ccf2b9800`. Doctor and the running process match.
+The installed diagnostic and FDA ordinary read stayed HTTP-only. The old saved
+FDA JSON, libraries, settings and helper hashes remain unchanged. Previous
+binaries/receipts are preserved for rollback. Do not repeat installation for
+final documentation. Keep the PR unmerged and the remaining backlog deferred.
+
 The active `rs-trafilatura/0.2.2` call uses `extract.rs` and html-cleaning, not the
 older `extractor/pipeline.rs` pruning path. It already retains delivered collapsed
 bodies. Do not assume hidden-node rules in `selector/discard.rs` affect this path.
@@ -28,6 +35,10 @@ before the single extractor. Do not unhide all elements, click controls, fetch
 lazy panels, recover script-state content, or bypass login/paywall/consent gates.
 Keep explicit CSS and originals untouched. Record unavailable selected panels
 as warnings rather than inventing their content.
+
+For an offline Rust probe, do not link an engine rlib to an independently chosen
+newest protocol rlib. Cargo can retain several incompatible crate instances.
+Prefer the actual CLI, or keep the probe's document types within the engine crate.
 
 ## Preserved follow-up: exclude search ads
 

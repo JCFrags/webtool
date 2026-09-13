@@ -23,11 +23,12 @@ sponsored results are excluded before ranking and output. This does not guarante
 detection of concealed ads or unknown future markup. Provider selection, ranking,
 settings and dependencies remain unchanged. Other roadmap work stays deferred.
 
-Read improvements and search-ad filtering are installed from clean build
-`51b42fffd958eda9f988244290ca7e690c7aef67`. The installed CLI returned ordinary
-results from DuckDuckGo and Brave. Focused paid/organic checks passed. The PR is
-not merged. These changes are separate from the published alpha. See STATUS for
-exact proof and remaining limits.
+Read improvements and the unchanged search-ad filter are installed from clean
+build `c9ad49b6ecbbd9afde300cf24f335f8ccf2b9800`. The installed ordinary reader
+passed the disclosure/overlay diagnostic and FDA article check through HTTP.
+The earlier DuckDuckGo/Brave and paid/organic checks remain historical evidence.
+The PR is not merged. These changes are separate from the published alpha.
+See STATUS for exact proof and remaining limits.
 
 The normal server now includes native PDF text reading through pinned Xberg.
 A two-page public PDF passed URL read, local ingestion, page-location checks,
