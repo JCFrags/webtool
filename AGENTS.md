@@ -7,12 +7,28 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current milestone: reliable, clean read
+## Current follow-up: exclude search ads
 
-Issue #23, PR #24, branch `feat/read-quality`, from updated main. Read quality is the
-sole active priority. See [ROADMAP.md](docs/ROADMAP.md) for the preserved backlog.
-Use one linked draft PR. Keep search, providers, ranking, configuration, dependency
-pins, API/data schemas, CI and published alpha tags/assets unchanged. No packaging.
+The user approved paid/sponsored search-result exclusion on the existing
+`feat/read-quality` branch and PR #24. Preserve the read improvements below and
+keep the PR unmerged. This is a narrow exception to the prior search freeze, not
+approval for other backlog work. Keep configured providers, ranking, settings,
+dependency pins, API/data schemas, CI and published alpha assets unchanged.
+
+Inspect paid-result context before conversion to title/URL/snippet. The pinned
+search library drops that context, so URL-only filtering cannot enforce this
+policy. Do not delete ordinary results because their prose mentions advertising.
+Keep saved-library search and historical snapshots unchanged. Verify a bounded
+paid/organic parser check and an ordinary installed search. Use the normal locked
+build and existing CI, then one supported installation with matching rollback
+binaries/receipts. Restart only the freshly verified, idle project server with
+its existing absolute config/data paths. Do not merge or publish.
+
+## Preserved milestone: reliable, clean read
+
+Issue #23, PR #24, branch `feat/read-quality`, from updated main. Read quality was
+the prior active scope. See [ROADMAP.md](docs/ROADMAP.md) for the preserved backlog.
+The following constraints and evidence describe that completed work. No packaging.
 Use the normal locked CLI/server build, not `cargo test` as a compilation shortcut.
 The existing integration-test `Job` initializer lacks `failed`; fixing that test
 belongs outside this milestone. Keep diagnostic inputs under ignored `runtime/`.
@@ -41,8 +57,8 @@ The table/footer follow-up is verified and installed from clean build
 The retained Chemistry proof preserved all headings and links. Installed ordinary
 Chemistry read stayed HTTP-only and excluded navigation/print footers. The initial
 Rust Book/JavaScript proof remains historical evidence. Do not repeat installation
-for final documentation or start another backlog priority. See STATUS for IDs,
-rollback and exact limitations.
+for final documentation. The search-ad follow-up above is now approved; other
+backlog priorities remain deferred. See STATUS for IDs, rollback and limitations.
 
 ## Published alpha provenance
 
@@ -240,9 +256,14 @@ Shared HTTP gate/pacing and one-day cache remain. Layout changes, contradictory
 identity or missing selection evidence fail explicitly. Other identifier/version
 forms were source-inspected, not an extra paper corpus. No scholarly search.
 
-Search supports ordinary web results only.
-Image, video, news, date, language, and domain-filter interfaces remain incomplete.
-There are no semantic rerankers or automatic LLM calls.
+Search supports ordinary web results only. Paid-result filtering is always on at
+the server's HTML-to-result boundary, before URL unwrapping, limits and merging.
+The pinned library's flat result cannot preserve sponsored container context.
+Use the local result parser and retain the merge URL guard. Web search is not
+cached; library search remains separate. See [SEARCH.md](docs/SEARCH.md) for
+markers, evidence and exact limitations. Do not promise absence of concealed ads
+or unknown future markup. Image, video, news, date, language and domain-filter
+interfaces remain incomplete. There are no semantic rerankers or automatic LLM calls.
 
 ## Deferred source fidelity
 

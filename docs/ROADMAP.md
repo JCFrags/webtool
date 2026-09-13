@@ -1,21 +1,30 @@
 # Roadmap
 
-## Sole active priority: reliable, clean read
+## Active follow-up: exclude search ads
+
+The user approved paid/sponsored search-result exclusion on the existing branch
+and PR #24. Check provider HTML context before result conversion and ranking.
+Keep organic results, saved-library search, existing provider selection, ranking
+rules, configuration, dependency pins and read-quality improvements. Keep the
+PR unmerged. See [SEARCH.md](SEARCH.md) for the filtering boundary and limits.
+No other deferred search interface or backlog feature is approved.
+
+## Preserved work: reliable, clean read
 
 Issue [#23](https://github.com/JCFrags/webtool/issues/23), PR
 [#24](https://github.com/JCFrags/webtool/pull/24), branch `feat/read-quality`.
 The initial two-page workflow and the user-approved table/footer follow-up are
 verified and installed locally. The follow-up used retained Chemistry input and
-one fresh installed ordinary read. Remote acceptance is pending; no other deferred
-area becomes active.
+one fresh installed ordinary read. Remote acceptance is pending. The search-ad
+follow-up above is the only newly approved work.
 
 - Select coherent main content without losing substantive sections, code, tables, references, captions, or discussion replies.
 - Make ordinary read compact and readable. Keep provenance behind `--details`, full JSON, and retained originals.
 - Recover likely JavaScript shells with one bounded configured Lightpanda attempt after HTTP. Keep explicit renderer choices and native routes.
 - Preserve the Rust Book and JavaScript proof. Verify the table/footer follow-up with retained sources, then install the update with rollback.
 
-Search, providers, ranking, and configuration stay unchanged. No new packaging,
-release, broad test corpus, benchmark, or deferred feature work belongs to this milestone.
+Provider selection, ranking rules and configuration stay unchanged. No packaging,
+release, broad test corpus, benchmark or other deferred feature work is approved.
 
 ## Deferred work
 

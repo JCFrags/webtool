@@ -13,13 +13,17 @@ Its tags and assets remain unchanged. See [alpha notes](docs/ALPHA.md),
 and [artifact evidence](docs/STATUS.md). Distribution requires the documented
 source-access and availability conditions. This is not general legal clearance.
 
-The sole active milestone is [reliable, clean read](docs/ROADMAP.md), issue #23
-and PR #24. Read-quality changes are separate from the published alpha. Search,
-providers, ranking, configuration, and deferred features stay unchanged.
-The branch implementation is installed locally for testing, from clean build
-`dc290a7e427a35daa6db3dfd516b743b0d205e04`. The initial two-page check passed.
-The table/footer follow-up passed retained-source checks and an installed ordinary
-Chemistry read. The PR is not merged. See STATUS for exact proof and remaining limits.
+The current approved follow-up is [search ad exclusion](docs/SEARCH.md) on PR #24.
+Recognized paid and sponsored results are excluded before ranking and output.
+Provider selection, ranking rules, settings and dependency pins stay unchanged.
+This does not guarantee detection of concealed ads or unknown future markup.
+Other [roadmap](docs/ROADMAP.md) work remains deferred.
+
+The read-quality implementation remains installed from clean build
+`dc290a7e427a35daa6db3dfd516b743b0d205e04`. The initial two-page and table/footer
+checks passed. Search-ad filtering is implemented; its installation is pending
+at this checkpoint. The PR is not merged. These changes are separate from the
+published alpha. See STATUS for exact proof and remaining limits.
 
 The normal server now includes native PDF text reading through pinned Xberg.
 A two-page public PDF passed URL read, local ingestion, page-location checks,
@@ -38,7 +42,7 @@ commands, evidence, and limits. Historical archive logs are not current results.
 |---|---|
 | CLI | Ordinary commands, text and Markdown output, JSON, JSONL batches, stderr warnings, meaningful failure exits |
 | Shared service | Axum API, concurrent requests, bounded processing, one server-local SQLite database |
-| Search | Native DuckDuckGo, Brave, Startpage, and Yahoo adapters, result deduplication, reciprocal-rank merging |
+| Search | DuckDuckGo, Brave, Startpage, and Yahoo result parsing, paid-result exclusion, deduplication, reciprocal-rank merging |
 | Reading | HTTP/HTML, pinned GitHub files and immediate directories, original-byte retention, explicit selection |
 | Libraries | Shared named collections, references to saved documents, attributed notes and tags |
 | Local search | SQLite FTS5 keyword search, literal matching, optional regex matching |
@@ -167,6 +171,18 @@ cargo build --locked -p webtool-cli -p webtool-server
 The installer runs the release build for installation. Keep binaries, data and
 smoke artifacts outside Git. Full tests and optional integration checks remain
 manual. See docs/STATUS.md for the bounded installed two-client proof and limits.
+
+## Search without paid placements
+
+Ordinary `webtool search QUERY` excludes recognized ads on the server for all
+output formats. It checks paid result containers and badges before discarding
+HTML context, and checks ad-click links before and after URL decoding. The policy
+is always on. Organic (unpaid) results for merchant sites remain eligible, as do
+pages that discuss advertising. Saved-library search is unchanged.
+
+No filter can guarantee detection of undisclosed promotion or future provider
+markup. Empty results, provider errors and rate limits remain visible; there is
+no unfiltered fallback. See [search policy and limits](docs/SEARCH.md).
 
 ## Everyday text output
 

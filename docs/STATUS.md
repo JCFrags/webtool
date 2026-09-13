@@ -3,6 +3,40 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Search-ad follow-up
+
+The user approved paid/sponsored result exclusion on `feat/read-quality`, PR #24,
+without merging or publishing. The read changes below remain intact. The exact
+policy, source evidence and future-markup limits are in [SEARCH.md](SEARCH.md).
+
+- Inspected the pinned `metadata-search-engine-rs/0.3.1` result model and all four
+  parsers. The flat model loses ad labels and ancestor context. The DuckDuckGo
+  `div.result` selector does not exclude known `result--ad` classes by itself.
+- A local parser checks the existing result-card formats before conversion, URL
+  unwrapping, provider limits and ranking. It rejects marked paid containers,
+  sponsored ancestors/links, explicit badges and known ad-click URL forms.
+  DuckDuckGo requires `web-result`. The merge boundary repeats the URL guard.
+- Ordinary merchant results and advertising topics remain eligible. URL query
+  values, configured providers, ranking rules, schema and library search are
+  preserved. No unfiltered fallback, extra provider request or browser was added.
+  The pinned client, provider endpoints/settings and time bounds remain in use.
+- The normal locked CLI/server build passed. Two focused parser/URL tests and the
+  two existing search-merge tests passed, with 41 unrelated tests filtered out.
+  No full suite, integration-test repair, benchmark or broad corpus ran. The
+  existing unused `HashMap` import warning remains unchanged.
+- One ordinary debug CLI query, `webtool search laptops --limit 5`, returned five
+  DuckDuckGo results in 869 ms. Merchant sites and an editorial review remained.
+  Brave returned HTTP 429, reported as `provider_error`; no bypass or retry ran
+  in that check. Live Startpage and Yahoo behavior was not exercised.
+- The final standalone-badge check also preserves an `Ad` title inside the real
+  title selector. That local check followed the live query and passed with the
+  same focused checks. Installation is pending at this checkpoint.
+
+Private checks and rollback assets belong in `runtime/search-ads/`. The isolated
+debug server stopped gracefully. The installed server has not changed yet.
+No dependency pin, CI workflow, helper, setting, library, packaging, alpha tag or
+published asset changed. Historical read evidence below is unchanged.
+
 ## Milestone 12: reliable, clean read
 
 Issue [#23](https://github.com/JCFrags/webtool/issues/23), PR
