@@ -13,11 +13,15 @@ Its tags and assets remain unchanged. See [alpha notes](docs/ALPHA.md),
 and [artifact evidence](docs/STATUS.md). Distribution requires the documented
 source-access and availability conditions. This is not general legal clearance.
 
-The current approved follow-up is [search ad exclusion](docs/SEARCH.md) on PR #24.
-Recognized paid and sponsored results are excluded before ranking and output.
-Provider selection, ranking rules, settings and dependency pins stay unchanged.
-This does not guarantee detection of concealed ads or unknown future markup.
-Other [roadmap](docs/ROADMAP.md) work remains deferred.
+The current approved follow-up improves main-content reading of collapsed sections
+and newsletter/popup overlays on PR #24. It preserves delivered section bodies,
+section labels and source whitespace without clicking controls or changing hidden
+state. See the [roadmap](docs/ROADMAP.md) and [proof](docs/STATUS.md).
+
+[Search ad exclusion](docs/SEARCH.md) remains unchanged. Recognized paid and
+sponsored results are excluded before ranking and output. This does not guarantee
+detection of concealed ads or unknown future markup. Provider selection, ranking,
+settings and dependencies remain unchanged. Other roadmap work stays deferred.
 
 Read improvements and search-ad filtering are installed from clean build
 `51b42fffd958eda9f988244290ca7e690c7aef67`. The installed CLI returned ordinary
@@ -230,10 +234,20 @@ It does not save a default setting or render a Markdown preview. Merged tables
 use HTML inside Markdown to preserve their structure. Use `webtool export ID
 --kind markdown -o page.md` to save a file for a Markdown-aware application.
 
-Ordinary HTML reads exclude explicit navigation and page-footer landmarks before
-content selection. Originals and all-page links remain complete. Explicit CSS can
-still select those regions. Cell text preserves list-item and line-break boundaries;
-this does not establish complete table or layout fidelity.
+Ordinary HTML reads exclude explicit navigation, page-footer landmarks and modal
+widgets before content selection. Email-signup overlays need an email field plus
+fixed positioning or a widget marker. An article that discusses newsletters is
+not removed merely for its words. Originals and all-page links remain complete.
+Explicit CSS can still select those regions.
+
+Collapsed content already delivered in HTML does not need a click. Native details
+summaries retain a paragraph boundary. Main/article disclosure buttons retain
+labels for unique same-scope panels, without changing visibility state. The reader
+does not expand menus or forms, fetch click-loaded panels, or bypass access gates.
+If a selected paired panel is empty, `disclosure_content_unavailable` stays on
+stderr. Missing/ambiguous target IDs and arbitrary custom controls remain limited.
+Cell text retains list-item and line-break boundaries; this is not complete layout
+or interactive-page coverage.
 
 `--format json` and `jsonl` keep their existing schemas and framing. Markdown
 exports are unchanged. Other structured extracts still use their existing output.

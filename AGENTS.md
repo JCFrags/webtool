@@ -7,7 +7,29 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current follow-up: exclude search ads
+## Current follow-up: clean disclosure and overlay reading
+
+The user approved another read-quality follow-up on `feat/read-quality`, PR #24.
+Keep the PR unmerged and do not publish. Preserve the installed search-ad policy,
+settings, helpers, dependencies, schemas, historical snapshots and alpha assets.
+Focus on main content inside collapsed sections and newsletter/popup clutter.
+Inspect raw and intermediate inputs first. Use a bounded diagnostic article and
+retained real article/code/table inputs, not a broad corpus or new framework.
+Run the normal locked build, focused checks and practical ordinary reads. After
+proof, install once with rollback binaries/receipts and a freshly verified idle
+project-server restart using its existing absolute config/data paths.
+
+The active `rs-trafilatura/0.2.2` call uses `extract.rs` and html-cleaning, not the
+older `extractor/pipeline.rs` pruning path. It already retains delivered collapsed
+bodies. Do not assume hidden-node rules in `selector/discard.rs` affect this path.
+The confirmed losses are deleted button labels, flattened summary boundaries,
+and widget context removed before later filters. Correct the selection copy
+before the single extractor. Do not unhide all elements, click controls, fetch
+lazy panels, recover script-state content, or bypass login/paywall/consent gates.
+Keep explicit CSS and originals untouched. Record unavailable selected panels
+as warnings rather than inventing their content.
+
+## Preserved follow-up: exclude search ads
 
 The user approved paid/sponsored search-result exclusion on the existing
 `feat/read-quality` branch and PR #24. Preserve the read improvements below and
@@ -63,8 +85,9 @@ The table/footer follow-up is verified and installed from clean build
 The retained Chemistry proof preserved all headings and links. Installed ordinary
 Chemistry read stayed HTTP-only and excluded navigation/print footers. The initial
 Rust Book/JavaScript proof remains historical evidence. Do not repeat installation
-for final documentation. The search-ad follow-up above is now approved; other
-backlog priorities remain deferred. See STATUS for IDs, rollback and limitations.
+for final documentation. The search-ad follow-up above is complete. The new read
+follow-up is the active scope; other backlog priorities remain deferred. See
+STATUS for IDs, rollback and limitations.
 
 ## Published alpha provenance
 
@@ -145,13 +168,20 @@ Do not import upstream CLI, server, cache, authentication, or unrelated agent fe
 
 ## Known implementation gaps
 
-HTML parser `rs-trafilatura/0.2.2+main-content/6` uses the existing extractor's
+HTML parser `rs-trafilatura/0.2.2+main-content/7` uses the existing extractor's
 standard selection thresholds, without recall-first or internal fallback mode.
 Article comments are not appended. The extractor's Forum profile preserves replies
 as main content; wider discussion coverage is not verified. All-page links stay
 independent of displayed blocks. Page navigation and footer landmarks are removed
 from the selection copy before their wrappers can be lost. Article-scoped footers
-and endnotes remain eligible for content selection. Explicit CSS bypasses ordinary
+and endnotes remain eligible for content selection. Modal widgets and identified
+email-signup overlays are removed before wrapper stripping can lose their context.
+A popup label alone does not justify removal; email overlays need an email field
+plus fixed positioning or a widget marker. Native disclosure summaries retain a
+block boundary. Main/article disclosure buttons retain their labels only with a
+unique same-scope target and no form fields. Hidden state stays unchanged. Empty
+selected panels produce `disclosure_content_unavailable`. Missing/ambiguous target
+IDs and remote-only content remain unsupported. Explicit CSS bypasses ordinary
 chrome filtering. Do not remove a substantive section merely because its class
 says related/social.
 

@@ -1,6 +1,20 @@
 # Roadmap
 
-## Active follow-up: exclude search ads
+## Active follow-up: clean disclosure and overlay reading
+
+Improve focused main-content reads on the existing branch and PR #24. Preserve
+substantive collapsed sections and clean section boundaries. Exclude newsletter
+and modal UI before the extractor loses the identifying wrappers. Use source
+structure, not blanket visibility changes or prose keyword deletion. Keep
+originals, explicit CSS, links, code/table values and historical snapshots intact.
+
+Verify a bounded diagnostic article and retained real inputs, then practical
+ordinary reads. Use the locked build and focused checks, followed by one supported
+local installation with rollback. Keep the PR unmerged and do not publish. No
+automatic clicking, access-control bypass, lazy-panel fetching, parser ladder,
+new dependencies, search changes or broad corpus is approved.
+
+## Preserved follow-up: exclude search ads
 
 The user approved paid/sponsored search-result exclusion on the existing branch
 and PR #24. Check provider HTML context before result conversion and ranking.
@@ -18,8 +32,8 @@ Issue [#23](https://github.com/JCFrags/webtool/issues/23), PR
 [#24](https://github.com/JCFrags/webtool/pull/24), branch `feat/read-quality`.
 The initial two-page workflow and the user-approved table/footer follow-up are
 verified and installed locally. The follow-up used retained Chemistry input and
-one fresh installed ordinary read. Remote acceptance is pending. The search-ad
-follow-up above is the only newly approved work.
+one fresh installed ordinary read. Remote acceptance is pending. The disclosure
+and overlay follow-up above is the current approved work.
 
 - Select coherent main content without losing substantive sections, code, tables, references, captions, or discussion replies.
 - Make ordinary read compact and readable. Keep provenance behind `--details`, full JSON, and retained originals.

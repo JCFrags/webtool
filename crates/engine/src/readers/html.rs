@@ -7,7 +7,7 @@ use url::Url;
 use webtool_protocol::*;
 use super::Parsed;
 
-pub const PARSER:&str="rs-trafilatura/0.2.2+main-content/6";
+pub const PARSER:&str="rs-trafilatura/0.2.2+main-content/7";
 
 /// A stable signal that ordinary Auto reads may use for one rendered retry.
 /// Parse, encoding, network, and explicit-selector failures are not this error.
@@ -97,22 +97,100 @@ fn chrome_landmark(e:ElementRef<'_>)->bool{
     (e.value().name()=="footer"||named_footer)&&!has_role(e,"doc-endnotes")
         &&!e.ancestors().filter_map(ElementRef::wrap).any(|a|a.value().name()=="article"||has_role(a,"article")||has_role(a,"doc-endnotes"))
 }
+fn popup_widget(e: ElementRef<'_>) -> bool {
+    // Remove modal semantics before wrapper stripping can discard them. Do not
+    // classify prose by words such as "newsletter" or "subscribe" alone.
+    if e.value().name()=="dialog" || has_role(e,"dialog") || has_role(e,"alertdialog")
+        || e.value().attr("aria-modal").is_some_and(|value|value.eq_ignore_ascii_case("true")) { return true; }
+    if !matches!(e.value().name(),"div"|"section"|"aside"|"form"|"small") { return false; }
+    let fixed=e.value().attr("style").is_some_and(|style|style.split(';').any(|declaration| {
+        declaration.split_once(':').is_some_and(|(name,value)|name.trim().eq_ignore_ascii_case("position")
+            && value.split('!').next().unwrap_or("").trim().eq_ignore_ascii_case("fixed"))
+    }));
+    let named=[e.value().attr("id"),e.value().attr("class")].into_iter().flatten().any(|value|
+        value.to_ascii_lowercase().split(|c:char|!c.is_ascii_alphanumeric())
+            .any(|token|matches!(token,"newsletter"|"subscribe"|"subscription"|"signup"|"popup"|"modal"|"overlay")));
+    (fixed||named) && e.select(&Selector::parse("input[type=email]").expect("constant selector")).next().is_some()
+        && e.select(&Selector::parse("main,article,[role=main],[role=article]").expect("constant selector")).next().is_none()
+}
 #[cfg(feature="web-extraction")]
-fn selection_source(original:&Html)->Result<String>{
+fn main_scope(e: ElementRef<'_>) -> Option<ElementRef<'_>> {
+    for ancestor in e.ancestors().filter_map(ElementRef::wrap) {
+        if matches!(ancestor.value().name(),"form"|"aside"|"template"|"script"|"style"|"noscript")
+            || chrome_landmark(ancestor) || popup_widget(ancestor) { return None; }
+        if matches!(ancestor.value().name(),"main"|"article") || has_role(ancestor,"main") || has_role(ancestor,"article") {
+            return Some(ancestor);
+        }
+    }
+    None
+}
+#[cfg(feature="web-extraction")]
+fn disclosure_body(e: ElementRef<'_>) -> bool {
+    e.descendants().any(|node|node.value().as_text().is_some_and(|value|!value.trim().is_empty())
+        && !node.ancestors().take_while(|ancestor|ancestor.id()!=e.id()).filter_map(ElementRef::wrap)
+            .any(|ancestor|matches!(ancestor.value().name(),"summary"|"button"|"script"|"style"|"template"|"noscript"|"form")))
+}
+#[cfg(feature="web-extraction")]
+fn selection_source(original:&Html)->Result<(String,Vec<String>)>{
     let mut selection=original.clone();
-    let excluded=selection.select(&selector("nav,footer,[role],div[id],div[class],aside[id],aside[class],section[id],section[class]")?)
-        .filter(|e|chrome_landmark(*e)).map(|e|e.id()).collect::<Vec<_>>();
+    let excluded=selection.select(&selector("nav,footer,dialog,[role],[aria-modal],[style],[id],[class],template")?)
+        .filter(|e|chrome_landmark(*e)||popup_widget(*e)||e.value().name()=="template")
+        .map(|e|e.id()).collect::<Vec<_>>();
     for id in excluded{
         if let Some(mut node)=selection.tree.get_mut(id){node.detach();}
     }
-    // Remove landmarks before the extractor discards their identifying wrappers.
-    // The original tree, source bytes, selectors, and all-page links stay intact.
-    Ok(selection.html())
+    // The active extractor already reads delivered collapsed bodies. Keep their
+    // visibility state unchanged. Only protect labels and structural boundaries
+    // from its button deletion and details/summary wrapper stripping.
+    let mut rename=Vec::new();
+    let mut unavailable=Vec::new();
+    let mut ids:HashMap<&str,Vec<ElementRef<'_>>>=HashMap::new();
+    for element in selection.select(&selector("[id]")?) {
+        ids.entry(element.value().attr("id").unwrap()).or_default().push(element);
+    }
+    for summary in selection.select(&selector("details > summary")?).filter(|e|main_scope(*e).is_some()) {
+        let details=summary.parent().and_then(ElementRef::wrap).expect("details parent");
+        if details.select(&selector("form,input,select,textarea")?).next().is_some() { continue; }
+        if details.children().filter_map(ElementRef::wrap).find(|e|e.value().name()=="summary").is_none_or(|first|first.id()!=summary.id()) { continue; }
+        if !disclosure_body(details) { unavailable.push(normalized(&text(summary))); }
+        let tag=if summary.descendants().filter_map(ElementRef::wrap).any(is_block) { "div" } else { "p" };
+        rename.push((summary.id(),tag));
+    }
+    for control in selection.select(&selector("button[aria-controls],a[aria-controls],[role=button][aria-controls]")?) {
+        let Some(scope)=main_scope(control) else { continue; };
+        if !matches!(control.value().attr("aria-expanded"),Some("true"|"false"))
+            && control.value().attr("data-toggle")!=Some("collapse")
+            && control.value().attr("data-bs-toggle")!=Some("collapse") { continue; }
+        let targets=control.value().attr("aria-controls").unwrap().split_ascii_whitespace().collect::<Vec<_>>();
+        if targets.len()!=1 { continue; }
+        let panel=match ids.get(targets[0]) {
+            Some(matches) if matches.len()==1 => matches[0],
+            _ => continue, // Missing or ambiguous IDs do not identify a source panel.
+        };
+        if main_scope(panel).is_none_or(|parent|parent.id()!=scope.id())
+            || panel.ancestors().any(|ancestor|ancestor.id()==control.id())
+            || control.ancestors().any(|ancestor|ancestor.id()==panel.id())
+            || panel.select(&selector("form,input,select,textarea")?).next().is_some() { continue; }
+        if !disclosure_body(panel) { unavailable.push(normalized(&text(control))); }
+        if control.value().name()=="button" {
+            let inline_parent=control.ancestors().take_while(|ancestor|ancestor.id()!=scope.id()).filter_map(ElementRef::wrap)
+                .any(|ancestor|matches!(ancestor.value().name(),"h1"|"h2"|"h3"|"h4"|"h5"|"h6"|"p"|"li"|"dt"|"dd"));
+            rename.push((control.id(),if inline_parent {"span"} else {"p"}));
+        }
+    }
+    drop(ids);
+    for (id,tag) in rename {
+        if let Some(mut node)=selection.tree.get_mut(id) {
+            if let scraper::node::Node::Element(element)=node.value() { element.name.local=tag.into(); }
+        }
+    }
+    // Originals, exact selectors and independent all-page links stay intact.
+    Ok((selection.html(),unavailable))
 }
 fn chrome_hint(e: ElementRef<'_>) -> bool {
     std::iter::once(e).chain(e.ancestors().filter_map(ElementRef::wrap)).any(|a| {
         if matches!(a.value().name(), "html"|"body") { return false; }
-        if chrome_landmark(a) { return true; }
+        if chrome_landmark(a) || popup_widget(a) { return true; }
         let tokens:HashSet<String>=[a.value().attr("id"), a.value().attr("class")].into_iter().flatten()
             .flat_map(|value| value.to_ascii_lowercase().split(|c:char| !c.is_ascii_alphanumeric()).map(str::to_owned).collect::<Vec<_>>()).collect();
         // A section about cookies, social systems, or related work is content.
@@ -295,6 +373,7 @@ pub fn parse(bytes:&[u8],url:&str,explicit:Option<&str>)->Result<Parsed>{
     let mut p=Parsed::new(&normalized(&title),PARSER);
     p.links=links(source,url);
     let mut readable_text:Option<String>=None;
+    let mut unavailable_disclosures=Vec::new();
     let selected=if let Some(css)=explicit{
         p.parser="explicit-css+source-blocks/5".into();
         let found=original.select(&selector(css)?).map(|n|n.html()).collect::<Vec<_>>();
@@ -313,7 +392,8 @@ pub fn parse(bytes:&[u8],url:&str,explicit:Option<&str>)->Result<Parsed>{
                 deduplicate:false,use_fallback_extraction:false,url:Some(url.into()),
                 ..Default::default()
             };
-            let selection=selection_source(&original)?;
+            let (selection,unavailable)=selection_source(&original)?;
+            unavailable_disclosures=unavailable;
             let r=rs_trafilatura::extract_with_options(&selection,&options).map_err(|e|anyhow!("HTML extraction failed: {e}"))?;
             readable_text=Some(r.content_text);
             if let Some(t)=r.metadata.title{p.title=t;}
@@ -351,11 +431,15 @@ pub fn parse(bytes:&[u8],url:&str,explicit:Option<&str>)->Result<Parsed>{
         // The text view can omit a short final card. Also retain a whitespace
         // boundary between adjacent original quotation/attribution inline nodes.
         // Only a matching selected run can use it, never unselected descendants.
-        for element in original.select(&selector("div,p,li,blockquote,figcaption")?) {
+        for element in original.select(&selector("div,p,li,blockquote,figcaption,details,summary")?) {
             if ignored(element){continue;}
+            // Direct disclosure text can lose whitespace next to inline links
+            // when wrappers are stripped. Use only identical-character runs,
+            // with their actual source whitespace, never an original subtree.
+            let disclosure=matches!(element.value().name(),"details"|"summary");
             let mut run=String::new();let mut spaced=false;
             let mut record=|run:&mut String,spaced:&mut bool|{
-                if *spaced{let line=normalized(run);lines.entry(key(&line)).or_default().insert(line);}
+                if (*spaced||disclosure)&&!run.trim().is_empty(){let line=normalized(run);lines.entry(key(&line)).or_default().insert(line);}
                 run.clear();*spaced=false;
             };
             for child in element.children(){
@@ -391,6 +475,12 @@ pub fn parse(bytes:&[u8],url:&str,explicit:Option<&str>)->Result<Parsed>{
             "no readable blocks found; the page may require JavaScript or an explicit selector",
         ).into());
     }
+    let unavailable=unavailable_disclosures.into_iter().filter(|label|!label.is_empty()
+        && p.blocks.iter().any(|block|normalized(&block.content.text())==*label)).collect::<HashSet<_>>().len();
+    if unavailable>0 {
+        let noun=if unavailable==1 {"section"} else {"sections"};
+        p.warnings.push(Warning::new("disclosure_content_unavailable",format!("The captured page has no readable body for {unavailable} selected disclosure {noun}. Content loaded only after interaction is not fetched.")));
+    }
     if unmapped>0{p.warnings.push(Warning::new("approximate_source_mapping",format!("{unmapped} blocks could not be mapped uniquely to an original HTML element.")));}
     let raw_tables=original.select(&selector("main table,article table")?)
         .filter(|table|explicit.is_some()||!chrome_hint(*table)).count();
@@ -405,6 +495,59 @@ pub fn select_original(source:&str,css:&str)->Result<Vec<serde_json::Value>>{
 #[cfg(test)]mod tests{
     use super::*;
     const SAMPLE:&str="<html><head><title>A</title></head><body><main><h1>Title</h1><p>Exact evidence.</p><pre><code class=\"language-rust\">  let n = 0;\n</code></pre><table><tr><th>Name</th><th>N</th></tr><tr><td>x</td><td>0</td></tr></table></main></body></html>";
+    #[cfg(feature="web-extraction")]
+    #[test]
+    fn disclosures_keep_labels_bodies_and_source_values() {
+        let source=r#"<html><head><title>Field guide</title></head><body><main><article>
+            <h1>Field guide</h1><p>Keep original field observations unchanged and record the instrument used for each measurement.</p>
+            <details><summary>References</summary>Read the handbook. <a href="/book">Source reference</a></details>
+            <h2><button aria-expanded="false" aria-controls="values">Measurement limits</button></h2>
+            <div id="values" hidden aria-hidden="true" style="display:none"><p>A zero value is not a missing value. Keep its unit and uncertainty.</p>
+            <pre><code>  let x = "&lt;details&gt;";
+</code></pre><table><tr><th>Value</th></tr><tr><td>0</td></tr></table></div>
+            <h2><button aria-expanded="false" aria-controls="empty">Appendix</button></h2><div id="empty" hidden></div>
+            </article></main></body></html>"#;
+        let parsed=parse(source.as_bytes(),"https://example.com/guide",None).unwrap();
+        let values=parsed.blocks.iter().map(|b|b.content.text()).collect::<Vec<_>>();
+        assert!(values.iter().any(|text|text=="References"));
+        assert!(values.iter().any(|text|text=="Read the handbook. Source reference"));
+        assert_eq!(values.iter().filter(|text|*text=="Measurement limits").count(),1);
+        assert!(values.iter().any(|text|text.contains("A zero value is not a missing value.")));
+        assert!(parsed.blocks.iter().any(|b|matches!(&b.content,Content::Code{text,..} if text=="  let x = \"<details>\";\n")));
+        assert!(parsed.blocks.iter().any(|b|matches!(&b.content,Content::Table{rows} if rows[1][0].text=="0")));
+        assert!(parsed.warnings.iter().any(|warning|warning.code=="disclosure_content_unavailable"));
+        assert_eq!(parsed.links,links(source,"https://example.com/guide"));
+        let explicit=parse(source.as_bytes(),"https://example.com/guide",Some("#values")).unwrap();
+        assert_eq!(explicit.parser,"explicit-css+source-blocks/5");
+        assert!(!explicit.warnings.iter().any(|warning|warning.code=="disclosure_content_unavailable"));
+    }
+    #[cfg(feature="web-extraction")]
+    #[test]
+    fn selection_filters_widgets_before_wrappers_and_limits_label_normalization() {
+        let source=r#"<main><article><p>Newsletters are a topic, not a reason to delete article prose.</p>
+            <small role="dialog" aria-modal="true">Modal promotion</small>
+            <div style="position: fixed!important"><p>Email promotion</p><input type="email"></div>
+            <nav><details><summary>Account menu</summary>Navigation body</details></nav>
+            <template><p>Inactive template</p></template>
+            <h2><button id="ambiguous" aria-expanded="false" aria-controls="duplicate">Ambiguous</button></h2>
+            <div id="duplicate">First</div><div id="duplicate">Second</div>
+            <h2><button id="form-toggle" aria-expanded="false" aria-controls="account">Account</button></h2>
+            <div id="account"><form><input type="password"></form></div>
+            <h2><button id="section-toggle" aria-expanded="false" aria-controls="section">Section</button></h2>
+            <div id="section" hidden aria-hidden="true"><p>Retained delivered content.</p></div>
+            </article></main>"#;
+        let original=Html::parse_document(source);
+        let (selection,_)=selection_source(&original).unwrap();
+        for unwanted in ["Modal promotion","Email promotion","Account menu","Inactive template"] { assert!(!selection.contains(unwanted),"{unwanted}"); }
+        assert!(selection.contains("Newsletters are a topic"));
+        let selected=Html::parse_document(&selection);
+        for id in ["ambiguous","form-toggle"] { assert_eq!(selected.select(&selector(&format!("#{id}")).unwrap()).next().unwrap().value().name(),"button"); }
+        assert_eq!(selected.select(&selector("#section-toggle").unwrap()).next().unwrap().value().name(),"span");
+        let panel=selected.select(&selector("#section").unwrap()).next().unwrap();
+        assert!(panel.value().attr("hidden").is_some());
+        assert_eq!(panel.value().attr("aria-hidden"),Some("true"));
+        assert!(original.html().contains("Modal promotion"));
+    }
     #[test]fn explicit_selector_preserves_code(){let p=parse(SAMPLE.as_bytes(),"https://example.com",Some("main")).unwrap();let c=p.blocks.iter().find(|b|matches!(b.content,Content::Code{..})).unwrap();assert_eq!(c.content.text(),"  let n = 0;\n");assert!(matches!(c.locator,Locator::Html{..}));}
     #[test]fn table_is_not_duplicated_as_paragraphs(){let p=parse(SAMPLE.as_bytes(),"https://example.com",Some("main")).unwrap();assert_eq!(p.blocks.iter().filter(|b|matches!(b.content,Content::Table{..})).count(),1);}
     #[test]fn bad_css_is_an_error(){assert!(select_original(SAMPLE,"[").is_err());}

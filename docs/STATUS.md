@@ -3,6 +3,71 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Disclosure and overlay read follow-up
+
+The user approved another read-quality follow-up on `feat/read-quality`, PR #24.
+The implementation and bounded debug proof are complete. Installation is pending
+at this source checkpoint. Keep the PR unmerged and do not publish.
+
+Source inspection and a small diagnostic article identified three actual losses:
+
+- The active cleaner deletes actual `button` elements with their labels. It does
+  not generally delete delivered collapsed panel bodies. Native summary wrappers
+  are flattened and can join the label, answer and link text.
+- Wrapper stripping can remove a `small` element's dialog role before the later
+  modal selector runs, leaving its promotional text in the article.
+- A fixed-position email offer without the known modal/newsletter class markers
+  can retain its heading and offer text after the form itself is removed.
+
+HTML parser `rs-trafilatura/0.2.2+main-content/7` corrects these boundaries in the
+selection copy before the existing extractor. It preserves native summary block
+boundaries and main/article disclosure-button labels for uniquely paired,
+same-scope panels without form fields. It removes modal widgets and identified
+email overlays before wrapper loss. An email overlay needs an email field plus
+fixed positioning or a widget marker, not newsletter words in article prose.
+Inactive templates are excluded. Hidden/open/ARIA state stays unchanged.
+
+The captured text remains the authority. Whitespace recovery for direct disclosure
+runs requires identical non-whitespace characters and one unique source match.
+No original subtree is restored after content selection. Code and table values,
+originals, explicit CSS, links, machine schemas and saved snapshots stay intact.
+An empty selected paired panel produces `disclosure_content_unavailable`, not
+invented content or an automatic interaction. No new browser behavior was added.
+
+### Bounded proof
+
+- An ordinary installed baseline read of the FDA's [Aspartame and Other Sweeteners
+  in Food](https://www.fda.gov/food/food-additives-petitions/aspartame-and-other-sweeteners-food)
+  already retained 11 collapsed panels through HTTP. The revised production reader
+  on the identical retained input kept all 86 blocks and 96 links exactly unchanged.
+- The retained Rust Book input kept all 16 code payloads, both table payloads and
+  its complete link inventory. No public refetch campaign was used.
+- The local diagnostic showed lost `Measurement limits`, merged summary text and
+  two leaked promotions before the change. The new ordinary debug CLI retained
+  the heading, hidden panel body, exact code, zero-valued table cell, references
+  and newsletter-topic prose. Both leaked promotions, navigation and site footer
+  were absent. The three all-page links remained, including the excluded offer.
+- Auto routing stayed HTTP with recovery false. Original export was byte-identical.
+  Default output showed the full saved ID once, a readable table and exact code.
+  The empty appendix warning stayed on stderr. Details output was also inspected.
+- The normal locked CLI/server build and two focused HTML tests passed. Each test
+  filtered out 46 unrelated library tests. No full suite, integration-test repair,
+  broad corpus, benchmark, dependency change or new fixture framework ran. The
+  existing unused `HashMap` import warning is unchanged.
+
+One diagnostic assertion initially expected a space that its direct source text
+did not contain. The reader correctly retained that absence. The bounded retry
+used an explicit source newline and verified recovery of that real whitespace,
+not insertion of a guessed separator. Both inputs remain in private evidence.
+
+Private inputs, baseline output and CLI proof are in `runtime/read-disclosures/`.
+The user's exact problem URLs were requested but not supplied during this proof.
+This verifies the described markup boundaries, not all newsletter providers or
+custom accordions. Missing/ambiguous panel IDs, panels outside semantic main/article
+containers, concealed promotion and content fetched only after interaction remain
+limited. Login, challenge, consent and paywall controls are not bypassed. Search,
+helpers, settings, native routes, packaging and published alpha assets are unchanged.
+
 ## Search-ad follow-up
 
 The user approved paid/sponsored result exclusion on `feat/read-quality`, PR #24,
