@@ -3,6 +3,101 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Live reading quality, September 13, 2026
+
+The user requested continued live testing and correction. This is ongoing product
+work, not a declaration that website coverage or reading quality is complete.
+PR #24 stays unmerged. The published alpha, dependency pins, helpers, configuration,
+protocol fields, libraries, and historical snapshots remain unchanged.
+
+### What live use found
+
+Five initial fresh CLI reads covered JavaScript quotes, AMD support, Chemistry,
+FDA sweeteners, and MDN Fetch documentation. All fetched successfully. Inspection
+of actual text, Markdown, and exported originals still found material losses:
+
+- Chemistry lost both supplied equations and a visible Newman citation title.
+  Scientific superscripts/subscripts were flattened. All 86 references printed
+  as `1.` in plain text, and a JSON-LD description replaced the page title.
+- MDN lost nested-list structure, list paragraphs, and all 23 code-language labels.
+  Code payloads survived, but separate `js` toolbar labels cluttered the output.
+- AMD and FDA action/download links had labels but no usable destinations in
+  ordinary text. Markdown also lacked selected inline destinations.
+- A further live Britannica read returned HTTP 200 in 0.520 seconds, unlike its
+  earlier denial, but print and feedback dialog text entered the article.
+- A search-selected news article returned HTTP 200 in 0.333 seconds but lost an
+  article-scoped editorial qualification. Possessive apostrophes gained spaces.
+- Amazon still failed after 2.402 seconds: no readable HTTP content, then one
+  unsuccessful browser-readiness attempt. Its earlier nonempty snapshot contained
+  inactive markup and recommendations, not a product inventory.
+- The news search took 0.847 seconds and returned ten DuckDuckGo results while
+  reporting Brave's HTTP 429. This does not establish both-provider health.
+
+These are individual observations, not latency guarantees. Source originals,
+full outputs, and reports are under ignored `runtime/live-reading/`.
+
+### Corrections
+
+Parser `main-content/9` keeps selected link spans, list context, source notation,
+and inline-math flow metadata. Explicit CSS uses `source-blocks/6`. Protocol fields
+are unchanged, and old documents without this metadata still render normally.
+
+- Selected link destinations come from actual anchors and UTF-8 block spans, not
+  label matching against the all-page link inventory. Plain action paragraphs
+  expose their destinations. Markdown includes selected inline links.
+- Source-supplied TeX passes through the one extractor in a collision-checked code
+  carrier. Only surviving carriers become Math blocks. Missing TeX has an explicit
+  source-required marker. Compact inline flows keep source paragraph boundaries
+  and spacing; detailed views retain separate source positions. No rejected source
+  equations are appended later. Math inside code/tables is outside this correction.
+- Numeric prose scripts preserve exponent/subscript meaning. Citation links do
+  not become exponents. The narrow citation-label exception preserves the visible
+  title without disabling subscription filtering or fetching its gated destination.
+- List metadata retains nesting, actual ordinals, and continuation blocks. Unique
+  original matches preserve start/reversed/value attributes. Text and Markdown
+  retain the structure without rewriting code or table payloads. Nonstandard
+  Markdown ordinals use explicit boundaries or labels to prevent renumbering.
+- Verified source code classes provide `brush: js` language metadata. Only the
+  redundant toolbar paired with that code block is excluded. Source titles and
+  matching main headings take priority over an extractor-selected description.
+- Unique identical-character original runs supply actual source spacing. Custom
+  dialogs require a control and one named modal target. Only unquoted numeric
+  attribute values in source modal selectors are normalized for CSS parsing.
+  Substantive article footers retain their qualifications through selection-copy
+  footer/disclaimer token normalization. Other gate and boilerplate markers stay
+  intact.
+
+### Verification and remaining limits
+
+The first actual CLI offline comparison used identical Chemistry, MDN, and FDA
+originals. It preserved both supplied equations, the Newman title at reference 14,
+MDN nesting and JavaScript languages, and every previous code/table payload. The
+initial live AMD/FDA link check preserved all 39/86 block payloads and exposed
+useful action/PDF destinations.
+
+The normal locked CLI/server build and nine HTML plus seven renderer checks
+passed. Actual four-page candidate use verified the inline equations, reference
+numbers, MDN structure, and source payload preservation. It also reproduced two
+remaining failures: an unquoted numeric modal selector, and a prose disclaimer
+class that still matched the upstream filter. A focused correction and retained
+CLI retry fixed those cases. Britannica now has 88 blocks without the print or
+feedback dialog phrases. The news article has 62 blocks and retains its full
+analysis/rapid-change qualification. Both originals remain byte-identical.
+Reports and final affected outputs are in `candidate-qa/` and `qualified-pass/`
+below the ignored evidence directory. No additional website fetches were needed
+for these corrections. Local installation and final live proof are pending.
+
+Amazon remains unavailable. No access or robots bypass was added. A single
+Britannica success is not general availability proof. FDA's source-currency date,
+image-layout tables, inline emphasis/code styling, and broader notation coverage
+remain incomplete. The news article's unlinked Sources entries had no anchors in
+the original, so absent URLs there are a source limitation. Its factual claims
+were not independently validated. Helper error stacks remain noisy.
+
+The existing manually launched server was absent after a workstation reboot.
+It was restored with the unchanged prior build and original absolute config/data
+paths before the live pass. No automatic startup mechanism was added.
+
 ## Reported page failures and latency
 
 Verified September 13, 2026 UTC (September 12 local). Clean source/build

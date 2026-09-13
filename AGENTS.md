@@ -7,7 +7,28 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current follow-up: truthful, fast page reads
+## Current work: live reading quality
+
+The user approved continued live testing and correction across page types. A
+successful fetch or build is not product acceptance. Keep PR #24 unmerged and
+published alpha assets unchanged. Preserve the existing service configuration,
+helpers, libraries, historical snapshots, and rollback builds. The narrower
+historical test limits below describe previous milestones, not a ban on this
+approved live pass. Use reproduced failures to choose focused corrections.
+
+Compare actual CLI text and Markdown with retained originals. Inspect useful
+qualifications, equations, list structure, action links, and code, not only HTTP
+status or block counts. The extractor's quality estimate does not validate these.
+Do not treat one site's HTTP denial as permanent. Do not treat an older nonempty
+snapshot as evidence of a successful read without inspecting its content.
+
+For offline CLI parsing, `ingest --name` accepts a filename, not a URL or path.
+Ingestion keeps exact bytes but has no public URL base for relative links. Use a
+fresh ordinary URL read to verify link resolution and retrieval behavior. Keep
+intermediate parser builds in isolated data directories so cache identity cannot
+reuse another implementation of the same uncommitted parser revision.
+
+## Preserved follow-up: truthful, fast page reads
 
 The reported page failures have a bounded correction, installed and verified from
 clean build `f99fb0acbb914d7146a2dd799535b2caae3839ce`. Keep PR #24 ready and
@@ -201,7 +222,7 @@ Do not import upstream CLI, server, cache, authentication, or unrelated agent fe
 
 ## Known implementation gaps
 
-HTML parser `rs-trafilatura/0.2.2+main-content/8` uses the existing extractor's
+HTML parser `rs-trafilatura/0.2.2+main-content/9` uses the existing extractor's
 standard selection thresholds, without recall-first or internal fallback mode.
 Article comments are not appended. The extractor's Forum profile preserves replies
 as main content; wider discussion coverage is not verified. All-page links stay
@@ -220,27 +241,55 @@ ordinary sections about recommendations. Native disclosure summaries retain a
 block boundary. Main/article disclosure buttons retain their labels only with a
 unique same-scope target and no form fields. Hidden state stays unchanged. Empty
 selected panels produce `disclosure_content_unavailable`. Missing/ambiguous target
-IDs and remote-only content remain unsupported. Explicit CSS bypasses ordinary
-chrome filtering. Do not remove a substantive section merely because its class
-says related/social.
+IDs and remote-only content remain unsupported. A control's `data-modal` can identify a dialog without ARIA. Require one named
+modal target and exclude main/article containers. Source selectors can use
+unquoted numeric attribute values. Quote only those values for CSS parsing;
+explicit user selectors still use the normal parser. Article-scoped prose footers
+can contain qualifications. The active extractor's footer and disclaimer class
+filters can still remove them despite its article exception. Normalize the footer
+layout token and prose disclaimer labels only inside eligible article footers,
+not arbitrary subscription or other filter markers. Explicit
+CSS bypasses ordinary chrome filtering. Do not remove a substantive section
+merely because its class says related/social.
 
 Walk only selected containers. Preserve inline runs and structural boundaries.
 The extractor's HTML can join inline text even when its text view retains spaces.
 Recover whitespace only from a unique match with identical non-whitespace text,
-or a matching original inline quotation boundary. Never add whole original
+or a matching original inline quotation boundary. Prefer actual source spacing
+when it uniquely matches a complete selected run. Never add whole original
 subtrees or substitute paragraphs to repair fragments. Code and table payloads
 come from unique original element matches. Keep derived mappings explicit.
-MathML uses a supplied TeX annotation or a source-required marker, not flattened
-operator text. This is not general extraction-quality or math validation.
-Non-UTF-8 decoding is absent.
-Markdown parsing implements a limited block reader, not full CommonMark.
-HTML table nesting, list hierarchy, inline link placement, and mathematical fidelity need stronger fixtures.
+
+The active cleaner deletes MathML and the HTML serializer drops fallback images.
+A selection-copy code carrier preserves supplied TeX at the selected position.
+Only a surviving generated carrier becomes a Math block. Unannotated MathML uses
+a source-required marker. No equations are appended from rejected source regions.
+Original bytes, explicit CSS, and math inside code/tables are not changed. Numeric
+prose superscripts/subscripts use Unicode notation. Other script text uses an
+explicit `^(...)` or `_(...)` representation. Citation links are not exponent text.
+The exact `id-lock-subscription` citation-label class can falsely remove a visible
+title. Neutralize only that token on its inline citation shape, not subscription
+filters globally or access gates on linked destinations.
+
+Optional metadata preserves selected inline link spans, list context, and source
+inline-math flows without changing protocol fields. Link spans use half-open UTF-8
+byte offsets in block text. They do not come from matching labels against the
+all-page link inventory. List context keeps nesting, ordinals, and continuation
+blocks. Original start/reversed/value attributes require a unique source match.
+Compact math flows join only adjacent selected fragments with retained source
+whitespace. Detailed views keep separate provenance blocks. Invalid or missing
+metadata falls back to ordinary block rendering. Non-default Markdown ordinals
+need explicit list boundaries or labels because Markdown engines can renumber them.
+
+Non-UTF-8 decoding is absent. Markdown parsing implements a limited block reader,
+not full CommonMark. General image, table-nesting, mathematical, and inline-style
+fidelity remain incomplete. This is not general extraction-quality validation.
 
 Text and Markdown share saved table cell values. Text grids support multiline
 ASCII cells and horizontal spans within 88 columns; uncertain widths or row spans
 use compact nonaligned rows. Markdown still uses raw HTML for merged tables, not
 a rendered preview. Cell conversion preserves list-item and br boundaries instead
-of concatenating their text. Explicit CSS uses source-blocks/5 and retains access
+of concatenating their text. Explicit CSS uses source-blocks/6 and retains access
 to complete original tables, including excluded navigation regions.
 
 For table defects, compare retained original list-item boundaries with saved rows
@@ -343,12 +392,12 @@ markers, evidence and exact limitations. Do not promise absence of concealed ads
 or unknown future markup. Image, video, news, date, language and domain-filter
 interfaces remain incomplete. There are no semantic rerankers or automatic LLM calls.
 
-## Deferred source fidelity
+## Remaining source fidelity
 
-Wait for coordinating direction before expanding scope. The public-page smoke
-still shows flattened inline superscripts; table captions, full list hierarchy,
-and ambiguous mappings need separate source-fidelity work. Do not turn this
-milestone into a Markdown rewrite or optional-integration validation campaign.
+Continue from reproduced live failures, not an assumed completed product. Image
+layout tables, source-currency metadata, inline emphasis/code styles, and ambiguous
+mappings still need work. Do not turn these into a Markdown parser rewrite or an
+optional-integration validation campaign without a concrete need.
 
 ## Boundaries not to expand
 

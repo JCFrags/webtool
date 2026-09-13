@@ -1,6 +1,27 @@
 # Roadmap
 
-## Active follow-up: truthful, fast page reads
+## Active work: live reading quality
+
+The user approved continued live testing and correction across page types. The
+product is not finished. Keep PR #24 unmerged and published alpha assets unchanged.
+Preserve prior useful behavior, configuration, helpers, libraries, and snapshots.
+The narrower limits in the historical milestones below do not prohibit this pass.
+
+Use actual CLI reads and compare retained sources with text and Markdown. Fix
+content loss and poor presentation as well as failed retrieval. Current confirmed
+work covers selected link destinations, mathematical notation, citation titles,
+list hierarchy and numbering, code-language labels, source spacing, custom modal
+exclusion, and article-footer qualifications. Do not add access bypasses, a hidden
+extractor chain, automatic clicks, or unbounded retries.
+
+Live testing found that Britannica can currently return a readable HTTP response
+but includes tool dialogs. Amazon still has no accepted product content after one
+bounded browser attempt. The older Amazon snapshot contained inactive markup, not
+a useful product inventory. One news article lost an editorial qualification.
+These are separate mechanisms, not evidence of one universal fetch regression.
+See [STATUS.md](STATUS.md) for practical evidence and remaining limits.
+
+## Preserved follow-up: truthful, fast page reads
 
 The reported cases have a bounded correction, installed and verified from clean
 build `f99fb0acbb914d7146a2dd799535b2caae3839ce`. Keep PR #24 ready and unmerged.
@@ -74,7 +95,7 @@ release, broad test corpus, benchmark or other deferred feature work is approved
 These areas remain backlog, not parallel priorities:
 
 - Format coverage, OCR readiness, figure extraction, and figure assets.
-- Markdown, mathematical notation, list hierarchy, and broader source fidelity.
+- Full Markdown parsing, image/table fidelity, source-currency metadata, and broader notation/style coverage beyond the current live corrections.
 - GitHub issues/PRs/releases and wider media/caption coverage.
 - Crawl resume, persisted frontiers, and sitemap expansion.
 - Academic search, citation graphs, bibliography tools, and reference-manager integration.
