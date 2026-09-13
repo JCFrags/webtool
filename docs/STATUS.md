@@ -3,6 +3,549 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Live reading quality, September 13, 2026
+
+The user requested continued live testing and correction. This is ongoing product
+work, not a declaration that website coverage or reading quality is complete.
+Clean source `44f6a45e2acef20dfda215555349da236c3ee1fd` is installed and active.
+Its CI passed in run `34764880552`. PR #24 stays unmerged. The published alpha,
+dependency pins, helpers, configuration, protocol fields, libraries, and historical
+snapshots remain unchanged.
+
+### What live use found
+
+Five initial fresh CLI reads covered JavaScript quotes, AMD support, Chemistry,
+FDA sweeteners, and MDN Fetch documentation. All fetched successfully. Inspection
+of actual text, Markdown, and exported originals still found material losses:
+
+- Chemistry lost both supplied equations and a visible Newman citation title.
+  Scientific superscripts/subscripts were flattened. All 86 references printed
+  as `1.` in plain text, and a JSON-LD description replaced the page title.
+- MDN lost nested-list structure, list paragraphs, and all 23 code-language labels.
+  Code payloads survived, but separate `js` toolbar labels cluttered the output.
+- AMD and FDA action/download links had labels but no usable destinations in
+  ordinary text. Markdown also lacked selected inline destinations.
+- A further live Britannica read returned HTTP 200 in 0.520 seconds, unlike its
+  earlier denial, but print and feedback dialog text entered the article.
+- A search-selected news article returned HTTP 200 in 0.333 seconds but lost an
+  article-scoped editorial qualification. Possessive apostrophes gained spaces.
+- Amazon still failed after 2.402 seconds: no readable HTTP content, then one
+  unsuccessful browser-readiness attempt. Its earlier nonempty snapshot contained
+  inactive markup and recommendations, not a product inventory.
+- The news search took 0.847 seconds and returned ten DuckDuckGo results while
+  reporting Brave's HTTP 429. This does not establish both-provider health.
+
+These are individual observations, not latency guarantees. Source originals,
+full outputs, and reports are under ignored `runtime/live-reading/`.
+
+### Corrections
+
+Parser `main-content/9` keeps selected link spans, list context, source notation,
+and inline-math flow metadata. Explicit CSS uses `source-blocks/6`. Protocol fields
+are unchanged, and old documents without this metadata still render normally.
+
+- Selected link destinations come from actual anchors and UTF-8 block spans, not
+  label matching against the all-page link inventory. Plain action paragraphs
+  expose their destinations. Markdown includes selected inline links.
+- Source-supplied TeX passes through the one extractor in a collision-checked code
+  carrier. Only surviving carriers become Math blocks. Missing TeX has an explicit
+  source-required marker. Compact inline flows keep source paragraph boundaries
+  and spacing; detailed views retain separate source positions. No rejected source
+  equations are appended later. Math inside code/tables is outside this correction.
+- Numeric prose scripts preserve exponent/subscript meaning. Citation links do
+  not become exponents. The narrow citation-label exception preserves the visible
+  title without disabling subscription filtering or fetching its gated destination.
+- List metadata retains nesting, actual ordinals, and continuation blocks. Unique
+  original matches preserve start/reversed/value attributes. Text and Markdown
+  retain the structure without rewriting code or table payloads. Nonstandard
+  Markdown ordinals use explicit boundaries or labels to prevent renumbering.
+- Verified source code classes provide `brush: js` language metadata. Only the
+  redundant toolbar paired with that code block is excluded. Source titles and
+  matching main headings take priority over an extractor-selected description.
+- Unique identical-character original runs supply actual source spacing. Custom
+  dialogs require a control and one named modal target. Only unquoted numeric
+  attribute values in source modal selectors are normalized for CSS parsing.
+  Substantive article footers retain their qualifications through selection-copy
+  footer/disclaimer token normalization. Other gate and boilerplate markers stay
+  intact.
+
+### Verification and remaining limits
+
+The first actual CLI offline comparison used identical Chemistry, MDN, and FDA
+originals. It preserved both supplied equations, the Newman title at reference 14,
+MDN nesting and JavaScript languages, and every previous code/table payload. The
+initial live AMD/FDA link check preserved all 39/86 block payloads and exposed
+useful action/PDF destinations.
+
+The normal locked CLI/server build and nine HTML plus seven renderer checks
+passed. Actual four-page candidate use verified the inline equations, reference
+numbers, MDN structure, and source payload preservation. It also reproduced two
+remaining failures: an unquoted numeric modal selector, and a prose disclaimer
+class that still matched the upstream filter. A focused correction and retained
+CLI retry fixed those cases. Britannica now has 88 blocks without the print or
+feedback dialog phrases. The news article has 62 blocks and retains its full
+analysis/rapid-change qualification. Both originals remain byte-identical.
+Reports and final affected outputs are in `candidate-qa/` and `qualified-pass/`
+below the ignored evidence directory. No additional website fetches were needed
+for these corrections.
+
+The supported installer ran once from the clean source, with a 54.37-second
+release build. The restart used fresh process/start, command, binary, listener,
+job, connection, and helper checks. Both installed binaries match their build
+outputs and receipts. Doctor and the running process report the exact source
+above. No automatic service or configuration change was made.
+
+Four fresh ordinary reads through the installed CLI, from outside the checkout,
+returned HTTP 200 without browser recovery:
+
+| Page | CLI read time | Blocks | Verified behavior |
+| --- | ---: | ---: | --- |
+| Chemistry | 0.860 s | 304 | Both exact equations inline, all 32 prior headings and 86 references, Newman title, script notation, unchanged table payload |
+| MDN Fetch | 0.226 s | 152 | Nested numbering and list paragraphs, all 23 exact code payloads with JavaScript fences |
+| Britannica football | 0.503 s | 88 | Readable article without print instructions or feedback-success dialog text |
+| News article | 0.465 s | 62 | Full editorial qualification and correct possessive spacing |
+
+The timings cover each fresh read, not the later saved-ID views and exports.
+Default text and Markdown were exercised. Each exported original matches its
+saved hash. All five earlier saved JSON records remain byte-identical. Library
+output, client/server configuration, and helper hashes match the pre-install
+snapshot. Rollback binaries and matching receipts are preserved in
+`runtime/live-reading/rollback/`. This code-only rollback needs no database restore.
+
+The candidate agents and both task-only servers are closed. Production remains
+active. Final documentation changes do not require another installation.
+
+Amazon remains unavailable. No access or robots bypass was added. A single
+Britannica success is not general availability proof. FDA's source-currency date,
+image-layout tables, inline emphasis/code styling, and broader notation coverage
+remain incomplete. The news article's unlinked Sources entries had no anchors in
+the original, so absent URLs there are a source limitation. Its factual claims
+were not independently validated. Helper error stacks remain noisy.
+
+The existing manually launched server was absent after a workstation reboot.
+It was restored with the unchanged prior build and original absolute config/data
+paths before the live pass. No automatic startup mechanism was added.
+
+## Reported page failures and latency
+
+Verified September 13, 2026 UTC (September 12 local). Clean source/build
+`f99fb0acbb914d7146a2dd799535b2caae3839ce` is installed and active. Source CI
+passed in run `34743103468`. PR #24 remains ready and unmerged. The published
+alpha, dependencies, configuration, helper binaries and search implementation
+are unchanged. This is a bounded correction, not a claim that every reported
+site is readable or that a general network slowdown was fixed.
+
+### Confirmed defects and correction
+
+- Amazon's three saved blocks were two literal noscript payloads and a recently
+  viewed recommendation heading. The active cleaner can unwrap noscript text
+  over 500 bytes before later cleanup. The two payloads exceeded that threshold and
+  became escaped markup text, not rendered product content. Parser
+  `main-content/8` removes actual noscript nodes in the selection copy before
+  this can happen. It also removes supplementary recently viewed UI outside
+  main/article. It does not delete prose or code by matching literal HTML text.
+  If no main content remains, Auto can make its existing single browser attempt.
+- ASUS had a separate inert filter container with 19 form inputs and no
+  substantive block structure. The selection copy now excludes such inactive
+  choice-control containers outside articles. Its actual product sections remain.
+  This does not remove all hidden, inert, or ARIA-hidden content.
+- Facebook's saved result was Lightpanda's synthetic `Navigation failed` page.
+  The helper exited zero but logged a root-frame `RobotsBlocked` navigation
+  error. Capture `lightpanda-json-dom/3` rejects that error before extraction.
+  Child-frame errors alone do not reject otherwise readable main content.
+  Versioned cache identity avoids reuse of the previous capture identity. Old
+  saved IDs, including the historical failed-page snapshot, are not rewritten.
+
+### Bounded practical proof
+
+The normal locked CLI/server build, one focused navigation test and seven
+existing HTML tests passed. An isolated server exercised the real CLI against
+retained inputs and a local replay of the helper envelope/diagnostic contract.
+No new test framework, full suite, public corpus or benchmark was added.
+
+- The identical retained ASUS response changed from 65 to 31 blocks in 0.205
+  seconds. All 34 filter-panel blocks were removed. Product sections remained.
+  Original export was byte-identical. Independent discovery kept 108 links.
+- Amazon correctly returned missing content from its retained response in 0.170
+  seconds instead of accepting its three clutter blocks. No product details
+  were invented or recovered from script state.
+- The replayed root failure was rejected through Auto in 0.035 seconds and
+  explicit Lightpanda in 0.026 seconds. A child-frame warning with readable main
+  content succeeded in 0.040 seconds. A local HTTP 403 failed in 0.013 seconds
+  without invoking the helper. These timings are local boundary checks, not
+  live Facebook or Britannica measurements.
+- The retained disclosure diagnostic kept all 14 block payloads, exact code,
+  table values and original hash. Default ASUS text output was inspected.
+- One fresh public ASUS debug read succeeded in 1.979 seconds, HTTP only. All
+  108 link records matched the earlier saved page. One fresh Amazon attempt
+  reached the existing Lightpanda readiness deadline in 2.519 seconds and
+  returned an error. Amazon remains unavailable in this proof.
+
+### Installed result and remaining limits
+
+The supported installer ran once with a 50.81-second release build. Installed
+binaries, release outputs and checksum receipts match. A fresh guarded restart
+verified process identity, inactive jobs/connections/helpers, and unchanged
+configuration before stopping only the project server. The replacement uses
+its existing absolute config/data paths. Doctor and the running executable
+identify the clean build above.
+
+- Installed fresh ASUS read: 0.201 seconds, HTTP, no automatic recovery, 31 blocks
+  and 108 links. Block payloads and links match the verified debug result.
+- Installed `webtool search laptops --limit 5`: 0.785 seconds wall time, 772 ms
+  server time, five results from DuckDuckGo and Brave, no warnings. Initial
+  investigation also found a 0.873-second search and a 0.273-second fresh Rust
+  Book read. These observations do not establish a general latency guarantee.
+- All five saved case records remained byte-identical through the
+  installed client/server. Libraries, client/server settings and helper hashes
+  match the pre-install snapshot. Rollback binaries and matching receipts are
+  preserved in `runtime/latency-regression/rollback/`. No database restore is
+  needed for this code-only rollback. Do not reinstall for documentation.
+- Britannica returned HTTP 403. Facebook reported a robots restriction. Neither
+  was retried live or bypassed. Amazon still lacks an accepted product read.
+  ASUS retains small `Filter` and `Need Help?` labels outside the narrow panel
+  rule. General hidden-widget coverage remains limited.
+- GitHub and Compute Market saved readable bodies with 22 and 66 blocks. Their
+  reported messages were scope/mapping warnings, not fetch failures. A bare URL
+  is not a shell command. Use `webtool read https://www.amd.com/en/support.html`.
+
+Private retained inputs, timings and CLI evidence are in
+`runtime/latency-regression/`. Task-only servers and the read-only scout are
+stopped. No blind timeout increase, provider change, browser replacement or
+access-control workaround was made.
+
+## Disclosure and overlay read follow-up
+
+The user approved another read-quality follow-up on `feat/read-quality`, PR #24.
+The implementation, bounded proof and local installation are complete. Keep the
+PR unmerged and do not publish. See the PR checks for remote build status.
+
+Source inspection and a small diagnostic article identified three actual losses:
+
+- The active cleaner deletes actual `button` elements with their labels. It does
+  not generally delete delivered collapsed panel bodies. Native summary wrappers
+  are flattened and can join the label, answer and link text.
+- Wrapper stripping can remove a `small` element's dialog role before the later
+  modal selector runs, leaving its promotional text in the article.
+- A fixed-position email offer without the known modal/newsletter class markers
+  can retain its heading and offer text after the form itself is removed.
+
+HTML parser `rs-trafilatura/0.2.2+main-content/7` corrects these boundaries in the
+selection copy before the existing extractor. It preserves native summary block
+boundaries and main/article disclosure-button labels for uniquely paired,
+same-scope panels without form fields. It removes modal widgets and identified
+email overlays before wrapper loss. An email overlay needs an email field plus
+fixed positioning or a widget marker, not newsletter words in article prose.
+Inactive templates are excluded. Hidden/open/ARIA state stays unchanged.
+
+The captured text remains the authority. Whitespace recovery for direct disclosure
+runs requires identical non-whitespace characters and one unique source match.
+No original subtree is restored after content selection. Code and table values,
+originals, explicit CSS, links, machine schemas and saved snapshots stay intact.
+An empty selected paired panel produces `disclosure_content_unavailable`, not
+invented content or an automatic interaction. No new browser behavior was added.
+
+### Bounded proof
+
+- An ordinary installed baseline read of the FDA's [Aspartame and Other Sweeteners
+  in Food](https://www.fda.gov/food/food-additives-petitions/aspartame-and-other-sweeteners-food)
+  already retained 11 collapsed panels through HTTP. The revised production reader
+  on the identical retained input kept all 86 blocks and 96 links exactly unchanged.
+- The retained Rust Book input kept all 16 code payloads, both table payloads and
+  its complete link inventory. No public refetch campaign was used.
+- The local diagnostic showed lost `Measurement limits`, merged summary text and
+  two leaked promotions before the change. The new ordinary debug CLI retained
+  the heading, hidden panel body, exact code, zero-valued table cell, references
+  and newsletter-topic prose. Both leaked promotions, navigation and site footer
+  were absent. The three all-page links remained, including the excluded offer.
+- Auto routing stayed HTTP with recovery false. Original export was byte-identical.
+  Default output showed the full saved ID once, a readable table and exact code.
+  The empty appendix warning stayed on stderr. Details output was also inspected.
+- The normal locked CLI/server build and two focused HTML tests passed. Each test
+  filtered out 46 unrelated library tests. No full suite, integration-test repair,
+  broad corpus, benchmark, dependency change or new fixture framework ran. The
+  existing unused `HashMap` import warning is unchanged.
+
+One diagnostic assertion initially expected a space that its direct source text
+did not contain. The reader correctly retained that absence. The bounded retry
+used an explicit source newline and verified recovery of that real whitespace,
+not insertion of a guessed separator. Both inputs remain in private evidence.
+
+### Installed result
+
+Verified September 13, 2026 UTC (September 12 local). Clean source/build:
+`c9ad49b6ecbbd9afde300cf24f335f8ccf2b9800`. The supported installer ran once and
+reported a 50.65-second release build. Installed binaries, release outputs and
+checksum receipts match. The guarded restart verified the old process/start/hash,
+no active jobs/connections/helpers and unchanged configuration/helper hashes before
+it stopped only the project server gracefully. The replacement uses the same
+absolute config/data paths and log/PID convention. Doctor and the running process
+identify the exact clean build above: PID `663021`, start ticks `16884587`.
+
+- Installed ordinary diagnostic ID:
+  `8ca5bd3cf9b8b642ce35aaf035bfa252a29b8d613cca1a5f8fce83264e7dcd8f`.
+  HTTP, recovery false, 14 blocks and three links. Its default CLI output is
+  byte-identical to the verified debug output. The 2,567-byte original export
+  matches the served input. The empty-panel warning remains on stderr.
+- Installed ordinary FDA ID:
+  `756bd3d21a927dabecbb5c89cd9b0d58d9c1ac0cc43cff5db790bcaa7e310870`.
+  HTTP, recovery false, 86 blocks and 96 links. All block payloads and headings
+  match the baseline. The original export contains 69,720 bytes.
+- The earlier saved FDA JSON is byte-identical through the installed client/server.
+  Libraries, client/server settings and helper hashes match the baseline. The
+  isolated debug server stopped. Rollback binaries and matching receipts remain
+  in `runtime/read-disclosures/rollback/`. No database restore is needed for this
+  code-only rollback. Later documentation needs no further installation.
+
+Private inputs, baseline output and CLI proof are in `runtime/read-disclosures/`.
+The user's exact problem URLs were requested but not supplied during this proof.
+This verifies the described markup boundaries, not all newsletter providers or
+custom accordions. Missing/ambiguous panel IDs, panels outside semantic main/article
+containers, concealed promotion and content fetched only after interaction remain
+limited. Login, challenge, consent and paywall controls are not bypassed. Search,
+helpers, settings, native routes, packaging and published alpha assets are unchanged.
+
+## Search-ad follow-up
+
+The user approved paid/sponsored result exclusion on `feat/read-quality`, PR #24,
+without merging or publishing. The read changes below remain intact. The exact
+policy, source evidence and future-markup limits are in [SEARCH.md](SEARCH.md).
+
+- Inspected the pinned `metadata-search-engine-rs/0.3.1` result model and all four
+  parsers. The flat model loses ad labels and ancestor context. The DuckDuckGo
+  `div.result` selector does not exclude known `result--ad` classes by itself.
+- A local parser checks the existing result-card formats before conversion, URL
+  unwrapping, provider limits and ranking. It rejects marked paid containers,
+  sponsored ancestors/links, explicit badges and known ad-click URL forms.
+  DuckDuckGo requires `web-result`. The merge boundary repeats the URL guard.
+- Ordinary merchant results and advertising topics remain eligible. URL query
+  values, configured providers, ranking rules, schema and library search are
+  preserved. No unfiltered fallback, extra provider request or browser was added.
+  The pinned client, provider endpoints/settings and time bounds remain in use.
+- The normal locked CLI/server build passed. Two focused parser/URL tests and the
+  two existing search-merge tests passed, with 41 unrelated tests filtered out.
+  No full suite, integration-test repair, benchmark or broad corpus ran. The
+  existing unused `HashMap` import warning remains unchanged.
+- One ordinary debug CLI query, `webtool search laptops --limit 5`, returned five
+  DuckDuckGo results in 869 ms. Merchant sites and an editorial review remained.
+  Brave returned HTTP 429, reported as `provider_error`; no bypass or retry ran
+  in that check. Live Startpage and Yahoo behavior was not exercised.
+- The final standalone-badge check also preserves an `Ad` title inside the real
+  title selector. That local check followed the live query and passed with the
+  same focused checks.
+
+### Installed result
+
+Verified September 13, 2026 UTC (September 12 local). Clean source/build:
+`51b42fffd958eda9f988244290ca7e690c7aef67`. Source CI passed, run `34735467901`.
+The supported installer ran once and reported a 57.55-second release build.
+Both installed binaries match their build outputs and checksum receipts. After
+fresh process/start/hash, inactive-job, connection and helper checks, only the
+verified project server stopped gracefully. The new installed server is PID
+`281079`, start ticks `16615165`. Doctor reports the exact clean source above.
+The same absolute config/data paths and existing log/PID convention remain in use.
+
+The installed ordinary `webtool search laptops --limit 5` returned five results
+from both DuckDuckGo and Brave, with no warnings. The two shared organic URLs
+retained both provider names, while query-distinct Amazon URLs stayed separate.
+Merchant results and an editorial review remained. This was the same commercial
+query used for debug verification, not a search campaign. No Startpage or Yahoo
+live query was made. The earlier Brave 429 remains a separate debug observation.
+
+Libraries, client/server settings, helper hashes and the local-library search
+response match the baseline. Historical saved documents and read implementation
+are unchanged. Previous binaries and matching receipts remain in
+`runtime/search-ads/rollback/`. Rollback does not require restoring the database
+or removing documents saved after this update. Later documentation needs no new
+installation. The isolated debug server and research worker are closed.
+
+Private evidence is in `runtime/search-ads/`. No dependency pin, CI workflow,
+helper, setting, library, packaging, alpha tag or published asset changed. PR #24
+remains unmerged. Historical read evidence below is unchanged.
+
+## Milestone 12: reliable, clean read
+
+Issue [#23](https://github.com/JCFrags/webtool/issues/23), PR
+[#24](https://github.com/JCFrags/webtool/pull/24), branch `feat/read-quality`.
+Started from updated main `ce023cd`. The sole active priority and deferred work
+are in [ROADMAP.md](ROADMAP.md). No search, provider, ranking, configuration,
+dependency, API/data-version, CI, packaging, tag, or release changes.
+
+### Table and footer follow-up
+
+User feedback approved this focused follow-up on the same issue, branch and PR.
+The saved Chemistry source and its intermediate extraction confirmed that the
+selector lost navigation wrappers, omitted some cell list entries, and left a
+print-footer container. The text renderer exposed routine cell diagnostics.
+
+- Parser `main-content/6` removes navigation/page-footer landmarks and named footer
+  containers from a selection copy before extraction. Article-scoped footers and
+  endnotes remain eligible. Original bytes, explicit selectors and all-page links
+  remain independent. Explicit CSS is now `source-blocks/5`.
+- Cell conversion preserves list-item, paragraph and line-break boundaries. It does
+  not guess missing values or restore unselected subtrees.
+- Text grids support multiline ASCII cells, row headers and horizontal spans up
+  to 88 columns. Uncertain widths and geometry use compact rows and real labels,
+  not `Cell / End cell` dumps. Markdown exports and machine schemas are unchanged.
+- Retained Chemistry changed from 310 to 304 blocks. The authority-control box and
+  print footer are absent. All 32 headings and 1,394 links are preserved, including
+  the Notes, References and Bibliography headings. Its chemical-substance caption
+  table remains. The retained original still matches its recorded SHA-256.
+- Explicit selection of the original authority table keeps every National/Other
+  entry, including the previously omitted labels, with separate lines and the
+  two-column heading. This does not rewrite the old saved table.
+- The debug CLI displayed the old saved table through the new compact renderer.
+  The production reader/renderer was invoked on the retained inputs. Rust Book
+  retained all 16 code blocks, both table payloads and its link records unchanged.
+- Normal locked CLI/server builds passed. No tests, suites, benchmarks, dependency
+  changes, public refetch campaign or new fixture framework ran. The unused
+  `HashMap` import warning is unchanged. Private evidence is in
+  `runtime/table-footer/`. Saved JSON was byte-identical through the new CLI.
+
+The follow-up is installed from clean source
+`dc290a7e427a35daa6db3dfd516b743b0d205e04`, with source CI `34665231455` passed.
+The installer ran once for this follow-up; Cargo reported a 1m 02s release build.
+Both installed binaries match build outputs and their receipts. Previous binaries
+and receipts remain in `runtime/table-footer/rollback/`. After fresh idle,
+process/start, command and binary-hash checks, the old server stopped gracefully.
+The installed server is PID `108376`, start ticks `7315828`; doctor reports the
+exact clean build above. Absolute config/data paths and the existing log/PID
+convention are preserved. Libraries, client/server settings and helper hashes
+remain unchanged.
+
+An installed ordinary `webtool read https://en.wikipedia.org/wiki/Chemistry`
+returned HTTP 200 with renderer `http`, Auto requested and no recovery attempt.
+Saved ID: `8be67eba6491d662e59307bb2111b3aae817ac4941fb5aec18cb5cf1879b7a2b`.
+The fresh source produced 300 blocks, all 32 headings and 1,392 discovered links.
+Navigation and print footers are absent. Its 676,125-byte original export matches
+its recorded hash. This is a newer source snapshot than the 675,132-byte retained
+input used for before/after comparison, not evidence that two links were lost.
+The installed old-snapshot table view matches the verified debug result.
+
+Limits: grids still use 88 columns and do not estimate Unicode display width.
+Complex row spans use explicit compact annotations. The retained source includes
+stylesheet error notices; these are absent from the fresh source. The reader does
+not blindly delete source error messages. This is not general table, layout,
+footnote or chrome-exclusion validation. No merge, release or alpha-asset change
+occurred. Later documentation does not require another installation. The original
+two-page results below remain historical evidence for the initial change.
+
+### Implementation and focused proof
+
+- Inspected the retained Rust Book HTTP input and quote-page HTTP/DOM inputs,
+  plus rs-trafilatura's intermediate HTML/text before changing selection.
+  The Rust page has navigation outside its main content. The quote HTTP source
+  has quote data only inside a script that writes the cards. Old ordinary read
+  failed with no structured HTML, not a network or access-denial error.
+- HTML uses the existing extractor with standard thresholds, no recall-first or
+  internal fallback mode, and no separately appended article comments. Upstream
+  Forum selection treats replies as content. Short content is not rejected by
+  an arbitrary reader length floor. Links stay independent for map/crawl/extract.
+- Default text has a compact header and one full saved ID. `read --details` shows
+  block IDs, selectors, retrieval/original metadata and full mapping diagnostics.
+  Default output omits link inventories and image URLs. Exact code, table cells,
+  source page numbers and caption times remain. JSON schemas and Markdown exports
+  are unchanged; interactive Markdown has a separate clean renderer.
+- Parser identity is `rs-trafilatura/0.2.2+main-content/5`. Selected inline text is
+  grouped without restoring removed subtrees. The extractor's HTML joined quote
+  and author text even where its text view retained whitespace. Unique whitespace-
+  only matches and matching original inline boundaries repair that defect without
+  replacing paragraphs or changing their order. Missing MathML notation is marked
+  as source-required; retained originals remain complete.
+- Auto ordinary web reads use HTTP first, with at most one configured Lightpanda
+  attempt after missing-content or combined shell evidence. HTTP errors, access
+  denials, challenges and limits are not browser retries. Rendered login/challenge/
+  loading-only content is rejected. Useful HTTP partial content survives failure
+  with a warning. Existing semaphores and one overall HTTP-plus-helper deadline
+  bound the operation; there is no recursive read or second extractor.
+- Normal locked CLI/server debug builds passed. The existing unused HashMap import
+  warning remains. The final quote-spacing correction passed against the retained
+  DOM, without another public request. Failed spacing checks were corrected at the
+  actual extraction boundary, not with global markup stripping.
+- Ordinary Rust Book Data Types read passed with no observed server child/helper
+  process and metadata renderer `http`, recovery false. All 16 code payloads and
+  both table matrices exactly matched the historical saved document. All 33 table
+  cells remain in the default output. The raw 44,687-byte HTTP input is unchanged.
+- Ordinary `https://quotes.toscrape.com/js/` read passed with one observed Lightpanda
+  process, actual HTTP 200 and ten quotes in 21 blocks. Login, navigation and footer
+  text are absent. Separate artifacts retain the initial 5,808-byte HTTP response
+  and 8,986-byte DOM. Metadata identifies the accepted renderer and selection reason.
+- Both original exports matched retained objects byte for byte. JSON parsed with
+  unchanged top-level schema. Historical saved IDs remain readable; a saved static
+  JSON response through the new client matched the previous client byte for byte.
+  Details/default output were inspected. No all-page link discovery was removed.
+
+Private proof and before/after outputs are under ignored `runtime/read-quality/`.
+Rollback copies of both installed binaries and matching checksum receipts are in
+`runtime/read-quality/rollback/`, alongside a consistent pre-restart database copy.
+Only this project's verified server was switched to the debug build, with its
+existing absolute config/data paths.
+
+### Installed result
+
+Verified September 12, 2026 UTC (September 11 local). Clean implementation/build
+checkpoint: `ec91d969ded528273de2b294068a2263c38acba9`. Its CI build passed,
+run `34661312947`. The existing installer ran once and built both optimized
+binaries in 54.95 seconds. Matching receipts and installed-versus-build hashes
+passed for `$HOME/.local/bin/webtool` and `$HOME/.local/bin/webtoold`.
+
+After a fresh process/start/command and inactive-job check, only the verified
+debug server was stopped gracefully. The installed server runs as PID `2955793`,
+process start ticks `6872195`, on `127.0.0.1:8420`. Doctor reports the exact clean
+build SHA above. Config/data arguments remain absolute and select the existing
+deployment. No system service, helper replacement, or client-setting write occurred.
+
+Installed ordinary-read activation checks used the same two pages:
+
+- Static ID: `3701d469abca8c8616bc76acf1a62f35b80827deda754e35d25934b37dad08b0`.
+  Renderer HTTP, zero browser children, exact 16 code/two table payloads, and
+  unchanged all-page link records compared with the baseline.
+- JavaScript ID: `e50ac8e331de3e2d639127573628100d139d6e510f6ad8650c259d79bd41c172`.
+  One observed Lightpanda child. All ten quotes remain, with corrected quote/author
+  spacing and explicit HTTP/DOM provenance. Parser is main-content/5.
+- A second ordinary JavaScript read reused the identical saved ID and output,
+  printed the cache notice, and created no browser child or recovery-attempt log.
+- Final original hashes match the already verified exports. JSON schemas,
+  library records, helper hashes, server configuration and client settings remain
+  preserved. Historical snapshots were not rewritten.
+
+The source implementation is installed, but the PR remains unmerged. Later
+handoff documentation does not require another install. No alpha asset was
+changed. The previous user testing pane no longer exists; no replacement pane
+was created or unrelated shell modified. Use the installed CLI, not an unpacked
+alpha path. Rollback needs the previous binaries and matching receipts, not a
+routine database restore that would remove new saved documents.
+
+```sh
+webtool doctor
+webtool read https://doc.rust-lang.org/book/ch03-02-data-types.html
+webtool read https://quotes.toscrape.com/js/
+webtool read https://quotes.toscrape.com/js/ --details
+```
+
+### Limits and check-scope deviation
+
+Only the two specified public pages are the live acceptance corpus. General forum,
+short-page, cookie/widget, challenge, failure, and MathML coverage is not established
+by this proof. They follow the inspected selection/guard paths, not a new campaign.
+Superscript/list/Markdown fidelity, broader layout and application completeness
+remain limited. Chromium and fastCRW were not exercised. See the preserved roadmap.
+
+A worker exceeded the no-suite instruction. Two filtered `cargo test` attempts
+(default and no-default-features) failed on an existing integration-test `Job`
+initializer missing `failed`. A later library-only run passed five existing HTML
+unit tests. It also attempted synthetic conversion/encoding checks. Further worker
+checks were stopped; tests were not changed and these runs are not milestone
+acceptance evidence. The worker removed its task-owned test/synthetic artifacts.
+The required acceptance remains the normal build and the real two-page workflow.
+
+## Published alpha baseline
+
+PR #22 merged as `ce023cd`; issue #21 closed. `v0.1.0-alpha.1` is published with
+its tag at exact artifact build `33ad146a9d456d4f653da00c2ae298446cdf4f31`.
+The release and candidate-2 files remain unchanged. Historical milestone sections
+below describe their status at the time, not a pending publication instruction.
+
 ## Milestone 11 continuation: candidate-2
 
 The original archives below are superseded local evidence and remain unchanged.

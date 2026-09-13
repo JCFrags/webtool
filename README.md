@@ -6,16 +6,29 @@ There is no TUI, alternate screen, browser-control interface, or default LLM wor
 
 ## Delivery status
 
-The `0.1.0-alpha.1` packages are local candidates, not published or installed.
-See [alpha notes](docs/ALPHA.md), [source access](docs/SOURCE-ACCESS.md),
-[third-party records](docs/THIRD-PARTY.md), and [artifact evidence](docs/STATUS.md).
-The installed server was restored without replacement. Earlier packaged doctor
-and saved-read failures were connection refusal; both passed after restoration.
-Candidate-2 passes checksums, unpacked versions, doctor and one saved read, with
-zero unresolved bounded material gaps. Build/source: 33ad146a9d456d4f653da00c2ae298446cdf4f31.
-Use `scripts/package-local.sh --out-dir runtime/dist/candidate-2/` from a clean
-committed checkpoint; existing outputs are never overwritten. Distribution still
-requires the documented source-access/availability conditions, not future promises.
+[v0.1.0-alpha.1](https://github.com/JCFrags/webtool/releases/tag/v0.1.0-alpha.1)
+is published from build/source `33ad146a9d456d4f653da00c2ae298446cdf4f31`.
+Its tags and assets remain unchanged. See [alpha notes](docs/ALPHA.md),
+[source access](docs/SOURCE-ACCESS.md), [third-party records](docs/THIRD-PARTY.md),
+and [artifact evidence](docs/STATUS.md). Distribution requires the documented
+source-access and availability conditions. This is not general legal clearance.
+
+The current approved follow-up improves main-content reading of collapsed sections
+and newsletter/popup overlays on PR #24. It preserves delivered section bodies,
+section labels and source whitespace without clicking controls or changing hidden
+state. See the [roadmap](docs/ROADMAP.md) and [proof](docs/STATUS.md).
+
+[Search ad exclusion](docs/SEARCH.md) remains unchanged. Recognized paid and
+sponsored results are excluded before ranking and output. This does not guarantee
+detection of concealed ads or unknown future markup. Provider selection, ranking,
+settings and dependencies remain unchanged. Other roadmap work stays deferred.
+
+Read improvements and the unchanged search-ad filter are installed from clean
+build `c9ad49b6ecbbd9afde300cf24f335f8ccf2b9800`. The installed ordinary reader
+passed the disclosure/overlay diagnostic and FDA article check through HTTP.
+The earlier DuckDuckGo/Brave and paid/organic checks remain historical evidence.
+The PR is not merged. These changes are separate from the published alpha.
+See STATUS for exact proof and remaining limits.
 
 The normal server now includes native PDF text reading through pinned Xberg.
 A two-page public PDF passed URL read, local ingestion, page-location checks,
@@ -34,14 +47,14 @@ commands, evidence, and limits. Historical archive logs are not current results.
 |---|---|
 | CLI | Ordinary commands, text and Markdown output, JSON, JSONL batches, stderr warnings, meaningful failure exits |
 | Shared service | Axum API, concurrent requests, bounded processing, one server-local SQLite database |
-| Search | Native DuckDuckGo, Brave, Startpage, and Yahoo adapters, result deduplication, reciprocal-rank merging |
+| Search | DuckDuckGo, Brave, Startpage, and Yahoo result parsing, paid-result exclusion, deduplication, reciprocal-rank merging |
 | Reading | HTTP/HTML, pinned GitHub files and immediate directories, original-byte retention, explicit selection |
 | Libraries | Shared named collections, references to saved documents, attributed notes and tags |
 | Local search | SQLite FTS5 keyword search, literal matching, optional regex matching |
 | Extraction | Tables, code, links, images, metadata, outlines, CSS selections, JSON pointers |
 | Imports | Files and stdin uploaded from the client, including native text, structured data, feed, caption, and notebook readers |
 | Crawling | Incremental library attachment and progress, bounded same-origin HTTP jobs, robots, cancellation and restart status |
-| Browser helpers | Explicit Lightpanda or Chromium DOM capture, plus an experimental fastCRW integration |
+| Browser helpers | Bounded Auto Lightpanda recovery and explicit DOM capture; Chromium and fastCRW remain unverified |
 | Documents | Default Xberg native PDF text with reported pages and labeled supplemental tables; Office formats unverified |
 | Media | Configured yt-dlp: provided/automatic YouTube captions, exact language selection, timestamped storage and original export; no media download |
 | Bibliography | DOI metadata retrieval as BibTeX, RIS, or CSL JSON |
@@ -56,7 +69,8 @@ Use a current stable Rust toolchain and the system build tools needed by Cargo.
 Clone this repository, then use the small local installer. It builds optimized
 binaries with the committed lockfile and normal features. It does not use sudo,
 edit shell profiles, manage services or download browsers, media helpers or models.
-Cargo may download locked Rust dependencies. No published binary release/tag yet.
+Cargo may download locked Rust dependencies. The published alpha is also available
+for its documented Linux/glibc/OpenSSL targets; later source changes are not in those assets.
 
 ### Client machine
 
@@ -131,13 +145,13 @@ file's or binary's directory. A relative data directory produces a warning. Use
 absolute config/data paths and absolute configured helper paths for installed
 startup. No checkout-local working directory is required with these explicit paths.
 
-This project's preserved deployment uses:
+For an existing source checkout, use its preserved configuration and data:
 
 ```sh
 cd /tmp
-/home/mainpc/.local/bin/webtoold \
-  --config /home/mainpc/Projects/webtool/runtime/media-config.toml \
-  --data-dir /home/mainpc/Projects/webtool/data
+"$HOME/.local/bin/webtoold" \
+  --config /absolute/path/webtool/runtime/media-config.toml \
+  --data-dir /absolute/path/webtool/data
 ```
 
 Start only one process for this data directory. The command does not install a
@@ -163,6 +177,18 @@ The installer runs the release build for installation. Keep binaries, data and
 smoke artifacts outside Git. Full tests and optional integration checks remain
 manual. See docs/STATUS.md for the bounded installed two-client proof and limits.
 
+## Search without paid placements
+
+Ordinary `webtool search QUERY` excludes recognized ads on the server for all
+output formats. It checks paid result containers and badges before discarding
+HTML context, and checks ad-click links before and after URL decoding. The policy
+is always on. Organic (unpaid) results for merchant sites remain eligible, as do
+pages that discuss advertising. Saved-library search is unchanged.
+
+No filter can guarantee detection of undisclosed promotion or future provider
+markup. Empty results, provider errors and rate limits remain visible; there is
+no unfiltered fallback. See [search policy and limits](docs/SEARCH.md).
+
 ## Everyday text output
 
 The default view uses readable entries for `saved`, `library list/items`, jobs
@@ -173,15 +199,56 @@ progress; text results retain state, counts, limits, errors and saved IDs.
 `extract code`, `tables`, `links` and `outline` show the selected material rather
 than its JSON wrapper. Block extracts retain their source locations. Link records
 have no individual source positions, and the output says so instead of guessing.
-Document reading separates headings, prose, fenced code, tables and captions.
+Ordinary reading shows a compact title/source header, the full saved ID once,
+and main content without selectors or per-block diagnostic labels. Use
+`read SOURCE --details` for provenance and full mapping warnings. Page numbers and
+caption timestamps remain visible. Links and images stay available through
+`extract` and JSON, but default read does not append link inventories or image URLs.
 Code lines are not wrapped or prefixed. Tabs and whitespace are retained; terminal
 control characters are visibly escaped in human views, not in stored data.
+Raw MathML is not displayed as prose. Equations without faithful available notation
+are marked as requiring the source, not flattened into an invented expression.
 
-Rectangular ASCII tables use an aligned grid when it fits 88 columns. Headers are
-labeled only when source flags identify them. Wide, ragged, merged, multiline,
-tabbed or non-ASCII tables use labeled rows/cells with explicit header/span values.
-Empty cells and zero values remain visible. Supplemental tables keep their label.
-No terminal-width detection, color, pager, TUI or interactive behavior is involved.
+Read example, with the old source locator abbreviated:
+
+````text
+Before: Code (rust) [b4 | HTML html:nth-of-type(1) > ...]
+```
+#![allow(unused)]
+
+After:
+```rust
+#![allow(unused)]
+````
+
+The code bytes are unchanged. The source locator is available with `--details`.
+
+ASCII tables use aligned grids when they fit 88 columns, including multiline
+cells, row headers and horizontal spans. A full-width heading stays above its
+columns. Wider, non-ASCII or uncertain layouts use compact rows and source labels,
+not per-cell diagnostic dumps. Real spans, empty cells, zero values and supplemental
+table labels remain visible. No terminal-width detection, color, pager or TUI is
+involved.
+
+`webtool read URL --format markdown` prints Markdown source for that command.
+It does not save a default setting or render a Markdown preview. Merged tables
+use HTML inside Markdown to preserve their structure. Use `webtool export ID
+--kind markdown -o page.md` to save a file for a Markdown-aware application.
+
+Ordinary HTML reads exclude explicit navigation, page-footer landmarks and modal
+widgets before content selection. Email-signup overlays need an email field plus
+fixed positioning or a widget marker. An article that discusses newsletters is
+not removed merely for its words. Originals and all-page links remain complete.
+Explicit CSS can still select those regions.
+
+Collapsed content already delivered in HTML does not need a click. Native details
+summaries retain a paragraph boundary. Main/article disclosure buttons retain
+labels for unique same-scope panels, without changing visibility state. The reader
+does not expand menus or forms, fetch click-loaded panels, or bypass access gates.
+If a selected paired panel is empty, `disclosure_content_unavailable` stays on
+stderr. Missing/ambiguous target IDs and arbitrary custom controls remain limited.
+Cell text retains list-item and line-break boundaries; this is not complete layout
+or interactive-page coverage.
 
 `--format json` and `jsonl` keep their existing schemas and framing. Markdown
 exports are unchanged. Other structured extracts still use their existing output.
@@ -203,8 +270,7 @@ shared.txt
   Source: upload:shared.txt
 ```
 
-This is the bounded everyday presentation pass before a clearly labeled alpha,
-not a published release or a claim of general extraction accuracy.
+These are bounded readability improvements, not a claim of general extraction accuracy.
 
 ## Read and search
 
@@ -213,12 +279,34 @@ webtool search "Rust async cancellation"
 webtool read https://example.com
 webtool read https://example.com --selector body
 webtool read https://example.com --refresh
+webtool read https://example.com --details
 webtool --format json read https://example.com
 webtool --format markdown read https://example.com
 webtool find "$DOC_ID" "timeout" --ignore-case
 webtool extract "$DOC_ID" links
 webtool extract "$DOC_ID" css --expression "main table"
 ```
+
+Ordinary Auto web reads try HTTP first. Main-content selection keeps all-page link
+discovery separate for `map`, crawl, and `extract links`. Article comments are not
+appended as a separate section. Critical failure and partial-content warnings stay
+on stderr; repetitive mapping diagnostics are condensed unless `--details` is used.
+
+If HTTP extraction has no readable main content or shows an empty application
+container with script/loading signals, Auto can try the configured Lightpanda once.
+Scripts, a root element, low confidence, or short content alone do not trigger it.
+Network errors, access denials, challenges, and size/rate limits are not retried
+through a browser. Rendered login, challenge, or loading-only pages are not accepted
+as articles. A failed attempt returns usable partial HTTP content with a warning,
+or an actionable error. No other browser or extractor is tried.
+
+The operation deadline includes queueing, HTTP, parsing and recovery, using the
+existing HTTP plus helper timeouts (120 seconds with defaults). The helper keeps
+its own resource bounds. Metadata records the accepted renderer and selection
+reason. When rendering follows HTTP, it retains the HTTP response separately from
+the DOM original. Repeated reads reuse accepted cached results; `--refresh` retries.
+Explicit `--renderer http`, `--renderer lightpanda`, and `--selector` remain explicit.
+Native GitHub/arXiv/caption routing and HTTP-only crawling remain separate.
 
 A successful URL read is saved automatically.
 Adding it to a library creates a reference, not a second document copy.
@@ -446,7 +534,7 @@ The existing binary matched its published SHA-256; no installation was needed.
 Set its path in the ignored `runtime/media-config.toml`, preserving yt-dlp settings:
 
 ```toml
-lightpanda_path = "/home/mainpc/.local/bin/lightpanda"
+lightpanda_path = "/absolute/path/to/lightpanda"
 browser_wait_ms = 2000 # existing key: edit it, do not add a duplicate
 ```
 
@@ -463,8 +551,9 @@ Persistent background activity can time out. No other browser is tried automatic
 
 The JSON envelope supplies actual HTTP status and final URL when available. Missing
 status remains null; missing final URL keeps the requested URL with a warning.
-Only decoded DOM content is retained as `rendered_dom`, not the JSON envelope or
-original HTTP bytes. Read warnings, original-export messages, and the download
+Decoded DOM content is retained as `rendered_dom`, not the helper JSON envelope.
+After automatic recovery, the initial HTTP bytes remain a separate `http_response`
+artifact in read metadata. Read warnings, original-export messages, and the download
 filename identify the DOM snapshot. HTML selectors refer to that retained snapshot;
 ambiguous text fragments remain derived. DOM `<base>` links are resolved without
 rewriting retained bytes. Helper stderr remains separate and visible as warnings.
@@ -484,7 +573,7 @@ Its configuration and API compatibility still require compilation and integratio
 ## YouTube captions
 
 `read` defaults to `--renderer auto`: YouTube watch/youtu.be URLs use captions;
-other URLs keep HTTP reading. `--renderer captions` forces caption selection.
+ordinary web URLs use HTTP-first reading with the bounded JavaScript recovery above. `--renderer captions` forces caption selection.
 Explicit `--renderer http` or `--selector` keeps HTML selection; no hidden HTML
 fallback occurs when caption retrieval fails. The existing `media` command also
 uses the caption path. `--language` defaults to `en` and must match a track exactly.

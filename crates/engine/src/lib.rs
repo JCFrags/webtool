@@ -4,6 +4,7 @@ pub mod fetch;
 pub mod jobs;
 pub mod media;
 pub mod readers;
+mod read_recovery;
 pub mod search;
 pub mod sources;
 pub mod store;
@@ -57,6 +58,14 @@ impl Engine {
         ]}
     }
     pub async fn read(&self,request:ReadRequest)->Result<ReadResponse>{
+        // One budget includes queueing, HTTP, parsing, and at most one browser attempt.
+        let seconds=self.config.request_timeout_seconds.saturating_add(self.config.helper_timeout_seconds);
+        let deadline=tokio::time::Instant::now().checked_add(std::time::Duration::from_secs(seconds))
+            .context("read deadline is out of range")?;
+        tokio::time::timeout_at(deadline,self.read_inner(request,deadline)).await
+            .map_err(|_|anyhow!("read_timeout: operation exceeded its {seconds}-second overall deadline"))?
+    }
+    async fn read_inner(&self,request:ReadRequest,deadline:tokio::time::Instant)->Result<ReadResponse>{
         let _operation=self.operation_slots.acquire().await?;
         let url=fetch::validated_url(&request.url)?;
         if let Some(name)=&request.library{self.store.require_library(name).await?;}
@@ -70,7 +79,7 @@ impl Engine {
         if caption_url.is_some() { media::validate_language(&request.language)?; }
         let key=hex::encode(Sha256::digest(serde_json::to_vec(&json!({"url":caption_url.as_deref().unwrap_or(url.as_str()),"renderer":request.renderer,
             "language":request.language,"media_parser":media::PARSER,"source_resolver":sources::VERSION,"arxiv_resolver":arxiv::VERSION,"selector":request.selector,"version":EXTRACTION_VERSION,"document_config":self.config.document_config,
-            "html_parser":readers::html::PARSER,"browser_capture":fetch::BROWSER_CAPTURE_VERSION,"lightpanda_path":self.config.lightpanda_path,"browser_wait_ms":self.config.browser_wait_ms,"crw":self.config.crw_renderer}))?));
+            "html_parser":readers::html::PARSER,"auto_recovery":read_recovery::VERSION,"browser_capture":fetch::BROWSER_CAPTURE_VERSION,"lightpanda_path":self.config.lightpanda_path,"browser_wait_ms":self.config.browser_wait_ms,"crw":self.config.crw_renderer}))?));
         let lock={
             let mut locks=self.locks.lock().await;
             locks.retain(|_,v|v.strong_count()>0);
@@ -118,7 +127,7 @@ impl Engine {
             if let Some(name)=request.library{self.store.add(&name,&document.id,request.actor).await?;}
             return Ok(ReadResponse{document,cached:false});
         }
-        let (fetched,github)={
+        let (mut fetched,github)={
             let _slot=self.network.acquire().await?;
             let native=if matches!(request.renderer,Renderer::Auto) && request.selector.is_none() {
                 sources::github(&self.client,&url,self.config.max_bytes).await?
@@ -132,21 +141,107 @@ impl Engine {
                 (fetched,None)
             }
         };
-        let filename=github.as_ref().map(|g|g.filename.clone()).unwrap_or_else(||if matches!(request.renderer,Renderer::Lightpanda) { readers::html::rendered_base(&fetched.bytes,&fetched.resolved) } else { fetched.resolved.clone() });
+        let mut actual_renderer=if fetched.role=="rendered_dom" {request.renderer}else{Renderer::Http};
+        let filename=github.as_ref().map(|g|g.filename.clone()).unwrap_or_else(||if fetched.role=="rendered_dom" {
+            readers::html::rendered_base(&fetched.bytes,&fetched.resolved)
+        }else{fetched.resolved.clone()});
         let mime=readers::detect(&filename,fetched.content_type.as_deref(),&fetched.bytes);
-        let original=self.store.put_bytes(&fetched.bytes,&mime,&fetched.role).await?;
-        let source=Source {requested:request.url,resolved:fetched.resolved.clone(),retrieved_at:Utc::now().to_rfc3339(),
-            status:fetched.status,version:fetched.version,original};
+        let html=matches!(mime.as_str(),"text/html"|"application/xhtml+xml");
+        let auto_web=matches!(request.renderer,Renderer::Auto)&&request.selector.is_none()&&github.is_none();
+        let mut original=self.store.put_bytes(&fetched.bytes,&mime,&fetched.role).await?;
+        let mut retrieved_at=Utc::now().to_rfc3339();
+        let evidence=if html{read_recovery::inspect(&fetched.bytes)}else{Default::default()};
+        if (auto_web||fetched.role=="rendered_dom")&&request.selector.is_none(){
+            if let Some(reason)=evidence.blocked{bail!("read_content_blocked: source is a {reason}; not accepted as article content");}
+        }
         let readme_links=github.as_ref().filter(|g|g.readme).map(|g|sources::readme_links(&fetched.bytes,g));
         let mut parsed=if let Some(details)=github.as_ref().filter(|g|g.directory) {
-            sources::directory(&fetched.bytes,details)?
-        } else { self.parse(fetched.bytes,filename,mime,request.selector).await? };
-        if matches!(request.renderer,Renderer::Lightpanda) {
-            if parsed.blocks.is_empty(){bail!("browser_empty_output: captured DOM has no readable blocks");}
-            parsed.metadata["browser"]=json!({"renderer":"lightpanda","capture":fetch::BROWSER_CAPTURE_VERSION,
-                "artifact":"rendered_dom","locations":"retained DOM snapshot","wait_until":"done",
-                "wait_script":"document.readyState === 'complete'","wait_ms":self.config.browser_wait_ms});
+            sources::directory(&fetched.bytes,details)
+        }else{self.parse(fetched.bytes.clone(),filename,mime.clone(),request.selector.clone()).await};
+        let mut routing=json!({"requested_renderer":request.renderer,"renderer":actual_renderer,
+            "selection_reason":"HTTP source content","auto_recovery_attempted":false});
+        if auto_web&&html {
+            let missing=parsed.as_ref().err().is_some_and(|error|error.is::<readers::html::MissingContent>());
+            let reason=if missing {Some("HTTP extraction found no readable main content")}
+                else if parsed.is_ok(){evidence.shell}else{None};
+            if let Some(reason)=reason {
+                // Preserve the initial response even when the accepted original becomes a DOM.
+                routing["http"]=json!({"url":fetched.resolved,"status":fetched.status,"version":fetched.version,
+                    "retrieved_at":retrieved_at,"artifact":original});
+                routing["selection_reason"]=json!(reason);
+                let recovery=if self.config.lightpanda_path.is_none(){
+                    Err(anyhow!("browser_helper_missing: automatic recovery needs configured lightpanda_path; configure it or use --renderer http for HTTP-only reading"))
+                }else{
+                    routing["auto_recovery_attempted"]=json!(true);
+                    tracing::info!(reason,"Auto read: one Lightpanda recovery attempt");
+                    // Reserve time to return usable HTTP content and persist its warning after failure.
+                    let budget=deadline.saturating_duration_since(tokio::time::Instant::now())
+                        .saturating_sub(std::time::Duration::from_secs(1))
+                        .min(std::time::Duration::from_secs(self.config.helper_timeout_seconds));
+                    if budget.is_zero(){Err(anyhow!("browser_timeout: no recovery time remains in the read deadline"))}else{
+                        match tokio::time::timeout(budget,async{
+                            let rendered={
+                                let _network=self.network.acquire().await?;
+                                let _browser=self.browser_slots.acquire().await?;
+                                fetch::browser(&fetched.resolved,&Renderer::Lightpanda,&self.config).await?
+                            };
+                            let artifact=self.store.put_bytes(&rendered.bytes,"text/html",&rendered.role).await?;
+                            let timestamp=Utc::now().to_rfc3339();
+                            routing["rendered_attempt"]=json!({"url":rendered.resolved,"status":rendered.status,
+                                "retrieved_at":timestamp,"artifact":artifact,"accepted":false});
+                            let evidence=read_recovery::inspect(&rendered.bytes);
+                            if let Some(reason)=evidence.blocked{bail!("browser_content_unavailable: rendered source is a {reason}");}
+                            let base=readers::html::rendered_base(&rendered.bytes,&rendered.resolved);
+                            let rendered_parsed=self.parse(rendered.bytes.clone(),base,"text/html".into(),None).await?;
+                            if !read_recovery::usable(&rendered_parsed)||evidence.shell.is_some(){
+                                bail!("browser_content_unavailable: rendered page has no usable main content or still contains an application/loading shell");
+                            }
+                            Ok::<_,anyhow::Error>((rendered,artifact,timestamp,rendered_parsed))
+                        }).await{
+                            Ok(result)=>result,
+                            Err(_)=>Err(anyhow!("browser_timeout: automatic rendering exceeded the remaining read budget")),
+                        }
+                    }
+                };
+                match recovery{
+                    Ok((rendered,artifact,timestamp,rendered_parsed))=>{
+                        fetched=rendered;original=artifact;retrieved_at=timestamp;parsed=Ok(rendered_parsed);
+                        actual_renderer=Renderer::Lightpanda;
+                        routing["renderer"]=json!(actual_renderer);
+                        routing["rendered_attempt"]["accepted"]=json!(true);
+                        fetched.warnings.push(Warning::new("automatic_rendering",format!("Used Lightpanda: {reason}.")));
+                    },
+                    Err(error)=>{
+                        let failure=format!("{error:#}");
+                        routing["recovery_error"]=json!(failure);
+                        if parsed.as_ref().is_ok_and(read_recovery::usable){
+                            fetched.warnings.push(Warning::new("javascript_recovery_failed",format!("Showing partial HTTP content. {reason}; recovery failed: {failure}. Use --refresh to retry.")));
+                        }else{
+                            bail!("read_content_unavailable: {reason}; {failure}. No usable article content was accepted.");
+                        }
+                    },
+                }
+            }
         }
+        let mut parsed=parsed?;
+        if fetched.role=="rendered_dom" {
+            if request.selector.is_none()&&(!read_recovery::usable(&parsed)||read_recovery::inspect(&fetched.bytes).shell.is_some()){
+                bail!("browser_content_unavailable: captured DOM has no usable main content or is still loading");
+            }
+            parsed.metadata["browser"]=json!({"renderer":actual_renderer,"artifact":"rendered_dom","locations":"retained DOM snapshot"});
+            if matches!(actual_renderer,Renderer::Lightpanda){
+                parsed.metadata["browser"]["capture"]=json!(fetch::BROWSER_CAPTURE_VERSION);
+                parsed.metadata["browser"]["wait_until"]=json!("done");
+                parsed.metadata["browser"]["wait_script"]=json!("document.readyState === 'complete'");
+                parsed.metadata["browser"]["wait_ms"]=json!(self.config.browser_wait_ms);
+            }
+        }
+        if auto_web{
+            routing["renderer"]=json!(actual_renderer);
+            parsed.metadata["read"]=routing;
+        }
+        let source=Source{requested:request.url,resolved:fetched.resolved,retrieved_at,
+            status:fetched.status,version:fetched.version,original};
         if let Some(details)=github { parsed.metadata["github"]=details.metadata; }
         if let Some(links)=readme_links {
             parsed.links.extend(links);
