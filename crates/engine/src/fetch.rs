@@ -109,7 +109,12 @@ pub async fn browser(url:&str,renderer:&Renderer,config:&Config)->Result<Fetched
 }
 
 /// CLI contract verified against official Lightpanda 0.3.6, src/lightpanda.zig.
-pub const BROWSER_CAPTURE_VERSION:&str="lightpanda-json-dom/2";
+pub const BROWSER_CAPTURE_VERSION:&str="lightpanda-json-dom/3";
+fn root_navigation_failed(diagnostics:&str)->bool{
+    diagnostics.lines().any(|line|line.contains("$scope=frame ")
+        && line.contains("$level=error ") && line.contains("$msg=\"navigate failed\"")
+        && line.split_ascii_whitespace().any(|field|field=="type=root"))
+}
 async fn lightpanda(url:&str,config:&Config)->Result<Fetched>{
     let path=config.lightpanda_path.as_ref().context("browser_helper_missing: configure lightpanda_path")?;
     let mut cmd=Command::new(path);
@@ -129,8 +134,10 @@ async fn lightpanda(url:&str,config:&Config)->Result<Fetched>{
         anyhow!("{code}: {message}")
     })?;
     let diagnostics=String::from_utf8_lossy(&output.stderr).trim().to_string();
-    // 0.3.6 can exit zero after logging a fatal fetch/wait failure.
-    if diagnostics.contains("level=fatal") || output.stdout.iter().all(u8::is_ascii_whitespace){
+    // 0.3.6 can exit zero and return a synthetic "Navigation failed" DOM after
+    // a root navigation error. Child-frame failures do not invalidate the page.
+    if diagnostics.contains("level=fatal") || root_navigation_failed(&diagnostics)
+        || output.stdout.iter().all(u8::is_ascii_whitespace){
         if diagnostics.contains("err=Timeout") || diagnostics.contains("Terminated") {
             bail!("browser_timeout: Lightpanda navigation/readiness failed: {diagnostics}");
         }
@@ -183,6 +190,12 @@ async fn crw(url:&str,config:&Config)->Result<Fetched>{
 
 #[cfg(test)]mod tests{
     use super::*;
+    #[test]fn root_navigation_errors_are_not_child_frame_warnings(){
+        let root=r#"$scope=frame $level=error $msg="navigate failed" err=RobotsBlocked type=root url=https://example.com/"#;
+        assert!(root_navigation_failed(root));
+        assert!(!root_navigation_failed(&root.replace("type=root", "type=iframe")));
+        assert!(!root_navigation_failed(r#"$scope=http $level=warn $msg="blocked by robots" url=https://example.com/type=root"#));
+    }
     #[test]fn rejects_local_files(){assert!(validated_url("file:///etc/passwd").is_err());}
     #[test]fn preserves_query_semantics(){assert_eq!(validated_url("https://example.com/a?x=2&x=1#part").unwrap().query(),Some("x=2&x=1"));}
     #[test]fn rejects_embedded_credentials(){assert!(validated_url("https://user:pass@example.com").is_err());}

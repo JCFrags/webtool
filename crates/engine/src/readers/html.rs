@@ -7,7 +7,7 @@ use url::Url;
 use webtool_protocol::*;
 use super::Parsed;
 
-pub const PARSER:&str="rs-trafilatura/0.2.2+main-content/7";
+pub const PARSER:&str="rs-trafilatura/0.2.2+main-content/8";
 
 /// A stable signal that ordinary Auto reads may use for one rendered retry.
 /// Parse, encoding, network, and explicit-selector failures are not this error.
@@ -114,6 +114,25 @@ fn popup_widget(e: ElementRef<'_>) -> bool {
         && e.select(&Selector::parse("main,article,[role=main],[role=article]").expect("constant selector")).next().is_none()
 }
 #[cfg(feature="web-extraction")]
+fn control_widget(e: ElementRef<'_>) -> bool {
+    if !matches!(e.value().name(),"div"|"section"|"aside"|"form")
+        || e.value().attr("inert").is_none() || has_role(e,"main") || has_role(e,"article")
+        || e.ancestors().filter_map(ElementRef::wrap).any(|a|a.value().name()=="article" || has_role(a,"article")) { return false; }
+    // Inert article panels can contain real content. Exclude only inactive
+    // choice controls with no prose, headings, lists, code, or table structure.
+    e.select(&Selector::parse("input[type=checkbox],input[type=radio],select,[role=checkbox],[role=radio],[role=combobox],[role=listbox]").expect("constant selector")).next().is_some()
+        && e.select(&Selector::parse("main,article,[role=main],[role=article],h1,h2,h3,h4,h5,h6,p,li,dt,dd,pre,code,table,blockquote,figcaption,[role=doc-endnotes]").expect("constant selector")).next().is_none()
+}
+#[cfg(feature="web-extraction")]
+fn recommendation_widget(e: ElementRef<'_>) -> bool {
+    // An auxiliary browsing-history widget is not a main-content section about
+    // recommendations. Require its accessible UI name, not matching body text.
+    (e.value().name()=="aside" || has_role(e,"complementary"))
+        && e.value().attr("aria-label").is_some_and(|label|label.to_ascii_lowercase().contains("recently viewed"))
+        && !e.ancestors().filter_map(ElementRef::wrap).any(|a|matches!(a.value().name(),"main"|"article") || has_role(a,"main") || has_role(a,"article"))
+        && e.select(&Selector::parse("main,article,[role=main],[role=article]").expect("constant selector")).next().is_none()
+}
+#[cfg(feature="web-extraction")]
 fn main_scope(e: ElementRef<'_>) -> Option<ElementRef<'_>> {
     for ancestor in e.ancestors().filter_map(ElementRef::wrap) {
         if matches!(ancestor.value().name(),"form"|"aside"|"template"|"script"|"style"|"noscript")
@@ -133,8 +152,11 @@ fn disclosure_body(e: ElementRef<'_>) -> bool {
 #[cfg(feature="web-extraction")]
 fn selection_source(original:&Html)->Result<(String,Vec<String>)>{
     let mut selection=original.clone();
-    let excluded=selection.select(&selector("nav,footer,dialog,[role],[aria-modal],[style],[id],[class],template")?)
-        .filter(|e|chrome_landmark(*e)||popup_widget(*e)||e.value().name()=="template")
+    let excluded=selection.select(&selector("nav,footer,dialog,aside,[role],[aria-modal],[style],[id],[class],[inert],template,noscript")?)
+        // Remove inactive payloads before the extractor can unwrap them into
+        // literal markup text. Original bytes and explicit CSS are unchanged.
+        .filter(|e|chrome_landmark(*e)||popup_widget(*e)||control_widget(*e)||recommendation_widget(*e)
+            || matches!(e.value().name(),"template"|"noscript"))
         .map(|e|e.id()).collect::<Vec<_>>();
     for id in excluded{
         if let Some(mut node)=selection.tree.get_mut(id){node.detach();}
@@ -529,17 +551,25 @@ pub fn select_original(source:&str,css:&str)->Result<Vec<serde_json::Value>>{
             <div style="position: fixed!important"><p>Email promotion</p><input type="email"></div>
             <nav><details><summary>Account menu</summary>Navigation body</details></nav>
             <template><p>Inactive template</p></template>
+            <noscript>Inactive fallback &lt;div&gt;markup&lt;/div&gt;</noscript>
+            <div inert><input type="checkbox"><span>Keep article controls.</span></div>
+            <div inert><p>Keep delivered inert prose.</p><input type="checkbox"></div>
+            <div inert><pre><code>literal &lt;noscript&gt; example</code></pre><input type="checkbox"></div>
             <h2><button id="ambiguous" aria-expanded="false" aria-controls="duplicate">Ambiguous</button></h2>
             <div id="duplicate">First</div><div id="duplicate">Second</div>
             <h2><button id="form-toggle" aria-expanded="false" aria-controls="account">Account</button></h2>
             <div id="account"><form><input type="password"></form></div>
             <h2><button id="section-toggle" aria-expanded="false" aria-controls="section">Section</button></h2>
             <div id="section" hidden aria-hidden="true"><p>Retained delivered content.</p></div>
-            </article></main>"#;
+            </article>
+            <div inert><input type="checkbox"><span>Inactive filter controls</span></div>
+            </main>
+            <aside aria-label="Recently viewed items"><span>Personalized widget</span></aside>
+            <aside aria-label="Research recommendations"><p>Keep research recommendations.</p></aside>"#;
         let original=Html::parse_document(source);
         let (selection,_)=selection_source(&original).unwrap();
-        for unwanted in ["Modal promotion","Email promotion","Account menu","Inactive template"] { assert!(!selection.contains(unwanted),"{unwanted}"); }
-        assert!(selection.contains("Newsletters are a topic"));
+        for unwanted in ["Modal promotion","Email promotion","Account menu","Inactive template","Inactive fallback","Inactive filter controls","Personalized widget"] { assert!(!selection.contains(unwanted),"{unwanted}"); }
+        for retained in ["Newsletters are a topic","Keep article controls.","Keep delivered inert prose.","literal &lt;noscript&gt; example","Keep research recommendations."] { assert!(selection.contains(retained),"{retained}"); }
         let selected=Html::parse_document(&selection);
         for id in ["ambiguous","form-toggle"] { assert_eq!(selected.select(&selector(&format!("#{id}")).unwrap()).next().unwrap().value().name(),"button"); }
         assert_eq!(selected.select(&selector("#section-toggle").unwrap()).next().unwrap().value().name(),"span");
