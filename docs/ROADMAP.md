@@ -19,7 +19,12 @@ but includes tool dialogs. Amazon still has no accepted product content after on
 bounded browser attempt. The older Amazon snapshot contained inactive markup, not
 a useful product inventory. One news article lost an editorial qualification.
 These are separate mechanisms, not evidence of one universal fetch regression.
-See [STATUS.md](STATUS.md) for practical evidence and remaining limits.
+The current correction is installed and active from clean source
+`44f6a45e2acef20dfda215555349da236c3ee1fd`, with CI passed. Installed ordinary
+Chemistry, MDN, Britannica, and news reads passed their focused checks without
+browser recovery. This is a usable improvement, not product completion. Do not
+reinstall for documentation alone. See [STATUS.md](STATUS.md) for evidence and
+remaining limits.
 
 ## Preserved follow-up: truthful, fast page reads
 

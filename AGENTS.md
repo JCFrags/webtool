@@ -16,6 +16,13 @@ helpers, libraries, historical snapshots, and rollback builds. The narrower
 historical test limits below describe previous milestones, not a ban on this
 approved live pass. Use reproduced failures to choose focused corrections.
 
+The current correction is installed and active from clean source
+`44f6a45e2acef20dfda215555349da236c3ee1fd`. CI and actual installed Chemistry,
+MDN, Britannica, and news reads passed. These four reads used HTTP without
+recovery. The earlier binary pair and matching receipts remain available for
+rollback. Do not reinstall for later documentation-only changes. See STATUS for
+exact observations and remaining gaps, including Amazon readiness failure.
+
 Compare actual CLI text and Markdown with retained originals. Inspect useful
 qualifications, equations, list structure, action links, and code, not only HTTP
 status or block counts. The extractor's quality estimate does not validate these.
@@ -23,8 +30,9 @@ Do not treat one site's HTTP denial as permanent. Do not treat an older nonempty
 snapshot as evidence of a successful read without inspecting its content.
 
 For offline CLI parsing, `ingest --name` accepts a filename, not a URL or path.
-Ingestion keeps exact bytes but has no public URL base for relative links. Use a
-fresh ordinary URL read to verify link resolution and retrieval behavior. Keep
+Ingestion keeps exact bytes but has no public URL base for relative links. Its
+selected blocks can differ from an ordinary URL read even for identical bytes.
+Use a fresh ordinary URL read to verify selection, link resolution, and retrieval. Keep
 intermediate parser builds in isolated data directories so cache identity cannot
 reuse another implementation of the same uncommitted parser revision.
 

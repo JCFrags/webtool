@@ -7,8 +7,10 @@ Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
 The user requested continued live testing and correction. This is ongoing product
 work, not a declaration that website coverage or reading quality is complete.
-PR #24 stays unmerged. The published alpha, dependency pins, helpers, configuration,
-protocol fields, libraries, and historical snapshots remain unchanged.
+Clean source `44f6a45e2acef20dfda215555349da236c3ee1fd` is installed and active.
+Its CI passed in run `34764880552`. PR #24 stays unmerged. The published alpha,
+dependency pins, helpers, configuration, protocol fields, libraries, and historical
+snapshots remain unchanged.
 
 ### What live use found
 
@@ -85,7 +87,33 @@ feedback dialog phrases. The news article has 62 blocks and retains its full
 analysis/rapid-change qualification. Both originals remain byte-identical.
 Reports and final affected outputs are in `candidate-qa/` and `qualified-pass/`
 below the ignored evidence directory. No additional website fetches were needed
-for these corrections. Local installation and final live proof are pending.
+for these corrections.
+
+The supported installer ran once from the clean source, with a 54.37-second
+release build. The restart used fresh process/start, command, binary, listener,
+job, connection, and helper checks. Both installed binaries match their build
+outputs and receipts. Doctor and the running process report the exact source
+above. No automatic service or configuration change was made.
+
+Four fresh ordinary reads through the installed CLI, from outside the checkout,
+returned HTTP 200 without browser recovery:
+
+| Page | CLI read time | Blocks | Verified behavior |
+| --- | ---: | ---: | --- |
+| Chemistry | 0.860 s | 304 | Both exact equations inline, all 32 prior headings and 86 references, Newman title, script notation, unchanged table payload |
+| MDN Fetch | 0.226 s | 152 | Nested numbering and list paragraphs, all 23 exact code payloads with JavaScript fences |
+| Britannica football | 0.503 s | 88 | Readable article without print instructions or feedback-success dialog text |
+| News article | 0.465 s | 62 | Full editorial qualification and correct possessive spacing |
+
+The timings cover each fresh read, not the later saved-ID views and exports.
+Default text and Markdown were exercised. Each exported original matches its
+saved hash. All five earlier saved JSON records remain byte-identical. Library
+output, client/server configuration, and helper hashes match the pre-install
+snapshot. Rollback binaries and matching receipts are preserved in
+`runtime/live-reading/rollback/`. This code-only rollback needs no database restore.
+
+The candidate agents and both task-only servers are closed. Production remains
+active. Final documentation changes do not require another installation.
 
 Amazon remains unavailable. No access or robots bypass was added. A single
 Britannica success is not general availability proof. FDA's source-currency date,
