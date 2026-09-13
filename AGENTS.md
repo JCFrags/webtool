@@ -7,7 +7,29 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current follow-up: clean disclosure and overlay reading
+## Current follow-up: truthful, fast page reads
+
+The reported page failures have a bounded correction, installed and verified from
+clean build `f99fb0acbb914d7146a2dd799535b2caae3839ce`. Keep PR #24 ready and
+unmerged. Do not publish or repeat installation for final documentation. Search,
+settings, helpers, dependencies, schemas, libraries and old snapshots are unchanged.
+
+Inspect retained inputs before changing selection. The Amazon response contained
+only inactive payloads and recommendation chrome, not product content. The ASUS
+response had real product sections beside a separate inert filter panel. A
+nonempty extraction is not proof of useful source content. Lightpanda can return
+its own error page with exit zero after a root navigation failure.
+
+The installed ASUS read used HTTP without recovery: 31 blocks, 108 links, 0.201
+seconds. Installed search returned five results from both providers in 0.785
+seconds without warnings. These are individual timings, not a latency guarantee.
+Amazon remained unavailable after one 2.519-second debug attempt. Britannica's
+HTTP denial and Facebook's robots restriction are not bypassed. Small ASUS
+`Filter` and `Need Help?` labels remain. See STATUS for exact proof and rollback.
+Do not expand the selector, alter timeouts, or start another backlog priority
+without new evidence and approved scope.
+
+## Preserved follow-up: clean disclosure and overlay reading
 
 The user approved another read-quality follow-up on `feat/read-quality`, PR #24.
 Keep the PR unmerged and do not publish. Preserve the installed search-ad policy,
@@ -96,8 +118,8 @@ The table/footer follow-up is verified and installed from clean build
 The retained Chemistry proof preserved all headings and links. Installed ordinary
 Chemistry read stayed HTTP-only and excluded navigation/print footers. The initial
 Rust Book/JavaScript proof remains historical evidence. Do not repeat installation
-for final documentation. The search-ad follow-up above is complete. The new read
-follow-up is the active scope; other backlog priorities remain deferred. See
+for final documentation. The search-ad follow-up above is complete. The later read
+follow-ups preserve this work; other backlog priorities remain deferred. See
 STATUS for IDs, rollback and limitations.
 
 ## Published alpha provenance
@@ -179,7 +201,7 @@ Do not import upstream CLI, server, cache, authentication, or unrelated agent fe
 
 ## Known implementation gaps
 
-HTML parser `rs-trafilatura/0.2.2+main-content/7` uses the existing extractor's
+HTML parser `rs-trafilatura/0.2.2+main-content/8` uses the existing extractor's
 standard selection thresholds, without recall-first or internal fallback mode.
 Article comments are not appended. The extractor's Forum profile preserves replies
 as main content; wider discussion coverage is not verified. All-page links stay
@@ -188,7 +210,13 @@ from the selection copy before their wrappers can be lost. Article-scoped footer
 and endnotes remain eligible for content selection. Modal widgets and identified
 email-signup overlays are removed before wrapper stripping can lose their context.
 A popup label alone does not justify removal; email overlays need an email field
-plus fixed positioning or a widget marker. Native disclosure summaries retain a
+plus fixed positioning or a widget marker. Remove actual noscript and template
+nodes before extraction. The active cleaner can unwrap noscript payloads over
+500 bytes and promote their literal markup into prose. Do not remove literal
+HTML examples by text matching. Inert choice-control containers are excluded
+only outside articles and without substantive block structure. Supplementary
+regions named as recently viewed UI are excluded outside main/article, not
+ordinary sections about recommendations. Native disclosure summaries retain a
 block boundary. Main/article disclosure buttons retain their labels only with a
 unique same-scope target and no form fields. Hidden state stays unchanged. Empty
 selected panels produce `disclosure_content_unavailable`. Missing/ambiguous target
@@ -239,9 +267,12 @@ OCR, layout, and equation recognition require actual model fixtures and accuracy
 
 Lightpanda 0.3.6 is verified with the official release digest. Its path is in
 runtime/media-config.toml, alongside unchanged yt-dlp settings. Telemetry is disabled.
-Capture version lightpanda-json-dom/2 uses fetch JSON content/http_status/url and
+Capture version lightpanda-json-dom/3 uses fetch JSON content/http_status/url and
 explicit done plus readyState-complete waits. 0.3.6 can exit zero after a fatal
-fetch/wait diagnostic; inspect stderr and the envelope, not exit status alone.
+fetch/wait diagnostic or a root-frame navigation error, returning a synthetic
+`Navigation failed` DOM. Inspect stderr and the envelope, not exit status alone.
+Reject the root-frame error before extraction. Child-frame failures do not
+invalidate readable main content. Cache identity changes do not rewrite old IDs.
 Current upstream CLI docs differ from 0.3.6 help (including wait defaults and
 --fail-on-http-error); do not assume newer flags work on this binary.
 DOM originals and selectors are snapshot-relative, never original HTTP responses.

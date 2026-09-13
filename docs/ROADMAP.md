@@ -1,6 +1,27 @@
 # Roadmap
 
-## Active follow-up: clean disclosure and overlay reading
+## Active follow-up: truthful, fast page reads
+
+The reported cases have a bounded correction, installed and verified from clean
+build `f99fb0acbb914d7146a2dd799535b2caae3839ce`. Keep PR #24 ready and unmerged.
+Do not publish, repeat installation for documentation, or start another backlog
+priority. Preserve the prior read and search-ad work, helpers, settings, schemas,
+libraries and historical snapshots.
+
+The selection copy now excludes inactive noscript payloads, supplementary
+recently viewed UI, and narrowly identified inert filter controls. Reported
+Lightpanda root navigation failures are rejected before content selection.
+Existing single-attempt recovery and timeout settings are unchanged. No blanket
+hidden-state rule or additional extraction engine was added.
+
+Installed ASUS reading kept product sections and 108 links in 0.201 seconds.
+Installed search returned five results from both providers in 0.785 seconds.
+These are bounded observations, not speed guarantees. Amazon remains unavailable
+after one fresh attempt. Website denials and robots restrictions are not bypassed.
+Small ASUS UI labels remain. See [STATUS.md](STATUS.md) for evidence and rollback.
+Further performance or extraction work needs a reproduced case and focused scope.
+
+## Preserved follow-up: clean disclosure and overlay reading
 
 Improve focused main-content reads on the existing branch and PR #24. Preserve
 substantive collapsed sections and clean section boundaries. Exclude newsletter
@@ -27,7 +48,7 @@ Keep organic results, saved-library search, existing provider selection, ranking
 rules, configuration, dependency pins and read-quality improvements. Keep the
 PR unmerged. See [SEARCH.md](SEARCH.md) for the filtering boundary and limits.
 The focused checks and installed ordinary search passed. Both configured default
-providers returned results. The active clean build is
+providers returned results. This follow-up was verified from clean build
 `51b42fffd958eda9f988244290ca7e690c7aef67`. No other deferred search interface or
 backlog feature is approved. Do not repeat installation for final documentation.
 
@@ -37,8 +58,8 @@ Issue [#23](https://github.com/JCFrags/webtool/issues/23), PR
 [#24](https://github.com/JCFrags/webtool/pull/24), branch `feat/read-quality`.
 The initial two-page workflow and the user-approved table/footer follow-up are
 verified and installed locally. The follow-up used retained Chemistry input and
-one fresh installed ordinary read. Remote acceptance is pending. The disclosure
-and overlay follow-up above is the current approved work.
+one fresh installed ordinary read. Remote acceptance is pending. The later
+follow-ups above preserve this work.
 
 - Select coherent main content without losing substantive sections, code, tables, references, captions, or discussion replies.
 - Make ordinary read compact and readable. Keep provenance behind `--details`, full JSON, and retained originals.

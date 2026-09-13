@@ -3,6 +3,94 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
+## Reported page failures and latency
+
+Verified September 13, 2026 UTC (September 12 local). Clean source/build
+`f99fb0acbb914d7146a2dd799535b2caae3839ce` is installed and active. Source CI
+passed in run `34743103468`. PR #24 remains ready and unmerged. The published
+alpha, dependencies, configuration, helper binaries and search implementation
+are unchanged. This is a bounded correction, not a claim that every reported
+site is readable or that a general network slowdown was fixed.
+
+### Confirmed defects and correction
+
+- Amazon's three saved blocks were two literal noscript payloads and a recently
+  viewed recommendation heading. The active cleaner can unwrap noscript text
+  over 500 bytes before later cleanup. The two payloads exceeded that threshold and
+  became escaped markup text, not rendered product content. Parser
+  `main-content/8` removes actual noscript nodes in the selection copy before
+  this can happen. It also removes supplementary recently viewed UI outside
+  main/article. It does not delete prose or code by matching literal HTML text.
+  If no main content remains, Auto can make its existing single browser attempt.
+- ASUS had a separate inert filter container with 19 form inputs and no
+  substantive block structure. The selection copy now excludes such inactive
+  choice-control containers outside articles. Its actual product sections remain.
+  This does not remove all hidden, inert, or ARIA-hidden content.
+- Facebook's saved result was Lightpanda's synthetic `Navigation failed` page.
+  The helper exited zero but logged a root-frame `RobotsBlocked` navigation
+  error. Capture `lightpanda-json-dom/3` rejects that error before extraction.
+  Child-frame errors alone do not reject otherwise readable main content.
+  Versioned cache identity avoids reuse of the previous capture identity. Old
+  saved IDs, including the historical failed-page snapshot, are not rewritten.
+
+### Bounded practical proof
+
+The normal locked CLI/server build, one focused navigation test and seven
+existing HTML tests passed. An isolated server exercised the real CLI against
+retained inputs and a local replay of the helper envelope/diagnostic contract.
+No new test framework, full suite, public corpus or benchmark was added.
+
+- The identical retained ASUS response changed from 65 to 31 blocks in 0.205
+  seconds. All 34 filter-panel blocks were removed. Product sections remained.
+  Original export was byte-identical. Independent discovery kept 108 links.
+- Amazon correctly returned missing content from its retained response in 0.170
+  seconds instead of accepting its three clutter blocks. No product details
+  were invented or recovered from script state.
+- The replayed root failure was rejected through Auto in 0.035 seconds and
+  explicit Lightpanda in 0.026 seconds. A child-frame warning with readable main
+  content succeeded in 0.040 seconds. A local HTTP 403 failed in 0.013 seconds
+  without invoking the helper. These timings are local boundary checks, not
+  live Facebook or Britannica measurements.
+- The retained disclosure diagnostic kept all 14 block payloads, exact code,
+  table values and original hash. Default ASUS text output was inspected.
+- One fresh public ASUS debug read succeeded in 1.979 seconds, HTTP only. All
+  108 link records matched the earlier saved page. One fresh Amazon attempt
+  reached the existing Lightpanda readiness deadline in 2.519 seconds and
+  returned an error. Amazon remains unavailable in this proof.
+
+### Installed result and remaining limits
+
+The supported installer ran once with a 50.81-second release build. Installed
+binaries, release outputs and checksum receipts match. A fresh guarded restart
+verified process identity, inactive jobs/connections/helpers, and unchanged
+configuration before stopping only the project server. The replacement uses
+its existing absolute config/data paths. Doctor and the running executable
+identify the clean build above.
+
+- Installed fresh ASUS read: 0.201 seconds, HTTP, no automatic recovery, 31 blocks
+  and 108 links. Block payloads and links match the verified debug result.
+- Installed `webtool search laptops --limit 5`: 0.785 seconds wall time, 772 ms
+  server time, five results from DuckDuckGo and Brave, no warnings. Initial
+  investigation also found a 0.873-second search and a 0.273-second fresh Rust
+  Book read. These observations do not establish a general latency guarantee.
+- All five saved case records remained byte-identical through the
+  installed client/server. Libraries, client/server settings and helper hashes
+  match the pre-install snapshot. Rollback binaries and matching receipts are
+  preserved in `runtime/latency-regression/rollback/`. No database restore is
+  needed for this code-only rollback. Do not reinstall for documentation.
+- Britannica returned HTTP 403. Facebook reported a robots restriction. Neither
+  was retried live or bypassed. Amazon still lacks an accepted product read.
+  ASUS retains small `Filter` and `Need Help?` labels outside the narrow panel
+  rule. General hidden-widget coverage remains limited.
+- GitHub and Compute Market saved readable bodies with 22 and 66 blocks. Their
+  reported messages were scope/mapping warnings, not fetch failures. A bare URL
+  is not a shell command. Use `webtool read https://www.amd.com/en/support.html`.
+
+Private retained inputs, timings and CLI evidence are in
+`runtime/latency-regression/`. Task-only servers and the read-only scout are
+stopped. No blind timeout increase, provider change, browser replacement or
+access-control workaround was made.
+
 ## Disclosure and overlay read follow-up
 
 The user approved another read-quality follow-up on `feat/read-quality`, PR #24.
