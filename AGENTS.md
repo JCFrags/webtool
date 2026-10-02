@@ -2,12 +2,37 @@
 
 ## Project intent
 
-Build a Rust-first, shared research service with a conventional text CLI.
+Build a Rust-centered, shared research service with a conventional text CLI.
 The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current work: live reading quality
+## Current work: full research service delivery
+
+The user approved implementation toward the complete researched roadmap, with
+parallel subagents. See [the delivery plan](docs/DELIVERY-PLAN.md) for core
+milestones, practical acceptance, and the final optional-LLM milestone. Rust is
+the center, not a language-percentage requirement. Use specialist helpers only
+when quality and measured resource costs justify them.
+
+Ordinary research operations remain LLM-free. After the core is accepted, add an
+explicit optional answer worker over up to five fetched search-result pages.
+The CLI will configure a changeable model/API endpoint and protected credentials
+for cloud or local use. Do not implement or invoke this worker before the core.
+
+The earlier read-quality freezes below describe historical milestones, not a ban
+on the newly approved roadmap. Their source-fidelity and preservation rules still
+apply. Keep PR #24 unmerged until the user explicitly changes that restriction.
+Do not bypass it through another PR. Preserve published alpha assets, the current
+installation, data, configuration, historical snapshots, and rollback files until
+an approved verified replacement is ready. Use task-owned worktrees and isolated
+diagnostic services/data. Paid commitments, credentials, non-loopback exposure,
+large model preparation, and permitted media sources remain separate gates.
+
+Historical activation claims below are dated evidence, not current service health.
+Check the actual process and configuration before any deployment action.
+
+## Preserved baseline: live reading quality
 
 The user approved continued live testing and correction across page types. A
 successful fetch or build is not product acceptance. Keep PR #24 unmerged and
