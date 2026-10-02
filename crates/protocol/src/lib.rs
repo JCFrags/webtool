@@ -6,6 +6,7 @@ use serde_json::Value;
 pub const API_VERSION: &str = "v1";
 pub const EXTRACTION_VERSION: &str = "webtool-0.1.0-schema1";
 
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Locator {
@@ -21,6 +22,7 @@ pub enum Locator {
     Derived { index: usize },
 }
 
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Cell {
     pub text: String,
@@ -33,6 +35,7 @@ pub struct Cell {
 }
 fn one() -> usize { 1 }
 
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Content {
@@ -59,14 +62,17 @@ impl Content {
     }
 }
 
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Block {
     pub id: String,
     pub content: Content,
     pub locator: Locator,
 }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Link { pub url: String, pub text: String }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Warning { pub code: String, pub message: String }
 impl Warning {
@@ -74,6 +80,7 @@ impl Warning {
         Self { code: code.into(), message: message.into() }
     }
 }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Artifact {
     pub sha256: String,
@@ -82,6 +89,7 @@ pub struct Artifact {
     /// Describes provenance, for example "http_response" or "rendered_dom".
     pub role: String,
 }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Source {
     pub requested: String,
@@ -91,6 +99,7 @@ pub struct Source {
     pub version: Option<String>,
     pub original: Artifact,
 }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
     pub schema_version: u32,
@@ -110,9 +119,11 @@ impl Document {
     }
 }
 
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Renderer { #[default] Auto, Http, Captions, Lightpanda, Chromium, Crw }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadRequest {
     pub url: String,
@@ -124,8 +135,10 @@ pub struct ReadRequest {
     #[serde(default)] pub actor: Option<String>,
 }
 pub fn default_language() -> String { "en".into() }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadResponse { pub document: Document, pub cached: bool }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchRequest {
     pub query: String,
@@ -133,6 +146,7 @@ pub struct SearchRequest {
     #[serde(default)] pub library: Option<String>,
 }
 fn ten() -> usize { 10 }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResult {
     pub title: String,
@@ -143,6 +157,7 @@ pub struct SearchResult {
     pub providers: Vec<String>,
     pub document_id: Option<String>,
 }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResponse {
     pub query: String,
@@ -150,6 +165,7 @@ pub struct SearchResponse {
     pub warnings: Vec<Warning>,
     pub elapsed_ms: u64,
 }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FindRequest {
     pub query: String,
@@ -158,6 +174,7 @@ pub struct FindRequest {
     #[serde(default = "hundred")] pub limit: usize,
 }
 fn hundred() -> usize { 100 }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Match {
     pub block_id: String,
@@ -166,30 +183,41 @@ pub struct Match {
     /// UTF-8 byte offsets into `text`, not Unicode character indices.
     pub ranges: Vec<[usize; 2]>,
 }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FindResponse { pub document_id: String, pub matches: Vec<Match>, pub truncated: bool }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExtractKind { Tables, Links, Code, Images, Metadata, Outline, JsonPointer, Css }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractRequest { pub kind: ExtractKind, pub expression: Option<String> }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractResponse { pub document_id: String, pub data: Value, pub warnings: Vec<Warning> }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Library { pub name: String, pub description: String, pub created_at: String, pub items: usize }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LibraryCreate { pub name: String, #[serde(default)] pub description: String }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LibraryAdd { pub document_id: String, #[serde(default)] pub actor: Option<String> }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Annotation {
     pub id: String, pub document_id: String, pub actor: String,
     pub note: String, pub tags: Vec<String>, pub created_at: String,
 }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnnotationCreate { pub actor: String, #[serde(default)] pub note: String, #[serde(default)] pub tags: Vec<String> }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentSummary { pub id: String, pub title: String, pub url: String, pub retrieved_at: String, pub warnings: usize }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrawlRequest {
     pub url: String,
@@ -200,12 +228,14 @@ pub struct CrawlRequest {
 }
 fn twenty() -> usize { 20 }
 fn two() -> usize { 2 }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum JobState { Queued, Running, Complete, Partial, Failed, Cancelled, Interrupted }
 impl JobState {
     pub fn terminal(&self) -> bool { !matches!(self, Self::Queued | Self::Running) }
 }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Job {
     pub id: String, pub state: JobState, pub request: CrawlRequest,
@@ -215,10 +245,13 @@ pub struct Job {
     #[serde(default)] pub failed: usize,
     pub warnings: Vec<Warning>, pub error: Option<String>,
 }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Problem { pub code: String, pub message: String }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Capability { pub name: String, pub available: bool, pub detail: String }
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Health { pub version: String, pub api_version: String,
     #[serde(default,skip_serializing_if="Option::is_none")] pub build_commit: Option<String>,
