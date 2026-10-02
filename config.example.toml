@@ -32,3 +32,21 @@ browser_no_sandbox = false
 
 # fastCRW configuration is intentionally absent.
 # The --features crw-browser integration is experimental, not a default fallback.
+
+# Web-search budgets are shared across clients, separate from ordinary reads.
+[search]
+timeout_ms = 8000 # Includes provider admission, pacing, headers, and body.
+concurrency = 4 # Active provider requests across all web searches.
+max_bytes = 4194304 # Per response, also capped by the top-level max_bytes.
+
+# These are the defaults for every provider. Omitted fields keep these defaults.
+# Only names in search_engines are called. Provider order is not a fallback chain.
+[search.providers.duckduckgo]
+timeout_ms = 6000 # Request/body budget after admission; global deadline still applies.
+concurrency = 1
+interval_ms = 1000 # Minimum interval between starts; zero explicitly disables pacing.
+
+[search.providers.brave]
+timeout_ms = 6000
+concurrency = 1
+interval_ms = 1000

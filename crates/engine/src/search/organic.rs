@@ -26,24 +26,26 @@ fn layout(provider: &str) -> Result<Layout> {
 }
 
 #[cfg(feature = "web-search")]
-pub(super) async fn search(client: &reqwest::Client, provider: &str, query: &str, limit: usize, max_bytes: usize) -> Result<Vec<SearchResult>> {
-    use std::time::Duration;
+pub(super) fn request(client: &reqwest::Client, provider: &str, query: &str) -> Result<reqwest::RequestBuilder> {
     let format = layout(provider)?;
     let mut request = client.get(format.endpoint).query(&[(format.query_key, query)]);
     if provider == "yahoo" {
         // Preserve the existing provider's language and safe-search settings.
         request = request.header("Cookie", "sB=v=1&vm=p&fl=1&vl=lang_en&pn=10");
     }
-    // Preserve the pinned adapter's header deadline and client's socket ceiling.
-    let mut response = tokio::time::timeout(
-        Duration::from_millis(metadata_search_engine_rs::engines::DEFAULT_TIMEOUT_MS),
-        request.send(),
-    ).await.map_err(|_| anyhow!("provider timeout"))??.error_for_status()?;
+    Ok(request)
+}
+
+#[cfg(feature = "web-search")]
+pub(super) async fn search(request: reqwest::RequestBuilder, provider: &str, limit: usize, max_bytes: usize) -> Result<Vec<SearchResult>> {
+    // Service deadlines include headers and body. Do not expose queries in errors.
+    let mut response = request.send().await.map_err(reqwest::Error::without_url)?
+        .error_for_status().map_err(reqwest::Error::without_url)?;
     if response.content_length().is_some_and(|n| n > max_bytes as u64) {
         bail!("search response exceeds the {max_bytes}-byte limit");
     }
     let mut body = Vec::new();
-    while let Some(chunk) = response.chunk().await? {
+    while let Some(chunk) = response.chunk().await.map_err(reqwest::Error::without_url)? {
         if body.len().saturating_add(chunk.len()) > max_bytes {
             bail!("search response exceeds the {max_bytes}-byte limit after decompression");
         }
@@ -145,6 +147,10 @@ fn destination(provider: &str, base: &Url, href: &str) -> Option<Url> {
     (!paid_url(&url)).then_some(url)
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("provider returned a recognized challenge form without organic results")]
+pub(super) struct Blocked;
+
 fn parse(provider: &str, html: &str, limit: usize) -> Result<Vec<SearchResult>> {
     let format = layout(provider)?;
     let base = Url::parse(format.endpoint)?;
@@ -164,6 +170,11 @@ fn parse(provider: &str, html: &str, limit: usize) -> Result<Vec<SearchResult>> 
         let mut snippet = card.select(&snippets).next().map(|el| el.text().collect::<String>().trim().to_owned()).unwrap_or_default();
         if provider == "yahoo" { snippet = snippet.split_whitespace().collect::<Vec<_>>().join(" "); }
         results.push(SearchResult { title, url: url.into(), snippet, score: 0.0, providers: vec![], document_id: None });
+    }
+    if results.is_empty() {
+        // Structural challenge evidence only. A result about CAPTCHA is not a block.
+        let challenge = selector("form#challenge-form, form[action*='anomaly.js'], #challenge-running, #cf-challenge-running, form .g-recaptcha, form .h-captcha")?;
+        if document.select(&challenge).next().is_some() { return Err(Blocked.into()); }
     }
     Ok(results)
 }

@@ -23,6 +23,7 @@ use store::Store;
 #[derive(Clone)]
 pub struct Engine {
     pub config:Arc<Config>,pub store:Store,pub client:reqwest::Client,
+    search:search::SearchService,
     operation_slots:Arc<Semaphore>,
     submission_lock:Arc<Mutex<()>>,
     network:Arc<Semaphore>,parse_slots:Arc<Semaphore>,browser_slots:Arc<Semaphore>,
@@ -35,7 +36,8 @@ impl Engine {
         config.validate()?;
         let store=Store::open(&config.data_dir).await?;
         let client=fetch::client(&config)?;
-        Ok(Self {store,client,operation_slots:Arc::new(Semaphore::new(config.network_concurrency + config.parse_concurrency)),submission_lock:Arc::new(Mutex::new(())),network:Arc::new(Semaphore::new(config.network_concurrency)),
+        let search=search::SearchService::new(&config)?;
+        Ok(Self {store,client,search,operation_slots:Arc::new(Semaphore::new(config.network_concurrency + config.parse_concurrency)),submission_lock:Arc::new(Mutex::new(())),network:Arc::new(Semaphore::new(config.network_concurrency)),
             parse_slots:Arc::new(Semaphore::new(config.parse_concurrency)),browser_slots:Arc::new(Semaphore::new(config.browser_concurrency)),
             job_slots:Arc::new(Semaphore::new(config.job_concurrency)),config:Arc::new(config),
             locks:Arc::new(Mutex::new(HashMap::new())),job_tokens:Arc::new(Mutex::new(HashMap::new())),
@@ -296,8 +298,7 @@ impl Engine {
             let results=self.store.search(request.query.clone(),if library=="*"{None}else{Some(library.clone())},request.limit).await?;
             return Ok(SearchResponse{query:request.query,results,warnings:vec![],elapsed_ms:start.elapsed().as_millis() as u64});
         }
-        let _slot=self.network.acquire().await?;
-        search::search(request,&self.config).await
+        self.search.search(request).await
     }
     pub async fn find(&self,id:&str,request:FindRequest)->Result<FindResponse>{
         let document=self.store.document(id).await?;
