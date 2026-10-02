@@ -83,14 +83,17 @@ impl Config {
             if !SEARCH_ENGINES.contains(&e.as_str()) {
                 bail!("unsupported search engine: {e}");
             }
-            if !seen.insert(e) { bail!("duplicate search engine: {e}"); }
+            if !seen.insert(e.as_str()) { bail!("duplicate search engine: {e}"); }
+        }
+        if seen.contains("brave") && seen.contains("brave_api") {
+            bail!("choose brave or brave_api, not both: they use the same upstream index");
         }
         self.search.validate()?;
         Ok(())
     }
 }
 
-const SEARCH_ENGINES: &[&str] = &["duckduckgo", "brave", "startpage", "yahoo"];
+const SEARCH_ENGINES: &[&str] = &["duckduckgo", "brave", "startpage", "yahoo", "brave_api", "searxng"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -102,10 +105,13 @@ pub struct SearchConfig {
     /// Also capped by the general max_bytes setting.
     pub max_bytes: usize,
     pub providers: BTreeMap<String, SearchProviderConfig>,
+    pub brave_api: BraveApiConfig,
+    pub searxng: SearxngConfig,
 }
 impl Default for SearchConfig {
     fn default() -> Self {
-        Self { timeout_ms: 8000, concurrency: 4, max_bytes: 4 * 1024 * 1024, providers: BTreeMap::new() }
+        Self { timeout_ms: 8000, concurrency: 4, max_bytes: 4 * 1024 * 1024, providers: BTreeMap::new(),
+            brave_api: BraveApiConfig::default(), searxng: SearxngConfig::default() }
     }
 }
 impl SearchConfig {
@@ -119,6 +125,21 @@ impl SearchConfig {
         if !(1024..=32 * 1024 * 1024).contains(&self.max_bytes) {
             bail!("search.max_bytes must be between 1024 and 33554432");
         }
+        if let Some(name) = &self.brave_api.api_key_env {
+            if name.is_empty() || name.len() > 128 || !name.bytes().enumerate().all(|(i, b)|
+                b.is_ascii_alphabetic() || b == b'_' || (i > 0 && b.is_ascii_digit())) {
+                bail!("search.brave_api.api_key_env must be an environment variable name, not a key");
+            }
+        }
+        if let Some(endpoint) = &self.searxng.endpoint {
+            let url = url::Url::parse(endpoint)
+                .map_err(|_| anyhow::anyhow!("search.searxng.endpoint must be an absolute HTTP(S) URL"))?;
+            if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none()
+                || !url.username().is_empty() || url.password().is_some()
+                || url.query().is_some() || url.fragment().is_some() {
+                bail!("search.searxng.endpoint must be HTTP(S) without credentials, query, or fragment");
+            }
+        }
         for (name, provider) in &self.providers {
             if !SEARCH_ENGINES.contains(&name.as_str()) {
                 bail!("unsupported search provider budget: {name}");
@@ -127,6 +148,20 @@ impl SearchConfig {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct BraveApiConfig {
+    /// Server environment reference only. Never store a credential in Config.
+    pub api_key_env: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct SearxngConfig {
+    /// Complete operator-selected search endpoint. No discovery or implicit service.
+    pub endpoint: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -178,16 +213,29 @@ mod tests {
         let partial: Config = toml::from_str("[search.providers.brave]\ntimeout_ms = 2000").unwrap();
         partial.validate().unwrap();
         assert_eq!(partial.search.providers["brave"].interval_ms, 1000);
+        let optional: Config = toml::from_str("search_engines = ['brave_api', 'searxng']").unwrap();
+        optional.validate().unwrap(); // Missing readiness stays a per-provider search outcome.
+        assert!(optional.search.brave_api.api_key_env.is_none());
+        assert!(optional.search.searxng.endpoint.is_none());
+        let configured: Config = toml::from_str("search_engines = ['brave_api', 'searxng']\n[search.brave_api]\napi_key_env = 'BRAVE_SEARCH_API_KEY'\n[search.searxng]\nendpoint = 'https://search.example.org/search'").unwrap();
+        configured.validate().unwrap(); // Validation never reads the environment or makes requests.
     }
     #[test] fn search_rejects_invalid_budgets_and_duplicate_providers() {
         for value in ["search_engines = ['brave', 'brave']", "[search]\ntimeout_ms = 0",
             "[search]\nconcurrency = 0", "[search]\nmax_bytes = 1",
             "[search.providers.unknown]", "[search.providers.brave]\ntimeout_ms = 20001",
-            "[search.providers.brave]\nconcurrency = 0", "[search.providers.brave]\ninterval_ms = 60001"] {
+            "[search.providers.brave]\nconcurrency = 0", "[search.providers.brave]\ninterval_ms = 60001",
+            "search_engines = ['brave', 'brave_api']", "[search.brave_api]\napi_key_env = 'not a variable'",
+            "[search.brave_api]\napi_key_env = '1INVALID'", "[search.searxng]\nendpoint = 'ftp://example.org/search'",
+            "[search.searxng]\nendpoint = 'https://user:synthetic@example.org/search'",
+            "[search.searxng]\nendpoint = 'https://example.org/search?token=synthetic'",
+            "[search.searxng]\nendpoint = 'https://example.org/search#fragment'", "[search.searxng]\nendpoint = ''"] {
             let config: Config = toml::from_str(value).unwrap();
             assert!(config.validate().is_err(), "{value}");
         }
         assert!(toml::from_str::<Config>("[search]\nunknown = true").is_err());
         assert!(toml::from_str::<Config>("[search.providers.brave]\nunknown = true").is_err());
+        assert!(toml::from_str::<Config>("[search.brave_api]\napi_key = 'synthetic'").is_err());
+        assert!(toml::from_str::<Config>("[search.brave_api]\nendpoint = 'https://example.org'").is_err());
     }
 }

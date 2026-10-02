@@ -2,6 +2,13 @@ use std::collections::HashMap;
 use webtool_protocol::*;
 mod organic;
 #[cfg(feature="web-search")]
+mod json;
+#[cfg(feature="web-search")]
+struct ProviderResults {
+    items: Vec<SearchResult>,
+    warnings: Vec<Warning>,
+}
+#[cfg(feature="web-search")]
 mod service;
 #[cfg(feature="web-search")]
 pub(crate) use service::SearchService;

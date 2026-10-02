@@ -3,15 +3,16 @@ use std::{sync::Arc, time::Duration};
 use anyhow::{bail, Result};
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use tokio::{sync::{Mutex, Semaphore}, time::{sleep_until, timeout, timeout_at, Instant}};
-use webtool_protocol::{SearchRequest, SearchResponse, SearchResult, Warning};
+use webtool_protocol::{SearchRequest, SearchResponse, Warning};
 
 use crate::config::{Config, SearchProviderConfig};
-use super::{merge, organic};
+use super::{json::{Failure, JsonProvider}, merge, organic, ProviderResults};
 
-/// One client and one set of limits for all Engine clones in this service.
+/// Pooled clients and one set of limits for all Engine clones in this service.
 #[derive(Clone)]
 pub(crate) struct SearchService {
     client: reqwest::Client,
+    json_client: reqwest::Client,
     providers: Arc<Vec<Provider>>,
     slots: Arc<Semaphore>,
     timeout: Duration,
@@ -20,6 +21,7 @@ pub(crate) struct SearchService {
 
 struct Provider {
     name: String,
+    json: Option<JsonProvider>,
     config: SearchProviderConfig,
     slots: Semaphore,
     next_start: Mutex<Instant>,
@@ -31,9 +33,15 @@ impl SearchService {
     pub(crate) fn new(config: &Config) -> Result<Self> {
         config.validate()?;
         let providers = config.search_engines.iter().map(|name| {
+            let json = match name.as_str() {
+                "brave_api" => Some(JsonProvider::Brave(config.search.brave_api.clone())),
+                "searxng" => Some(JsonProvider::Searxng(config.search.searxng.clone())),
+                _ => None,
+            };
             let config = config.search.providers.get(name).cloned().unwrap_or_default();
             Provider {
                 name: name.clone(),
+                json,
                 slots: Semaphore::new(config.concurrency),
                 config,
                 next_start: Mutex::new(Instant::now()),
@@ -43,6 +51,11 @@ impl SearchService {
         }).collect();
         Ok(Self {
             client: metadata_search_engine_rs::engines::build_http_client()?,
+            // Do not share HTML cookies/default headers with a keyed API. Refuse all
+            // JSON redirects so credentials cannot cross an origin or downgrade TLS.
+            json_client: reqwest::Client::builder().user_agent(&config.user_agent)
+                .redirect(reqwest::redirect::Policy::none()).referer(false)
+                .timeout(Duration::from_secs(20)).build()?,
             providers: Arc::new(providers),
             slots: Arc::new(Semaphore::new(config.search.concurrency)),
             timeout: Duration::from_millis(config.search.timeout_ms),
@@ -77,11 +90,12 @@ impl SearchService {
         // Completion order must not select titles/snippets or change ranking sums.
         for (provider, answer) in self.providers.iter().zip(answers) {
             match answer.expect("every provider future returned an outcome") {
-                Ok(items) => {
+                Ok(ProviderResults { items, warnings: provider_warnings }) => {
                     if items.is_empty() {
                         warnings.push(Warning::new("provider_empty", format!(
                             "{} returned no parsed organic results. This can mean no matches, excluded ads, or unrecognized upstream markup.", provider.name)));
                     }
+                    warnings.extend(provider_warnings);
                     rows.push((provider.name.clone(), items));
                 }
                 Err(warning) => warnings.push(warning),
@@ -95,7 +109,25 @@ impl SearchService {
         })
     }
 
-    async fn run(&self, provider: &Provider, request: &SearchRequest) -> Result<Vec<SearchResult>, Warning> {
+    async fn run(&self, provider: &Provider, request: &SearchRequest) -> Result<ProviderResults, Warning> {
+        let client = if provider.json.is_some() { &self.json_client } else { &self.client };
+        // Configuration and unsupported-query failures make no request and consume
+        // no pacing reservation. A missing optional provider does not stop others.
+        let outgoing = match &provider.json {
+            Some(json) => json.request(client, request),
+            None => organic::request(client, &provider.name, &request.query),
+        }.map_err(|error| failure(&provider.name, error))?;
+        #[cfg(test)]
+        let outgoing = match &provider.endpoint {
+            Some(endpoint) => {
+                let mut outgoing = outgoing.build().unwrap();
+                let mut url = url::Url::parse(endpoint).unwrap();
+                url.set_query(outgoing.url().query());
+                *outgoing.url_mut() = url;
+                reqwest::RequestBuilder::from_parts(client.clone(), outgoing)
+            }
+            None => outgoing,
+        };
         // Provider admission includes its pacing wait. Do not hold global capacity
         // during that wait, and do not reserve future starts for canceled requests.
         let _provider = provider.slots.acquire().await.expect("search semaphore stays open");
@@ -105,15 +137,14 @@ impl SearchService {
         *next_start = Instant::now() + Duration::from_millis(provider.config.interval_ms);
         drop(next_start);
 
-        let outgoing = organic::request(&self.client, &provider.name, &request.query)
-            .map_err(|error| failure(&provider.name, error))?;
-        #[cfg(test)]
-        let outgoing = match &provider.endpoint {
-            Some(endpoint) => self.client.get(endpoint).query(&[("q", &request.query)]),
-            None => outgoing,
+        let read = async {
+            match &provider.json {
+                Some(json) => json.search(outgoing, request.limit, self.max_bytes).await,
+                None => organic::search(outgoing, &provider.name, request.limit, self.max_bytes).await
+                    .map(|items| ProviderResults { items, warnings: Vec::new() }),
+            }
         };
-        timeout(Duration::from_millis(provider.config.timeout_ms),
-            organic::search(outgoing, &provider.name, request.limit, self.max_bytes)).await
+        timeout(Duration::from_millis(provider.config.timeout_ms), read).await
             .map_err(|_| Warning::new("provider_timeout", format!(
                 "{}: provider request/body budget of {} ms reached.", provider.name, provider.config.timeout_ms)))?
             .map_err(|error| failure(&provider.name, error))
@@ -121,7 +152,9 @@ impl SearchService {
 }
 
 fn failure(provider: &str, error: anyhow::Error) -> Warning {
-    let code = if error.is::<organic::Blocked>() {
+    let code = if let Some(json) = error.downcast_ref::<Failure>() {
+        json.code
+    } else if error.is::<organic::Blocked>() {
         "provider_blocked"
     } else if let Some(http) = error.downcast_ref::<reqwest::Error>() {
         if http.is_timeout() { "provider_timeout" }
@@ -141,6 +174,7 @@ mod tests {
     struct LocalProviders {
         url: String,
         events: Events,
+        requests: Arc<StdMutex<Vec<String>>>,
         task: tokio::task::JoinHandle<()>,
     }
     impl Drop for LocalProviders {
@@ -153,6 +187,8 @@ mod tests {
             (path, (delay, status, body))).collect());
         let events: Events = Arc::new(StdMutex::new(Vec::new()));
         let trace = events.clone();
+        let requests = Arc::new(StdMutex::new(Vec::new()));
+        let capture = requests.clone();
         let task = tokio::spawn(async move {
             let mut children = tokio::task::JoinSet::new();
             loop {
@@ -161,6 +197,7 @@ mod tests {
                         let Ok((mut socket, _)) = accepted else { break; };
                         let routes = routes.clone();
                         let trace = trace.clone();
+                        let capture = capture.clone();
                         children.spawn(async move {
                             let mut input = [0; 8192];
                             let mut n = 0;
@@ -170,11 +207,14 @@ mod tests {
                                 n += size;
                             }
                             let request = String::from_utf8_lossy(&input[..n]);
+                            capture.lock().unwrap().push(request.to_string());
                             let path = request.split_whitespace().nth(1).unwrap().split('?').next().unwrap();
                             let (delay, status, body) = routes.get(path).unwrap();
                             trace.lock().unwrap().push((path.into(), true, Instant::now()));
                             tokio::time::sleep(Duration::from_millis(*delay)).await;
-                            let response = format!("HTTP/1.1 {status}\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+                            // Redirect cases use the synthetic body as their Location.
+                            let location = if status.starts_with("302") { format!("Location: {body}\r\n") } else { String::new() };
+                            let response = format!("HTTP/1.1 {status}\r\n{location}Content-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
                             trace.lock().unwrap().push((path.into(), false, Instant::now()));
                             let _ = socket.write_all(response.as_bytes()).await;
                         });
@@ -183,7 +223,7 @@ mod tests {
                 }
             }
         });
-        LocalProviders { url, events, task }
+        LocalProviders { url, events, requests, task }
     }
     fn card(provider: &str) -> String {
         match provider {
@@ -202,7 +242,10 @@ mod tests {
                 timeout_ms: 2000, interval_ms: interval, concurrency: 1,
             });
         }
-        let mut service = SearchService::new(&config).unwrap();
+        with_endpoints(&config, local)
+    }
+    fn with_endpoints(config: &Config, local: &LocalProviders) -> SearchService {
+        let mut service = SearchService::new(config).unwrap();
         for provider in Arc::get_mut(&mut service.providers).unwrap() {
             provider.endpoint = Some(format!("{}/{}", local.url, provider.name));
         }
@@ -210,6 +253,169 @@ mod tests {
     }
     fn request() -> SearchRequest {
         SearchRequest { query: "literal query & no rewrite".into(), limit: 5, library: None }
+    }
+
+    const SYNTHETIC_KEY: &str = "synthetic-search-key-not-a-real-credential";
+    fn json_config(local: &LocalProviders) -> Config {
+        let mut config = Config::default();
+        config.search_engines = vec!["brave_api".into(), "searxng".into(), "duckduckgo".into()];
+        config.search.timeout_ms = 2000;
+        config.search.concurrency = 1;
+        config.search.brave_api.api_key_env = Some(format!("WEBTOOL_SYNTHETIC_{}", uuid::Uuid::new_v4().simple()));
+        config.search.searxng.endpoint = Some(format!("{}/searxng", local.url));
+        for name in &config.search_engines {
+            config.search.providers.insert(name.clone(), SearchProviderConfig {
+                timeout_ms: 1000, interval_ms: 300, concurrency: 1,
+            });
+        }
+        config
+    }
+    fn fixture_endpoint(service: &mut SearchService, name: &str, endpoint: String) {
+        Arc::get_mut(&mut service.providers).unwrap().iter_mut().find(|p| p.name == name).unwrap().endpoint = Some(endpoint);
+    }
+    fn assert_redacted(answer: &SearchResponse, local: &LocalProviders) {
+        for warning in &answer.warnings {
+            for forbidden in [SYNTHETIC_KEY, local.url.as_str(), "literal", "raw-error-sentinel", "x-subscription-token"] {
+                assert!(!warning.message.to_lowercase().contains(forbidden), "unsafe provider warning");
+            }
+        }
+    }
+    fn brave_json() -> String {
+        serde_json::json!({"type":"search","web":{"type":"search","results":[
+            {"type":"ad","title":"Paid type","url":"https://example.org/paid-type"},
+            {"type":"search_result","is_sponsored":true,"title":"Paid flag","url":"https://example.org/paid-flag"},
+            {"type":"search_result","title":"Paid URL","url":"https://example.org/?gclid=paid"},
+            {"type":"search_result","title":"Advertising research","url":"https://example.org/source?x=1","description":"Sponsored content is the topic."}
+        ]},"ads":{"results":[{"title":"Ignore ads","url":"https://example.org/other"}]},
+        "videos":{"results":[{"title":"Ignore video","url":"https://example.org/video"}]}}).to_string()
+    }
+    fn searxng_json() -> String {
+        serde_json::json!({"results":[
+            {"template":"images.html","category":"images","title":"Image","url":"https://example.org/image"},
+            {"template":"default.html","sponsored":true,"title":"Paid","url":"https://example.org/paid"},
+            {"template":"default.html","title":"Paid URL","url":"https://example.org/?utm_medium=cpc"},
+            {"template":"default.html","title":42,"url":"https://example.org/malformed"},
+            {"template":"default.html","category":"general","title":"SearXNG summary","url":"https://example.org/source?x=1","content":"A snippet, not fetched evidence.","engines":["brave","duckduckgo","google"],"positions":[1,1,1],"score":999}
+        ],"answers":[{"answer":"Not a web result"}],"unresponsive_engines":[["synthetic-upstream","raw-error-sentinel"]]}).to_string()
+    }
+
+    #[tokio::test]
+    async fn json_organic_selection_and_shared_budgets() {
+        let local = local(vec![
+            ("/brave_api", 20, "200 OK", brave_json()),
+            ("/searxng", 20, "200 OK", searxng_json()),
+            ("/duckduckgo", 20, "200 OK", card("duckduckgo")),
+        ]).await;
+        let config = json_config(&local);
+        let name = config.search.brave_api.api_key_env.as_ref().unwrap();
+        std::env::set_var(name, SYNTHETIC_KEY);
+        let service = with_endpoints(&config, &local);
+        let mut query = request(); query.limit = 1;
+        let outgoing = service.providers[0].json.as_ref().unwrap().request(&service.json_client, &query).unwrap().build().unwrap();
+        let token = &outgoing.headers()["X-Subscription-Token"];
+        assert!(token.is_sensitive());
+        assert!(!format!("{outgoing:?}").contains(SYNTHETIC_KEY));
+        assert_eq!(outgoing.url().scheme(), "https");
+        assert_eq!(outgoing.url().host_str(), Some("api.search.brave.com"));
+        assert!(!format!("{config:?}").contains(SYNTHETIC_KEY));
+        assert!(!serde_json::to_string(&config).unwrap().contains(SYNTHETIC_KEY));
+        let clone = service.clone();
+        let (a, b) = tokio::join!(service.search(query.clone()), clone.search(query));
+        for answer in [a.unwrap(), b.unwrap()] {
+            assert_eq!(answer.results.len(), 1);
+            let row = &answer.results[0];
+            assert_eq!(row.title, "Advertising research");
+            assert_eq!(row.snippet, "Sponsored content is the topic.");
+            assert_eq!(row.providers, ["brave_api", "searxng", "duckduckgo"]);
+            assert!((row.score - 3.0 / 61.0).abs() < 1e-12);
+            assert_eq!(answer.warnings.len(), 1);
+            assert_eq!(answer.warnings[0].code, "provider_partial");
+            assert!(answer.warnings[0].message.contains("1 malformed rows and 1 reported upstream failures"));
+            assert_redacted(&answer, &local);
+        }
+        let mut active = 0;
+        let mut peak = 0;
+        let mut last: HashMap<&str, Instant> = HashMap::new();
+        let events = local.events.lock().unwrap();
+        for (path, start, time) in events.iter() {
+            if *start {
+                active += 1; peak = peak.max(active);
+                if let Some(previous) = last.insert(path, *time) {
+                    assert!(*time - previous >= Duration::from_millis(280));
+                }
+            } else { active -= 1; }
+        }
+        assert_eq!(peak, 1);
+        assert_eq!(last.len(), 3);
+        for raw in local.requests.lock().unwrap().iter() {
+            let target = raw.split_whitespace().nth(1).unwrap();
+            let url = url::Url::parse(&format!("http://localhost{target}")).unwrap();
+            let params: HashMap<_, _> = url.query_pairs().collect();
+            assert_eq!(params["q"], request().query);
+            if url.path() == "/brave_api" {
+                assert!(raw.contains(SYNTHETIC_KEY));
+                assert_eq!(params["spellcheck"], "false");
+                assert_eq!(params["result_filter"], "web");
+                assert_eq!(params["text_decorations"], "false");
+            } else { assert!(!raw.contains(SYNTHETIC_KEY)); }
+            if url.path() == "/searxng" {
+                assert_eq!(params["format"], "json"); assert_eq!(params["categories"], "general");
+            }
+        }
+        std::env::remove_var(name);
+        eprintln!("JSON providers: organic fields only, paid rows excluded before limit, one SearXNG vote, shared global peak 1 and pacing >=280 ms; key header sensitive and isolated");
+    }
+
+    #[tokio::test]
+    async fn json_failures_keep_partial_results_without_disclosing_credentials() {
+        let target = local(vec![("/target", 0, "200 OK", brave_json())]).await;
+        let local = local(vec![
+            ("/brave_api", 0, "429 Too Many Requests", format!("{SYNTHETIC_KEY} raw-error-sentinel")),
+            ("/searxng", 0, "200 OK", searxng_json()),
+            ("/duckduckgo", 0, "200 OK", card("duckduckgo")),
+            ("/malformed", 0, "200 OK", format!("{{\"results\":\"{SYNTHETIC_KEY} raw-error-sentinel\"}}")),
+            ("/slow", 1000, "200 OK", brave_json()),
+            ("/redirect", 0, "302 Found", format!("{}/target", target.url)),
+            ("/error", 0, "200 OK", format!("{{\"error\":\"{SYNTHETIC_KEY} raw-error-sentinel\"}}")),
+            ("/large", 0, "200 OK", "x".repeat(2048)),
+        ]).await;
+        let mut config = json_config(&local);
+        let name = config.search.brave_api.api_key_env.clone().unwrap();
+        config.search.timeout_ms = 500;
+        for provider in config.search.providers.values_mut() { provider.interval_ms = 0; provider.timeout_ms = 100; }
+        // This random test-owned reference has no value. No real key is read.
+        config.search.searxng.endpoint = None;
+        let answer = with_endpoints(&config, &local).search(request()).await.unwrap();
+        assert_eq!(answer.results[0].providers, ["duckduckgo"]);
+        assert_eq!(answer.warnings.iter().map(|w| w.code.as_str()).collect::<Vec<_>>(), ["provider_unconfigured", "provider_unconfigured"]);
+        assert_eq!(local.requests.lock().unwrap().len(), 1);
+        assert_redacted(&answer, &local);
+        config.search.searxng.endpoint = Some(format!("{}/searxng", local.url));
+        let mut service = with_endpoints(&config, &local);
+        fixture_endpoint(&mut service, "searxng", format!("{}/malformed", local.url));
+        let answer = service.search(request()).await.unwrap();
+        assert_eq!(answer.results[0].providers, ["duckduckgo"]);
+        assert_eq!(answer.warnings.iter().map(|w| w.code.as_str()).collect::<Vec<_>>(), ["provider_unconfigured", "provider_error"]);
+        assert_redacted(&answer, &local);
+        std::env::set_var(&name, SYNTHETIC_KEY);
+        for (path, code) in [("brave_api", "provider_blocked"), ("slow", "provider_timeout"),
+            ("redirect", "provider_error"), ("error", "provider_error"), ("large", "provider_error")] {
+            let mut service = with_endpoints(&config, &local);
+            fixture_endpoint(&mut service, "brave_api", format!("{}/{path}", local.url));
+            if path == "large" { service.max_bytes = 1024; }
+            let answer = service.search(request()).await.unwrap();
+            assert_eq!(answer.results[0].providers, ["searxng", "duckduckgo"], "{path}");
+            assert_eq!(answer.warnings[0].code, code, "{path}");
+            assert!(answer.elapsed_ms < 500);
+            assert_redacted(&answer, &local);
+            if path == "redirect" { assert!(answer.warnings[0].message.contains("redirect refused (HTTP 302)")); }
+        }
+        assert!(target.requests.lock().unwrap().is_empty(), "the credentialed redirect must not be followed");
+        let mut query = request(); query.query = "x".repeat(601);
+        let answer = with_endpoints(&config, &local).search(query).await.unwrap();
+        assert_eq!(answer.warnings[0].code, "provider_unsupported");
+        std::env::remove_var(name);
+        eprintln!("JSON provider failures: partial results survive missing config/key, malformed JSON, HTTP 429, timeout, redirect, error envelope, and byte cap; no redirected key or raw error disclosure");
     }
 
     #[tokio::test]

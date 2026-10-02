@@ -12,6 +12,9 @@ helper_timeout_seconds = 90
 cache_seconds = 3600
 user_agent = "webtool/0.1 (+shared research reader)"
 search_engines = ["duckduckgo", "brave"]
+# Optional choices: replace brave with brave_api, or explicitly add searxng.
+# brave and brave_api cannot run together because they use the same index.
+# Defining a section below does not enable that provider.
 browser_wait_ms = 2000
 browser_no_sandbox = false
 
@@ -50,3 +53,19 @@ interval_ms = 1000 # Minimum interval between starts; zero explicitly disables p
 timeout_ms = 6000
 concurrency = 1
 interval_ms = 1000
+
+# Optional Brave Search API. Supply this environment variable to the server using
+# protected service configuration. Do not put its value in TOML or client settings.
+# The HTTPS endpoint is fixed. No request occurs until brave_api is selected.
+# [search.brave_api]
+# api_key_env = "BRAVE_SEARCH_API_KEY"
+# [search.providers.brave_api]
+# interval_ms = 1000
+
+# Optional operator-managed SearXNG. Use the complete /search (or /) endpoint.
+# JSON must be enabled. No credentials, query parameters, or fragments in this URL.
+# HTTP is accepted for trusted local services but sends queries without encryption.
+# [search.searxng]
+# endpoint = "http://127.0.0.1:8080/search"
+# [search.providers.searxng]
+# interval_ms = 1000
