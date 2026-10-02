@@ -7,6 +7,7 @@ use serde_json::{json,Value};
 use webtool_protocol::*;
 mod settings;
 mod presentation;
+mod mcp;
 
 #[derive(Parser)]
 #[command(name="webtool",version,about="Search, read, extract, and save sources through a shared server",after_help="No TUI. Results go to stdout. Warnings and progress go to stderr. Use --format json for scripts.")]
@@ -29,6 +30,8 @@ enum Command{
     Connect{server_url:String},
     /// Inspect local client configuration without contacting the server.
     Config{#[command(subcommand)]action:ConfigCommand},
+    /// Serve MCP over stdin/stdout, forwarding operations to the configured HTTP server.
+    Mcp,
     /// Check server reachability and report compiled or configured capabilities.
     Doctor,
     /// Search the web, or a saved library. Use --library '*' for all saved documents.
@@ -194,9 +197,10 @@ async fn run(cli:Cli)->Result<()>{
     if matches!(cli.command,Command::Config{..}){
         return if matches!(format,Output::Text|Output::Markdown){stdout(&format!("Endpoint: {server}\nConfiguration: {}\nSource: {source}\n",config_path.display()))}else{output(&json!({"server":server,"config_path":config_path,"source":source}),format)};
     }
+    if matches!(cli.command,Command::Mcp){return mcp::run(&server,cli.timeout).await;}
     let client=Client::new(&server,cli.timeout)?;
     match cli.command{
-        Command::Connect{..}|Command::Config{..}=>unreachable!(),
+        Command::Connect{..}|Command::Config{..}|Command::Mcp=>unreachable!(),
         Command::Doctor=>{
             let h:Health=client.get("/v1/health").await?;
             if matches!(format,Output::Text|Output::Markdown){
