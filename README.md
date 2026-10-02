@@ -13,19 +13,22 @@ Its tags and assets remain unchanged. See [alpha notes](docs/ALPHA.md),
 and [artifact evidence](docs/STATUS.md). Distribution requires the documented
 source-access and availability conditions. This is not general legal clearance.
 
-The current approved follow-up improves main-content reading of collapsed sections
-and newsletter/popup overlays on PR #24. It preserves delivered section bodies,
-section labels and source whitespace without clicking controls or changing hidden
-state. See the [roadmap](docs/ROADMAP.md) and [proof](docs/STATUS.md).
+The approved [delivery plan](docs/DELIVERY-PLAN.md) expands the Rust-centered core:
+web search/reading, app connectors, code and scholarly research, durable crawls,
+historical sources, and bounded media work. Optional configurable cloud/local LLM
+answers are the final milestone, after the core works. These are delivery goals,
+not claims that every feature is implemented. See the [roadmap](docs/ROADMAP.md)
+and [verified status](docs/STATUS.md). PR #24 remains unmerged.
 
 [Search ad exclusion](docs/SEARCH.md) remains unchanged. Recognized paid and
 sponsored results are excluded before ranking and output. This does not guarantee
-detection of concealed ads or unknown future markup. Provider selection, ranking,
-settings and dependencies remain unchanged. Other roadmap work stays deferred.
+detection of concealed ads or unknown future markup. New provider and API work
+must preserve this filtering boundary. Existing installed settings and historical
+snapshots are unchanged until a verified replacement is deliberately activated.
 
-Read improvements and the unchanged search-ad filter are installed from clean
-build `c9ad49b6ecbbd9afde300cf24f335f8ccf2b9800`. The installed ordinary reader
-passed the disclosure/overlay diagnostic and FDA article check through HTTP.
+Historical installation evidence includes read improvements and the search-ad
+filter from clean build `c9ad49b6ecbbd9afde300cf24f335f8ccf2b9800`. That installed
+reader passed the disclosure/overlay diagnostic and FDA article check through HTTP.
 The earlier DuckDuckGo/Brave and paid/organic checks remain historical evidence.
 The PR is not merged. These changes are separate from the published alpha.
 See STATUS for exact proof and remaining limits.

@@ -1,6 +1,22 @@
 # Roadmap
 
-## Active work: live reading quality
+## Active work: full research service delivery
+
+The user approved the complete Rust-centered research roadmap, with parallel work
+on independent parts. The [delivery plan](DELIVERY-PLAN.md) defines the stages:
+quality/performance comparison, web foundations and connectors, code and scholarly
+research, durable crawling and archives, and bounded media work. After the core
+is accepted, add purely optional cloud/local LLM answer workers configured through
+the CLI. Default operations remain LLM-free.
+
+The earlier milestones below retain their evidence and source-fidelity lessons.
+Their narrow implementation freezes are historical, not current limits on the
+newly approved roadmap. PR #24's explicit unmerged restriction, published alpha
+assets, existing data/configuration, snapshots, and rollback assets remain
+preserved. New source changes are not installed or accepted merely because they
+appear in this plan. Verify actual service health separately from old status notes.
+
+## Preserved baseline: live reading quality
 
 The user approved continued live testing and correction across page types. The
 product is not finished. Keep PR #24 unmerged and published alpha assets unchanged.
@@ -95,19 +111,18 @@ follow-ups above preserve this work.
 Provider selection, ranking rules and configuration stay unchanged. No packaging,
 release, broad test corpus, benchmark or other deferred feature work is approved.
 
-## Deferred work
+## Additional backlog
 
-These areas remain backlog, not parallel priorities:
+The delivery plan now owns academic discovery, crawl resume/sitemaps, search
+improvements, media capabilities, and the final optional-LLM milestone. The
+following extensions are not prerequisites for that core delivery:
 
-- Format coverage, OCR readiness, figure extraction, and figure assets.
-- Full Markdown parsing, image/table fidelity, source-currency metadata, and broader notation/style coverage beyond the current live corrections.
-- GitHub issues/PRs/releases and wider media/caption coverage.
-- Crawl resume, persisted frontiers, and sitemap expansion.
-- Academic search, citation graphs, bibliography tools, and reference-manager integration.
-- Optional explicit LLM jobs. No mandatory runtime or silent rewriting.
-- Search filters, categories, dates, languages, and other search interfaces.
+- Additional document formats, broad OCR coverage, and figure-asset export beyond the measured HTML/PDF paths.
+- Full CommonMark support and broader notation/style handling beyond reproduced source-fidelity needs.
+- GitHub issues/PRs/releases, revision comparison, and semantic repository navigation.
+- Citation graphs, additional bibliography tools, and reference-manager integration.
+- Provider-specific search interfaces beyond the explicitly supported filters.
 - Portability and platform/linkage support beyond the verified environment.
-- Performance improvements supported by measurements, not assumed gains.
 
 ## Completed baseline
 
