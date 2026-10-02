@@ -1,4 +1,5 @@
 pub mod html;
+pub mod encoding;
 pub mod text;
 pub mod captions;
 pub mod document;
@@ -37,7 +38,7 @@ pub fn detect(name:&str, content_type:Option<&str>, bytes:&[u8])->String {
     }
     let ext=extension(name);
     let known=match ext.as_str() {
-        "html"|"htm"=>Some("text/html"), "md"|"markdown"=>Some("text/markdown"),
+        "html"|"htm"=>Some("text/html"), "xhtml"|"xht"=>Some("application/xhtml+xml"), "md"|"markdown"=>Some("text/markdown"),
         "csv"=>Some("text/csv"), "tsv"=>Some("text/tab-separated-values"),
         "json"=>Some("application/json"), "jsonl"|"ndjson"=>Some("application/x-ndjson"),
         "ipynb"=>Some("application/x-ipynb+json"), "srt"=>Some("application/x-subrip"),
@@ -57,9 +58,13 @@ pub fn detect(name:&str, content_type:Option<&str>, bytes:&[u8])->String {
     // A generic HTTP media type must not override a meaningful file extension.
     if !ct.is_empty() && !["application/octet-stream","binary/octet-stream","text/plain"].contains(&ct.as_str()) { return ct; }
     if let Some(k)=known { return k.into(); }
+    // Sniff only the bounded ASCII-compatible prefix. A later legacy byte must
+    // not prevent an otherwise recognizable HTML upload from reaching decoding.
+    let prefix=String::from_utf8_lossy(&bytes[..bytes.len().min(1024)]);
+    let prefix=prefix.trim_start_matches('\u{feff}').trim_start().to_ascii_lowercase();
+    if prefix.starts_with("<!doctype html")||prefix.starts_with("<html") { return "text/html".into(); }
     if let Ok(s)=std::str::from_utf8(bytes) {
         let prefix=s.trim_start().chars().take(300).collect::<String>().to_ascii_lowercase();
-        if prefix.starts_with("<!doctype html")||prefix.starts_with("<html") { return "text/html".into(); }
         if prefix.starts_with("webvtt") { return "text/vtt".into(); }
         if prefix.contains("<rss") { return "application/rss+xml".into(); }
         if prefix.contains("<feed") { return "application/atom+xml".into(); }
@@ -73,7 +78,8 @@ pub fn detect(name:&str, content_type:Option<&str>, bytes:&[u8])->String {
 /// Pure input parsing. CPU work is invoked on a bounded blocking pool by Engine.
 pub fn parse(bytes:&[u8], name:&str, mime:&str, selector:Option<&str>)->Result<Parsed> {
     if mime=="text/html"||mime=="application/xhtml+xml" {
-        return html::parse(bytes,name,selector);
+        let decoded=encoding::decode(bytes,mime,None,false,encoding::DEFAULT_LIMIT)?;
+        return html::parse_decoded(decoded,name,selector);
     }
     if matches!(mime,"application/rss+xml"|"application/atom+xml") {
         let feed=feed_rs::parser::parse(bytes).context("parse RSS or Atom feed")?;

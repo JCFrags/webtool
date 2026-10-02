@@ -186,6 +186,14 @@ impl Engine {
         if !(1..=5000).contains(&limit){bail!("map limit must be between 1 and 5000");}
         let _permit=self.network.acquire().await?;
         let result=fetch::http(&self.client,url,self.config.max_bytes).await?;
+        let mime=crate::readers::detect(&result.resolved,result.content_type.as_deref(),&result.bytes);
+        if matches!(mime.as_str(),"text/html"|"application/xhtml+xml") {
+            let original=self.store.put_bytes(&result.bytes,&mime,&result.role).await?;
+            let decoded=self.decode_html(result.bytes,mime,result.content_type,false).await?;
+            let all=crate::readers::html::links(&decoded.text,&result.resolved);
+            return Ok(json!({"source":result.resolved,"kind":"page_links","links":all.iter().take(limit).collect::<Vec<_>>(),
+                "truncated":all.len()>limit,"original":original,"html_encoding":decoded.metadata,"warnings":decoded.warnings}));
+        }
         let source=std::str::from_utf8(&result.bytes)?;
         if let Ok(tree)=roxmltree::Document::parse(source){
             if matches!(tree.root_element().tag_name().name(),"urlset"|"sitemapindex"){

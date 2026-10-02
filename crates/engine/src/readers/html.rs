@@ -7,7 +7,7 @@ use url::Url;
 use webtool_protocol::*;
 use super::Parsed;
 
-pub const PARSER:&str="rs-trafilatura/0.2.2+main-content/9";
+pub const PARSER:&str="rs-trafilatura/0.2.2+main-content/10+html-encoding/1";
 
 /// A stable signal that ordinary Auto reads may use for one rendered retry.
 /// Parse, encoding, network, and explicit-selector failures are not this error.
@@ -661,15 +661,28 @@ pub fn links(source:&str,url:&str)->Vec<Link>{
 }
 
 /// Only browser captures use their DOM base; retained bytes remain unchanged.
-pub fn rendered_base(bytes:&[u8],url:&str)->String{
-    let Ok(source)=std::str::from_utf8(bytes) else {return url.into()};
+pub fn rendered_base(source:&str,url:&str)->String{
     let doc=Html::parse_document(source);let base=Url::parse(url).ok();
     doc.select(&Selector::parse("base[href]").expect("constant selector")).next()
         .and_then(|e|absolute(base.as_ref(),e.value().attr("href")?)).unwrap_or_else(||url.into())
 }
 
 pub fn parse(bytes:&[u8],url:&str,explicit:Option<&str>)->Result<Parsed>{
-    let source=std::str::from_utf8(bytes).map_err(|_|anyhow!("HTML is not UTF-8. Encoding conversion is not implemented in this build."))?;
+    parse_decoded(super::encoding::decode(bytes,"text/html",None,false,super::encoding::DEFAULT_LIMIT)?,url,explicit)
+}
+
+/// Selection, source matching and link discovery share the same decoded view.
+pub fn parse_decoded(decoded:super::encoding::Decoded,url:&str,explicit:Option<&str>)->Result<Parsed>{
+    let mut parsed=parse_source(&decoded.text,url,explicit).map_err(|error|{
+        if decoded.warnings.is_empty(){error}else{
+            error.context(format!("HTML decoding diagnostics: {}",decoded.warnings.iter()
+                .map(|w|format!("{}: {}",w.code,w.message)).collect::<Vec<_>>().join(" ")))
+        }
+    })?;
+    decoded.attach(&mut parsed);
+    Ok(parsed)
+}
+fn parse_source(source:&str,url:&str,explicit:Option<&str>)->Result<Parsed>{
     let original=Html::parse_document(source);
     let title=original.select(&selector("title")?).next().map(text).filter(|value|!value.trim().is_empty());
     let mut display_title=title.as_deref().map(normalized).unwrap_or_else(||url.into());
@@ -687,7 +700,7 @@ pub fn parse(bytes:&[u8],url:&str,explicit:Option<&str>)->Result<Parsed>{
     let mut unavailable_disclosures=Vec::new();
     let mut math_sources=MathSources::new();
     let selected=if let Some(css)=explicit{
-        p.parser="explicit-css+source-blocks/6".into();
+        p.parser="explicit-css+source-blocks/7+html-encoding/1".into();
         let found=original.select(&selector(css)?).map(|n|n.html()).collect::<Vec<_>>();
         if found.is_empty(){bail!("CSS selector matched no elements");}found.join("\n")
     }else{
@@ -842,7 +855,7 @@ pub fn select_original(source:&str,css:&str)->Result<Vec<serde_json::Value>>{
         assert!(parsed.warnings.iter().any(|warning|warning.code=="disclosure_content_unavailable"));
         assert_eq!(parsed.links,links(source,"https://example.com/guide"));
         let explicit=parse(source.as_bytes(),"https://example.com/guide",Some("#values")).unwrap();
-        assert_eq!(explicit.parser,"explicit-css+source-blocks/6");
+        assert_eq!(explicit.parser,"explicit-css+source-blocks/7+html-encoding/1");
         assert!(!explicit.warnings.iter().any(|warning|warning.code=="disclosure_content_unavailable"));
     }
     #[cfg(feature="web-extraction")]

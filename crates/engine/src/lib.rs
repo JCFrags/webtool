@@ -81,7 +81,7 @@ impl Engine {
         if caption_url.is_some() { media::validate_language(&request.language)?; }
         let key=hex::encode(Sha256::digest(serde_json::to_vec(&json!({"url":caption_url.as_deref().unwrap_or(url.as_str()),"renderer":request.renderer,
             "language":request.language,"media_parser":media::PARSER,"source_resolver":sources::VERSION,"arxiv_resolver":arxiv::VERSION,"selector":request.selector,"version":EXTRACTION_VERSION,"document_config":self.config.document_config,
-            "html_parser":readers::html::PARSER,"auto_recovery":read_recovery::VERSION,"browser_capture":fetch::BROWSER_CAPTURE_VERSION,"lightpanda_path":self.config.lightpanda_path,"browser_wait_ms":self.config.browser_wait_ms,"crw":self.config.crw_renderer}))?));
+            "html_parser":readers::html::PARSER,"html_decoded_limit":self.config.max_bytes,"auto_recovery":read_recovery::VERSION,"browser_capture":fetch::BROWSER_CAPTURE_VERSION,"lightpanda_path":self.config.lightpanda_path,"browser_wait_ms":self.config.browser_wait_ms,"crw":self.config.crw_renderer}))?));
         let lock={
             let mut locks=self.locks.lock().await;
             locks.retain(|_,v|v.strong_count()>0);
@@ -144,32 +144,38 @@ impl Engine {
             }
         };
         let mut actual_renderer=if fetched.role=="rendered_dom" {request.renderer}else{Renderer::Http};
-        let filename=github.as_ref().map(|g|g.filename.clone()).unwrap_or_else(||if fetched.role=="rendered_dom" {
-            readers::html::rendered_base(&fetched.bytes,&fetched.resolved)
-        }else{fetched.resolved.clone()});
+        let mut filename=github.as_ref().map(|g|g.filename.clone()).unwrap_or_else(||fetched.resolved.clone());
         let mime=readers::detect(&filename,fetched.content_type.as_deref(),&fetched.bytes);
         let html=matches!(mime.as_str(),"text/html"|"application/xhtml+xml");
         let auto_web=matches!(request.renderer,Renderer::Auto)&&request.selector.is_none()&&github.is_none();
         let mut original=self.store.put_bytes(&fetched.bytes,&mime,&fetched.role).await?;
         let mut retrieved_at=Utc::now().to_rfc3339();
-        let evidence=if html{read_recovery::inspect(&fetched.bytes)}else{Default::default()};
+        let decoded=if html{Some(self.decode_html(fetched.bytes.clone(),mime.clone(),fetched.content_type.clone(),fetched.role=="rendered_dom").await?)}else{None};
+        if fetched.role=="rendered_dom" {
+            if let Some(decoded)=&decoded{filename=readers::html::rendered_base(&decoded.text,&fetched.resolved);}
+        }
+        let mut evidence=decoded.as_ref().map(|d|read_recovery::inspect(&d.text)).unwrap_or_default();
+        let decoding_errors=decoded.as_ref().is_some_and(|d|d.had_errors);
+        let http_encoding=decoded.as_ref().map(|d|d.metadata.clone());
+        let encoding_warnings=decoded.as_ref().map(|d|d.warnings.clone()).unwrap_or_default();
         if (auto_web||fetched.role=="rendered_dom")&&request.selector.is_none(){
             if let Some(reason)=evidence.blocked{bail!("read_content_blocked: source is a {reason}; not accepted as article content");}
         }
         let readme_links=github.as_ref().filter(|g|g.readme).map(|g|sources::readme_links(&fetched.bytes,g));
         let mut parsed=if let Some(details)=github.as_ref().filter(|g|g.directory) {
             sources::directory(&fetched.bytes,details)
-        }else{self.parse(fetched.bytes.clone(),filename,mime.clone(),request.selector.clone()).await};
+        }else if let Some(decoded)=decoded{self.parse_html(decoded,filename,request.selector.clone()).await}
+        else{self.parse(fetched.bytes.clone(),filename,mime.clone(),request.selector.clone()).await};
         let mut routing=json!({"requested_renderer":request.renderer,"renderer":actual_renderer,
             "selection_reason":"HTTP source content","auto_recovery_attempted":false});
-        if auto_web&&html {
+        if auto_web&&html&&!decoding_errors {
             let missing=parsed.as_ref().err().is_some_and(|error|error.is::<readers::html::MissingContent>());
             let reason=if missing {Some("HTTP extraction found no readable main content")}
                 else if parsed.is_ok(){evidence.shell}else{None};
             if let Some(reason)=reason {
                 // Preserve the initial response even when the accepted original becomes a DOM.
                 routing["http"]=json!({"url":fetched.resolved,"status":fetched.status,"version":fetched.version,
-                    "retrieved_at":retrieved_at,"artifact":original});
+                    "retrieved_at":retrieved_at,"artifact":original,"html_encoding":http_encoding});
                 routing["selection_reason"]=json!(reason);
                 let recovery=if self.config.lightpanda_path.is_none(){
                     Err(anyhow!("browser_helper_missing: automatic recovery needs configured lightpanda_path; configure it or use --renderer http for HTTP-only reading"))
@@ -191,14 +197,15 @@ impl Engine {
                             let timestamp=Utc::now().to_rfc3339();
                             routing["rendered_attempt"]=json!({"url":rendered.resolved,"status":rendered.status,
                                 "retrieved_at":timestamp,"artifact":artifact,"accepted":false});
-                            let evidence=read_recovery::inspect(&rendered.bytes);
+                            let decoded=self.decode_html(rendered.bytes.clone(),"text/html".into(),rendered.content_type.clone(),true).await?;
+                            let evidence=read_recovery::inspect(&decoded.text);
                             if let Some(reason)=evidence.blocked{bail!("browser_content_unavailable: rendered source is a {reason}");}
-                            let base=readers::html::rendered_base(&rendered.bytes,&rendered.resolved);
-                            let rendered_parsed=self.parse(rendered.bytes.clone(),base,"text/html".into(),None).await?;
+                            let base=readers::html::rendered_base(&decoded.text,&rendered.resolved);
+                            let rendered_parsed=self.parse_html(decoded,base,None).await?;
                             if !read_recovery::usable(&rendered_parsed)||evidence.shell.is_some(){
                                 bail!("browser_content_unavailable: rendered page has no usable main content or still contains an application/loading shell");
                             }
-                            Ok::<_,anyhow::Error>((rendered,artifact,timestamp,rendered_parsed))
+                            Ok::<_,anyhow::Error>((rendered,artifact,timestamp,rendered_parsed,evidence))
                         }).await{
                             Ok(result)=>result,
                             Err(_)=>Err(anyhow!("browser_timeout: automatic rendering exceeded the remaining read budget")),
@@ -206,8 +213,9 @@ impl Engine {
                     }
                 };
                 match recovery{
-                    Ok((rendered,artifact,timestamp,rendered_parsed))=>{
-                        fetched=rendered;original=artifact;retrieved_at=timestamp;parsed=Ok(rendered_parsed);
+                    Ok((rendered,artifact,timestamp,rendered_parsed,rendered_evidence))=>{
+                        fetched=rendered;original=artifact;retrieved_at=timestamp;parsed=Ok(rendered_parsed);evidence=rendered_evidence;
+                        fetched.warnings.extend(encoding_warnings.into_iter().map(|w|Warning::new(w.code,format!("Initial HTTP source: {}",w.message))));
                         actual_renderer=Renderer::Lightpanda;
                         routing["renderer"]=json!(actual_renderer);
                         routing["rendered_attempt"]["accepted"]=json!(true);
@@ -227,7 +235,7 @@ impl Engine {
         }
         let mut parsed=parsed?;
         if fetched.role=="rendered_dom" {
-            if request.selector.is_none()&&(!read_recovery::usable(&parsed)||read_recovery::inspect(&fetched.bytes).shell.is_some()){
+            if request.selector.is_none()&&(!read_recovery::usable(&parsed)||evidence.shell.is_some()){
                 bail!("browser_content_unavailable: captured DOM has no usable main content or is still loading");
             }
             parsed.metadata["browser"]=json!({"renderer":actual_renderer,"artifact":"rendered_dom","locations":"retained DOM snapshot"});
@@ -254,7 +262,24 @@ impl Engine {
         if let Some(name)=request.library{self.store.add(&name,&document.id,request.actor).await?;}
         Ok(ReadResponse{document,cached:false})
     }
+    async fn decode_html(&self,bytes:Vec<u8>,mime:String,content_type:Option<String>,rendered:bool)->Result<readers::encoding::Decoded>{
+        let permit=self.parse_slots.clone().acquire_owned().await?;
+        let limit=self.config.max_bytes;
+        tokio::task::spawn_blocking(move||{
+            let _permit=permit;readers::encoding::decode(&bytes,&mime,content_type.as_deref(),rendered,limit)
+        }).await.context("HTML decoding task failed")?
+    }
+    async fn parse_html(&self,decoded:readers::encoding::Decoded,name:String,selector:Option<String>)->Result<readers::Parsed>{
+        let permit=self.parse_slots.clone().acquire_owned().await?;
+        tokio::task::spawn_blocking(move||{
+            let _permit=permit;readers::html::parse_decoded(decoded,&name,selector.as_deref())
+        }).await.context("HTML reader task failed")?
+    }
     async fn parse(&self,bytes:Vec<u8>,name:String,mime:String,selector:Option<String>)->Result<readers::Parsed>{
+        if matches!(mime.as_str(),"text/html"|"application/xhtml+xml"){
+            let decoded=self.decode_html(bytes,mime,None,false).await?;
+            return self.parse_html(decoded,name,selector).await;
+        }
         let permit=self.parse_slots.clone().acquire_owned().await?;
         if readers::is_document_format(&mime){
             // The permit stays alive for the whole document operation.
@@ -268,8 +293,10 @@ impl Engine {
     async fn finish(&self,parsed:readers::Parsed,source:Source,mut warnings:Vec<Warning>)->Result<Document>{
         warnings.extend(parsed.warnings);
         if parsed.blocks.is_empty(){warnings.push(Warning::new("empty_document","The source was accepted but contains no readable blocks."));}
-        let id=hex::encode(Sha256::digest(serde_json::to_vec(&json!({"source":source.requested,"hash":source.original.sha256,
-            "version":source.version,"parser":parsed.parser,"extraction":EXTRACTION_VERSION,"blocks":parsed.blocks,"configuration":self.config.document_config}))?));
+        let mut identity=json!({"source":source.requested,"hash":source.original.sha256,
+            "version":source.version,"parser":parsed.parser,"extraction":EXTRACTION_VERSION,"blocks":parsed.blocks,"configuration":self.config.document_config});
+        if let Some(encoding)=parsed.metadata.get("html_encoding"){identity["html_encoding"]=encoding.clone();}
+        let id=hex::encode(Sha256::digest(serde_json::to_vec(&identity)?));
         let document=Document{schema_version:1,id,title:parsed.title,source,parser:parsed.parser,extraction_version:EXTRACTION_VERSION.into(),
             blocks:parsed.blocks,links:parsed.links,metadata:parsed.metadata,warnings};
         self.store.save(document).await
@@ -325,8 +352,14 @@ impl Engine {
                 if !matches!(d.source.original.media_type.as_str(),"text/html"|"application/xhtml+xml"){bail!("CSS extraction requires an HTML original");}
                 let bytes=self.store.bytes(&d.source.original).await?;
                 let css=request.expression.context("a CSS selector expression is required")?;
-                let source=String::from_utf8(bytes)?;
-                json!(tokio::task::spawn_blocking(move||readers::html::select_original(&source,&css)).await??)
+                let encoding=d.metadata.get("html_encoding").cloned();
+                let limit=self.config.max_bytes;
+                let permit=self.parse_slots.clone().acquire_owned().await?;
+                json!(tokio::task::spawn_blocking(move||{
+                    let _permit=permit;
+                    let source=readers::encoding::restore(&bytes,encoding.as_ref(),limit)?;
+                    readers::html::select_original(&source,&css)
+                }).await??)
             },
         };
         Ok(ExtractResponse{document_id:d.id,data,warnings})

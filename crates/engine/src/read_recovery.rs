@@ -3,7 +3,7 @@ use scraper::{ElementRef, Html, Selector};
 use webtool_protocol::Content;
 use crate::readers::Parsed;
 
-pub const VERSION: &str = "http-lightpanda-recovery/1";
+pub const VERSION: &str = "http-lightpanda-recovery/2";
 
 #[derive(Default)]
 pub struct Evidence {
@@ -49,8 +49,8 @@ fn gate(text: &str) -> Option<&'static str> {
     None
 }
 
-pub fn inspect(bytes: &[u8]) -> Evidence {
-    let Ok(source) = std::str::from_utf8(bytes) else { return Evidence::default(); };
+/// Inspect the same decoded input used by selection and link discovery.
+pub fn inspect(source: &str) -> Evidence {
     let dom = Html::parse_document(source);
     let mut evidence = Evidence::default();
     // A login link or an article discussing CAPTCHAs does not establish a gate.
