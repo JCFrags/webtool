@@ -314,9 +314,14 @@ whitespace. Detailed views keep separate provenance blocks. Invalid or missing
 metadata falls back to ordinary block rendering. Non-default Markdown ordinals
 need explicit list boundaries or labels because Markdown engines can renumber them.
 
-Non-UTF-8 decoding is absent. Markdown parsing implements a limited block reader,
-not full CommonMark. General image, table-nesting, mathematical, and inline-style
-fidelity remain incomplete. This is not general extraction-quality validation.
+HTML uses one bounded decoded view for gates, extraction, links, and saved CSS
+replay. See [ENCODING.md](docs/ENCODING.md) for BOM/HTTP/meta precedence, decoded
+limits, replacement warnings, and exact original retention. XHTML and captured
+DOM remain explicitly UTF-8-only. Current HTML identity is main-content/10 plus
+html-encoding/1, CSS is source-blocks/7, and recovery is /2. Earlier identities
+above describe preserved snapshots. Markdown parsing implements a limited block
+reader, not full CommonMark. General image, table-nesting, mathematical, and
+inline-style fidelity remain incomplete. This is not general quality validation.
 
 Text and Markdown share saved table cell values. Text grids support multiline
 ASCII cells and horizontal spans within 88 columns; uncertain widths or row spans
@@ -424,6 +429,20 @@ cached; library search remains separate. See [SEARCH.md](docs/SEARCH.md) for
 markers, evidence and exact limitations. Do not promise absence of concealed ads
 or unknown future markup. Image, video, news, date, language and domain-filter
 interfaces remain incomplete. There are no semantic rerankers or automatic LLM calls.
+
+## Shared connector foundations
+
+The HTTP API exposes generated OpenAPI at `/openapi.json`, safe bounded Problem
+errors, and Python/TypeScript client examples. The engine still uses anyhow and a
+finite server compatibility adapter, not a complete typed error model. Add newly
+introduced error prefixes explicitly rather than restoring broad substring guesses.
+See [API.md](docs/API.md).
+
+`webtool mcp` is a bounded stdio HTTP adapter to the same server. It starts no
+listener or engine. Saved-ID passages preserve exact continuation and original
+artifact references. Exercise `tools/list` after schema changes: tagged enum
+schemas need explicit root object types. See [MCP.md](docs/MCP.md). Source and
+local diagnostic verification do not establish installed activation.
 
 ## Remaining source fidelity
 

@@ -88,6 +88,9 @@ fn legacy_engine_error(message: &str) -> Option<ApiError> {
         "github_unsupported_object" => (S::UNPROCESSABLE_ENTITY, "github_unsupported_object", "This GitHub object is not supported."),
         "github_content_unavailable" | "github_readme_unavailable" => (S::UNPROCESSABLE_ENTITY, "github_content_unavailable", "The GitHub source content is unavailable."),
         "github_invalid_response" | "github_api_error" => (S::BAD_GATEWAY, "github_api_error", "The GitHub API request failed."),
+        "html_input_size_limit" | "html_decoded_size_limit" => (S::PAYLOAD_TOO_LARGE, "size_limit", "HTML input or decoded text exceeds the configured byte limit."),
+        "html_encoding_unsupported" | "xhtml_encoding_unsupported" => (S::UNPROCESSABLE_ENTITY, "encoding_unsupported", "The source character encoding is not supported by this reader."),
+        "html_encoding_invalid" | "rendered_encoding_invalid" => (S::UNPROCESSABLE_ENTITY, "encoding_invalid", "The source does not meet the reader's character encoding requirements."),
         "browser_helper_missing" => (S::UNPROCESSABLE_ENTITY, "browser_helper_missing", "The requested browser helper is not configured."),
         "browser_timeout" => (S::GATEWAY_TIMEOUT, "browser_timeout", "The browser helper deadline was reached."),
         "browser_size_limit" => (S::PAYLOAD_TOO_LARGE, "browser_size_limit", "Browser output exceeds the configured byte limit."),
@@ -219,6 +222,9 @@ mod tests {
         assert!(!error.message.contains("private"));
         let error = ApiError::from(anyhow::anyhow!("document not found"));
         assert_eq!(error.status, StatusCode::NOT_FOUND);
+        let error = ApiError::from(anyhow::anyhow!("html_decoded_size_limit: decoded HTML exceeds 4096 UTF-8 bytes"));
+        assert_eq!(error.status, StatusCode::PAYLOAD_TOO_LARGE);
+        assert_eq!(error.code, "size_limit");
     }
 
     #[test]

@@ -49,9 +49,9 @@ commands, evidence, and limits. Historical archive logs are not current results.
 | Area | Current implementation |
 |---|---|
 | CLI | Ordinary commands, text and Markdown output, JSON, JSONL batches, stderr warnings, meaningful failure exits |
-| Shared service | Axum API, concurrent requests, bounded processing, one server-local SQLite database |
-| Search | DuckDuckGo, Brave, Startpage, and Yahoo result parsing, paid-result exclusion, deduplication, reciprocal-rank merging |
-| Reading | HTTP/HTML, pinned GitHub files and immediate directories, original-byte retention, explicit selection |
+| Shared service | Axum API, generated OpenAPI, Python/TypeScript client examples, bounded stdio MCP, one server-local SQLite database |
+| Search | DuckDuckGo, Brave, Startpage, and Yahoo parsing, shared provider budgets, explicit partial results, paid-result exclusion, reciprocal-rank merging |
+| Reading | Bounded HTML decoding, HTTP/HTML, pinned GitHub files and immediate directories, original-byte retention, explicit selection |
 | Libraries | Shared named collections, references to saved documents, attributed notes and tags |
 | Local search | SQLite FTS5 keyword search, literal matching, optional regex matching |
 | Extraction | Tables, code, links, images, metadata, outlines, CSS selections, JSON pointers |
@@ -652,4 +652,5 @@ Prefer library integrations over importing entire upstream servers.
 Do not add quality profiles, automatic extractor chains, or a TUI.
 Add source format support only with fidelity fixtures and explicit limitations.
 
-See [architecture](docs/ARCHITECTURE.md), [API](docs/API.md), [status](docs/STATUS.md), and [sources](docs/SOURCES.md).
+See [architecture](docs/ARCHITECTURE.md), [API](docs/API.md), [MCP](docs/MCP.md),
+[HTML decoding](docs/ENCODING.md), [status](docs/STATUS.md), and [sources](docs/SOURCES.md).
