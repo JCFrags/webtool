@@ -1,12 +1,17 @@
 //! A conventional, pipe-friendly CLI. No alternate screen, mouse handling, or TUI runtime.
 use std::{io::{self,Read,Write},path::PathBuf,process::ExitCode,time::Duration};
-use anyhow::{anyhow,bail,Context,Result};
+use anyhow::{bail,Context,Result};
 use clap::{Parser,Subcommand,ValueEnum};
 use serde::{de::DeserializeOwned,Serialize};
 use serde_json::{json,Value};
 use webtool_protocol::*;
 mod settings;
 mod presentation;
+mod mcp;
+mod code;
+mod external_code;
+mod scholarly;
+mod media_jobs;
 
 #[derive(Parser)]
 #[command(name="webtool",version,about="Search, read, extract, and save sources through a shared server",after_help="No TUI. Results go to stdout. Warnings and progress go to stderr. Use --format json for scripts.")]
@@ -22,6 +27,10 @@ impl From<Browser> for Renderer{fn from(v:Browser)->Self{match v{Browser::Auto=>
 #[derive(Clone,Copy,ValueEnum)]enum Kind{Tables,Links,Code,Images,Metadata,Outline,JsonPointer,Css}
 impl From<Kind> for ExtractKind{fn from(v:Kind)->Self{match v{Kind::Tables=>Self::Tables,Kind::Links=>Self::Links,Kind::Code=>Self::Code,Kind::Images=>Self::Images,Kind::Metadata=>Self::Metadata,Kind::Outline=>Self::Outline,Kind::JsonPointer=>Self::JsonPointer,Kind::Css=>Self::Css}}}
 #[derive(Clone,Copy,ValueEnum)]enum ExportKind{Markdown,Json,Original,TableCsv}
+#[derive(Clone,Copy,ValueEnum)]enum CaptionSelection{ProvidedFirst,Provided,Automatic}
+impl From<CaptionSelection> for CaptionChoice{fn from(value:CaptionSelection)->Self{match value{
+    CaptionSelection::ProvidedFirst=>Self::ProvidedFirst,CaptionSelection::Provided=>Self::Provided,CaptionSelection::Automatic=>Self::Automatic,
+}}}
 
 #[derive(Subcommand)]
 enum Command{
@@ -29,15 +38,29 @@ enum Command{
     Connect{server_url:String},
     /// Inspect local client configuration without contacting the server.
     Config{#[command(subcommand)]action:ConfigCommand},
+    /// Serve MCP over stdin/stdout, forwarding operations to the configured HTTP server.
+    Mcp,
     /// Check server reachability and report compiled or configured capabilities.
     Doctor,
+    /// Discover public repositories and navigate explicitly selected revision-pinned files.
+    Code{#[command(subcommand)]action:code::CodeCommand},
+    /// Read an explicit docs.rs release page or published source. Never selects latest.
+    Docs(code::DocsArgs),
+    /// Explicit optional code/documentation indexes. No default provider or hidden calls.
+    External{#[command(subcommand)]action:external_code::Command},
     /// Search the web, or a saved library. Use --library '*' for all saved documents.
     Search{#[arg(required=true,num_args=1..)]query:Vec<String>,#[arg(long,default_value_t=10)]limit:usize,#[arg(long)]library:Option<String>},
+    /// Explicit historical capture lookup and reading. Never a live-read fallback.
+    Archive{#[command(subcommand)]action:ArchiveCommand},
+    /// Explicit scholarly discovery and selected metadata. Ordinary search is unchanged.
+    Scholar{#[command(subcommand)]action:scholarly::Command},
     /// Read a URL or a saved document ID. URLs are retained automatically.
     Read{source:String,#[arg(long)]refresh:bool,#[arg(long,value_enum,default_value="auto")]renderer:Browser,
         #[arg(long,default_value="en")]language:String,
         #[arg(long)]selector:Option<String>,#[arg(long)]library:Option<String>,#[arg(long)]actor:Option<String>,
-        #[arg(long)]start_block:Option<usize>,#[arg(long)]end_block:Option<usize>,#[arg(long)]page:Option<usize>},
+        #[arg(long)]start_block:Option<usize>,#[arg(long)]end_block:Option<usize>,#[arg(long)]page:Option<usize>,
+        /// Show retrieval metadata, block IDs, and source locations.
+        #[arg(long)]details:bool},
     /// Upload a local file. Use '-' for stdin and --name to identify its format.
     Ingest{file:PathBuf,#[arg(long)]name:Option<String>,#[arg(long)]library:Option<String>,#[arg(long)]actor:Option<String>,#[arg(long)]selector:Option<String>},
     /// Find literal text, or a regex, in a saved document or URL.
@@ -54,21 +77,56 @@ enum Command{
     Notes{document:String},
     /// Submit a bounded, same-origin crawl. Robots rules are respected.
     Crawl{url:String,#[arg(long,default_value_t=20)]max_pages:usize,#[arg(long,default_value_t=2)]max_depth:usize,
-        #[arg(long)]library:Option<String>,#[arg(long)]actor:Option<String>,#[arg(long)]wait:bool},
+        #[arg(long)]library:Option<String>,#[arg(long)]actor:Option<String>,#[arg(long)]wait:bool,
+        /// Add an explicit same-origin sitemap root. Repeat for up to eight roots.
+        #[arg(long="sitemap")]sitemaps:Vec<String>,
+        /// Discover sitemap roots from robots.txt, without guessing paths.
+        #[arg(long)]discover_sitemaps:bool},
     /// List links from a page or URLs from a sitemap, without article extraction.
     Map{url:String,#[arg(long,default_value_t=100)]limit:usize},
     /// List jobs or inspect one. --wait polls status with progress on stderr.
-    Jobs{id:Option<String>,#[arg(long,requires="id",conflicts_with="cancel")]wait:bool,#[arg(long,requires="id")]cancel:bool},
+    Jobs{id:Option<String>,#[arg(long,requires="id",conflicts_with="cancel")]wait:bool,
+        #[arg(long,requires="id",conflicts_with="resume")]cancel:bool,
+        /// Resume only pending/interrupted work from the saved frontier.
+        #[arg(long,requires="id")]resume:bool,
+        /// Increase the total attempt budget on resume, including prior attempts.
+        #[arg(long,requires="resume")]max_pages:Option<usize>},
     /// Retrieve existing captions through yt-dlp. No video download or transcription.
     Media{url:String,#[arg(long,default_value="en")]language:String,#[arg(long)]library:Option<String>},
-    /// Cite a saved arXiv paper offline, or retrieve a DOI citation.
+    /// Search flat video metadata, list caption tracks, or save an explicitly selected track.
+    Video{#[command(subcommand)]action:VideoCommand},
+    /// Cite a saved arXiv or PMC paper offline, or retrieve a DOI citation.
     Cite{#[arg(value_name="DOI_OR_DOCUMENT_ID")]doi:String,#[arg(long="as",default_value="bibtex",value_parser=["bibtex","ris","csl"])]style:String},
     /// Export a saved document. Existing files require --force.
     Export{document:String,#[arg(long,value_enum,default_value="markdown")]kind:ExportKind,#[arg(long,default_value_t=1)]table:usize,#[arg(short,long)]output:PathBuf,#[arg(long)]force:bool},
     /// Read URLs from a UTF-8 file or stdin. Emit one result per line with --format jsonl.
     Batch{file:PathBuf,#[arg(long)]library:Option<String>},
 }
+#[derive(Subcommand)]enum VideoCommand{
+    /// Observe exact source format identities. No media transfer or rights guarantee.
+    Formats{url:String},
+    /// Submit one preview-checked bounded video or native-audio job.
+    Download(media_jobs::DownloadArgs),
+    /// Export one accepted job artifact to a client-local file.
+    Export(media_jobs::ExportArgs),
+    /// Search supplied metadata without fetching each video. Quote the literal query.
+    Search{query:String,#[arg(long,default_value_t=5)]limit:usize},
+    /// List untranslated VTT tracks without signed URLs. No caption download.
+    Tracks{url:String},
+    /// Save one exact-language track. Provided-first is the existing default.
+    Captions{url:String,#[arg(long,default_value="en")]language:String,
+        #[arg(long,value_enum,default_value="provided-first")]choice:CaptionSelection,
+        #[arg(long)]refresh:bool,#[arg(long)]library:Option<String>},
+}
 #[derive(Subcommand)]enum ConfigCommand{Show}
+#[derive(Subcommand)]enum ArchiveCommand{
+    /// List captures at or before --at (UTC YYYYMMDDhhmmss), newest first.
+    Lookup{url:String,#[arg(long)]at:String,#[arg(long,default_value_t=30)]within_days:u16,
+        #[arg(long,default_value_t=3)]limit:usize,#[arg(long)]refresh:bool},
+    /// Read one exact selected UTC capture. Redirects and live fallback are refused.
+    Read{url:String,#[arg(long)]timestamp:String,#[arg(long)]refresh:bool,
+        #[arg(long)]library:Option<String>,#[arg(long)]actor:Option<String>,#[arg(long)]details:bool},
+}
 #[derive(Subcommand)]enum LibraryCommand{
     List,
     Create{name:String,#[arg(long,default_value="")]description:String},
@@ -106,7 +164,10 @@ impl Client{
         let mut previous=String::new();
         loop{
             let job:Job=self.get(&format!("/v1/jobs/{id}")).await?;
-            let message=format!("{id}: {:?}, {} visited attempts, {} saved, {} failed (limits: {} pages, depth {})",job.state,job.visited,job.document_ids.len(),job.failed,job.request.max_pages,job.request.max_depth);
+            let mut message=if let Some(r)=job.request.crawl() {format!("{id}: {:?}, {} visited attempts, {} saved, {} failed (limits: {} attempts, depth {})",job.state,job.visited,job.document_ids.len(),job.failed,r.max_pages,r.max_depth)}
+                else {format!("{id}: {:?}",job.state)};
+            if let Some(m)=&job.media {message.push_str(&format!(", {:?}, {} transferred bytes, total={}",m.progress.stage,m.progress.transferred_bytes,m.progress.total_bytes.map(|n|n.to_string()).unwrap_or_else(||"unknown".into())));}
+            if let Some(p)=&job.progress{message.push_str(&format!(", {} charged, {} pending, {} active, {} interrupted attempts",p.attempted,p.pending,p.active,p.interrupted));}
             if message!=previous{eprintln!("{}",render::terminal_safe(&message));previous=message;}
             if job.state.terminal(){return Ok(job);}
             tokio::select!{
@@ -122,14 +183,38 @@ fn output<T:Serialize>(value:&T,format:Output)->Result<()>{
     let text=if matches!(format,Output::Jsonl){serde_json::to_string(value)?}else{serde_json::to_string_pretty(value)?};
     stdout(&format!("{text}\n"))
 }
-fn warnings(items:&[Warning]){for w in items{eprintln!("{}",render::terminal_safe(&format!("Warning [{}]: {}",w.code,w.message)));}}
-fn document(d:&Document,format:Output)->Result<()>{
-    warnings(&d.warnings);
-    match format{Output::Text=>stdout(&render::plain(d)),Output::Markdown=>stdout(&render::terminal_safe(&render::markdown(d))),_=>output(d,format)}
+fn warning_is_mapping_or_provenance(w:&Warning)->bool{
+    matches!(w.code.as_str(),"approximate_source_mapping"|"document_location_unavailable"
+        |"rendered_dom_snapshot"|"comment_locations_derived")
+}
+fn warnings(items:&[Warning],details:bool){
+    if details{
+        for w in items{eprintln!("{}",render::terminal_safe(&format!("Warning [{}]: {}",w.code,w.message)));}
+        return;
+    }
+    let diagnostics:Vec<&Warning>=items.iter().filter(|w|warning_is_mapping_or_provenance(w)).collect();
+    for w in items.iter().filter(|w|!warning_is_mapping_or_provenance(w)){
+        eprintln!("{}",render::terminal_safe(&format!("Warning [{}]: {}",w.code,w.message)));
+    }
+    if diagnostics.len()==1{
+        let w=diagnostics[0];
+        eprintln!("{}",render::terminal_safe(&format!("Warning [{}]: {}",w.code,w.message)));
+    }else if diagnostics.len()>1{
+        eprintln!("Warning: {} repeated source mapping/provenance diagnostics were condensed. Use read --details or --format json for full details.",diagnostics.len());
+    }
+}
+fn document(d:&Document,format:Output,details:bool,condense_warnings:bool)->Result<()>{
+    warnings(&d.warnings,details||!human(format)||!condense_warnings);
+    let text=match format{
+        Output::Text=>Some(if details{render::plain_details(d)}else{render::plain(d)}),
+        Output::Markdown=>Some(render::terminal_safe(&render::markdown_read(d,details))),
+        _=>None,
+    };
+    if let Some(text)=text{stdout(&text)}else{output(d,format)}
 }
 fn human(format:Output)->bool{matches!(format,Output::Text|Output::Markdown)}
 fn job_output(job:&Job,format:Output)->Result<()>{
-    warnings(&job.warnings);
+    warnings(&job.warnings,true);
     if human(format){stdout(&presentation::job(job))}else{output(job,format)}
 }
 fn excerpt(text:&str,start:usize,end:usize)->String{
@@ -168,9 +253,10 @@ async fn run(cli:Cli)->Result<()>{
     if matches!(cli.command,Command::Config{..}){
         return if matches!(format,Output::Text|Output::Markdown){stdout(&format!("Endpoint: {server}\nConfiguration: {}\nSource: {source}\n",config_path.display()))}else{output(&json!({"server":server,"config_path":config_path,"source":source}),format)};
     }
+    if matches!(cli.command,Command::Mcp){return mcp::run(&server,cli.timeout).await;}
     let client=Client::new(&server,cli.timeout)?;
     match cli.command{
-        Command::Connect{..}|Command::Config{..}=>unreachable!(),
+        Command::Connect{..}|Command::Config{..}|Command::Mcp=>unreachable!(),
         Command::Doctor=>{
             let h:Health=client.get("/v1/health").await?;
             if matches!(format,Output::Text|Output::Markdown){
@@ -179,9 +265,12 @@ async fn run(cli:Cli)->Result<()>{
                 Ok(())
             }else{let mut value=serde_json::to_value(&h)?;value["build_commit"]=json!(h.build_commit.as_deref().unwrap_or("unknown"));value["endpoint"]=json!(client.base);value["endpoint_source"]=json!(source);output(&value,format)}
         },
+        Command::Code{action}=>code::run(&client,action,format).await,
+        Command::External{action}=>external_code::run(&client,action,format).await,
+        Command::Docs(args)=>code::docs(&client,args,format).await,
         Command::Search{query,limit,library}=>{
             let result:SearchResponse=client.post("/v1/search",&SearchRequest{query:query.join(" "),limit,library}).await?;
-            warnings(&result.warnings);
+            warnings(&result.warnings,true);
             if matches!(format,Output::Text|Output::Markdown){
                 for (i,r) in result.results.iter().enumerate(){
                     stdout(&render::terminal_safe(&format!("{}. {}\n   {}\n   {}\n   Providers: {}{}\n\n",i+1,r.title,r.url,
@@ -191,7 +280,25 @@ async fn run(cli:Cli)->Result<()>{
             }else{output(&result,format)?;}
             if result.results.is_empty()&&!result.warnings.is_empty(){bail!("search returned no results and reported provider warnings");}Ok(())
         },
-        Command::Read{source,refresh,renderer,language,selector,library,actor,start_block,end_block,page}=>{
+        Command::Archive{action}=>match action{
+            ArchiveCommand::Lookup{url,at,within_days,limit,refresh}=>{
+                let result:ArchiveLookupResponse=client.post("/v1/archive/lookup",&ArchiveLookupRequest{url,at,within_days,limit,refresh}).await?;
+                warnings(&result.warnings,true);
+                if human(format){
+                    stdout(&render::terminal_safe(&format!("Historical candidates for {}\nUTC interval: {} through {} (at or before)\nIndex checked: {}{}\n",result.requested_url,result.earliest_at,result.requested_at,result.retrieved_at,if result.cached{" (cached)"}else{""})))?;
+                    for c in &result.captures{stdout(&render::terminal_safe(&format!("{} | capture HTTP {} | {}\n  {}\n",c.timestamp,c.capture_status.map(|s|s.to_string()).unwrap_or_else(||"unknown".into()),c.media_type.as_deref().unwrap_or("unknown"),c.replay_url)))?;}
+                    if result.captures.is_empty(){stdout("No matching capture returned. No page was read.\n")?;}
+                    Ok(())
+                }else{output(&result,format)}
+            },
+            ArchiveCommand::Read{url,timestamp,refresh,library,actor,details}=>{
+                let result:ReadResponse=client.post("/v1/archive/read",&ArchiveReadRequest{url,timestamp,refresh,library,actor}).await?;
+                if result.cached{eprintln!("Using saved historical capture. Pass --refresh to check the same capture again.");}
+                document(&result.document,format,details,true)
+            },
+        },
+        Command::Scholar{action}=>scholarly::run(&client,action,format).await,
+        Command::Read{source,refresh,renderer,language,selector,library,actor,start_block,end_block,page,details}=>{
             let mut d=if source.starts_with("https://")||source.starts_with("http://"){
                 let result:ReadResponse=client.post("/v1/read",&ReadRequest{url:source,refresh,renderer:renderer.into(),language,library,selector,actor}).await?;
                 if result.cached{eprintln!("Using saved extraction. Pass --refresh to retrieve again.");}result.document
@@ -209,7 +316,7 @@ async fn run(cli:Cli)->Result<()>{
                 if start==0||end<start||end>d.blocks.len(){bail!("invalid block range for {} blocks",d.blocks.len());}
                 d.blocks=d.blocks[start-1..end].to_vec();d.warnings.push(Warning::new("selected_blocks",format!("Showing only blocks {start} through {end}.")));
             }
-            document(&d,format)
+            document(&d,format,details,true)
         },
         Command::Ingest{file,name,library,actor,selector}=>{
             let bytes=input(&file)?;
@@ -217,7 +324,7 @@ async fn run(cli:Cli)->Result<()>{
             let mut form=reqwest::multipart::Form::new().part("file",reqwest::multipart::Part::bytes(bytes).file_name(name));
             if let Some(v)=library{form=form.text("library",v);}if let Some(v)=actor{form=form.text("actor",v);}if let Some(v)=selector{form=form.text("selector",v);}
             let response=client.http.post(format!("{}/v1/ingest",client.base)).multipart(form).send().await.with_context(||client.connection_error())?;
-            let d:Document=Client::decode(response).await?;document(&d,format)
+            let d:Document=Client::decode(response).await?;document(&d,format,false,false)
         },
         Command::Find{source,query,regex,ignore_case,limit}=>{
             let d=client.resolve(&source).await?;
@@ -235,7 +342,7 @@ async fn run(cli:Cli)->Result<()>{
         Command::Extract{source,kind,expression}=>{
             let d=client.resolve(&source).await?;let extract_kind:ExtractKind=kind.into();
             let result:ExtractResponse=client.post(&format!("/v1/documents/{}/extract",d.id),&ExtractRequest{kind:extract_kind.clone(),expression}).await?;
-            warnings(&result.warnings);
+            warnings(&result.warnings,true);
             if human(format){if let Some(text)=presentation::extract(&result,&extract_kind,&d)?{return stdout(&text);}}
             output(&result,format)
         },
@@ -256,26 +363,65 @@ async fn run(cli:Cli)->Result<()>{
             if human(format){stdout(&presentation::documents(&v))}else{output(&v,format)}},
         Command::Note{document,actor,text,tags}=>{document_id(&document)?;let a:Annotation=client.post(&format!("/v1/documents/{document}/annotations"),&AnnotationCreate{actor,note:text,tags}).await?;output(&a,format)},
         Command::Notes{document}=>{document_id(&document)?;let a:Vec<Annotation>=client.get(&format!("/v1/documents/{document}/annotations")).await?;output(&a,format)},
-        Command::Crawl{url,max_pages,max_depth,library,actor,wait}=>{
-            let j:Job=client.post("/v1/crawl",&CrawlRequest{url,max_pages,max_depth,library,actor}).await?;
+        Command::Crawl{url,max_pages,max_depth,library,actor,wait,sitemaps,discover_sitemaps}=>{
+            let j:Job=client.post("/v1/crawl",&CrawlRequest{url,max_pages,max_depth,sitemaps,discover_sitemaps,library,actor}).await?;
             let j=if wait{client.wait(&j.id).await?}else{j};job_output(&j,format)?;
             if matches!(j.state,JobState::Failed|JobState::Interrupted){bail!("crawl did not complete successfully");}Ok(())
         },
         Command::Map{url,limit}=>{let v:Value=client.post("/v1/map",&json!({"url":url,"limit":limit})).await?;output(&v,format)},
-        Command::Jobs{id,wait,cancel}=>{
+        Command::Jobs{id,wait,cancel,resume,max_pages}=>{
             if let Some(id)=id{
                 if cancel{let v:Value=client.post(&format!("/v1/jobs/{id}/cancel"),&json!({})).await?;
                     if human(format){return stdout(&render::terminal_safe(&format!("Job {id}: cancellation requested={} | state={}\n",v["cancel_requested"].as_bool().map(|b|b.to_string()).unwrap_or_else(||"unknown".into()),v["state"].as_str().unwrap_or("unknown"))));}
                     return output(&v,format);}
-                let j:Job=if wait{client.wait(&id).await?}else{client.get(&format!("/v1/jobs/{id}")).await?};job_output(&j,format)?;
-                if wait && matches!(j.state,JobState::Failed|JobState::Interrupted){bail!("crawl did not complete successfully");}Ok(())
+                let resumed:Option<Job>=if resume{Some(client.post(&format!("/v1/jobs/{id}/resume"),&CrawlResumeRequest{max_pages}).await?)}else{None};
+                let j:Job=if wait{client.wait(&id).await?}else if let Some(j)=resumed{j}else{client.get(&format!("/v1/jobs/{id}")).await?};job_output(&j,format)?;
+                if wait && matches!(j.state,JobState::Failed|JobState::Interrupted){bail!("job did not complete successfully");}Ok(())
             }else{let jobs:Vec<Job>=client.get("/v1/jobs").await?;
                 if human(format){
                     if jobs.is_empty(){stdout("No jobs.\n")?;}
                     for job in &jobs{job_output(job,format)?;}Ok(())
-                }else{for job in &jobs{warnings(&job.warnings);}output(&jobs,format)}}
+                }else{for job in &jobs{warnings(&job.warnings,true);}output(&jobs,format)}}
         },
-        Command::Media{url,language,library}=>{let d:Document=client.post("/v1/media",&json!({"url":url,"language":language,"library":library})).await?;document(&d,format)},
+        Command::Media{url,language,library}=>{let d:Document=client.post("/v1/media",&json!({"url":url,"language":language,"library":library})).await?;document(&d,format,false,false)},
+        Command::Video{action}=>match action{
+            VideoCommand::Formats{url}=>media_jobs::formats(&client,url,format).await,
+            VideoCommand::Download(args)=>media_jobs::download(&client,args,format).await,
+            VideoCommand::Export(args)=>media_jobs::export(&client,args).await,
+            VideoCommand::Search{query,limit}=>{
+                let response:VideoSearchResponse=client.post("/v1/video/search",&VideoSearchRequest{query,limit}).await?;
+                warnings(&response.warnings,true);
+                if human(format){
+                    stdout(&render::terminal_safe(&format!("Provider: {} | flat discovery metadata, not transcript evidence\n",response.provider)))?;
+                    for result in &response.results{
+                        let video=&result.video;
+                        stdout(&render::terminal_safe(&format!("{}. {}\n   {}\n   Channel: {} | Duration seconds: {} | Views: {}\n\n",
+                            result.provider_rank,video.title.as_deref().unwrap_or("(title unavailable)"),video.url,
+                            video.channel.as_deref().unwrap_or("unavailable"),video.duration_seconds.map(|n|n.to_string()).unwrap_or_else(||"unavailable".into()),
+                            video.view_count.map(|n|n.to_string()).unwrap_or_else(||"unavailable".into()))))?;
+                    }
+                    if response.results.is_empty(){stdout("No video results returned.\n")?;}
+                    Ok(())
+                }else{output(&response,format)}
+            },
+            VideoCommand::Tracks{url}=>{
+                let response:CaptionTracksResponse=client.post("/v1/video/tracks",&CaptionTracksRequest{url}).await?;
+                warnings(&response.warnings,true);
+                if human(format){
+                    stdout(&render::terminal_safe(&format!("{}\n{}\n",response.video.title.as_deref().unwrap_or("(title unavailable)"),response.video.url)))?;
+                    for track in &response.tracks{
+                        stdout(&render::terminal_safe(&format!("{} | {} | {} | {}\n",track.language,track.origin.as_str(),track.format,track.name.as_deref().unwrap_or("(name unavailable)"))))?;
+                    }
+                    if response.tracks.is_empty(){stdout("No selectable untranslated VTT tracks.\n")?;}
+                    Ok(())
+                }else{output(&response,format)}
+            },
+            VideoCommand::Captions{url,language,choice,refresh,library}=>{
+                let response:ReadResponse=client.post("/v1/video/captions",&CaptionReadRequest{url,language,choice:choice.into(),refresh,library}).await?;
+                if response.cached{eprintln!("Using saved extraction. Pass --refresh to retrieve again.");}
+                document(&response.document,format,false,false)
+            },
+        },
         Command::Cite{doi,style}=>{let v:Value=client.post("/v1/cite",&json!({"doi":doi,"format":style})).await?;
             if matches!(format,Output::Text|Output::Markdown){stdout(&format!("{}\n",render::terminal_safe(v["text"].as_str().context("citation response has no text")?)))}else{output(&v,format)}},
         Command::Export{document:source,kind,table,output:path,force}=>{
@@ -299,7 +445,7 @@ async fn run(cli:Cli)->Result<()>{
             for url in data.lines().map(str::trim).filter(|s|!s.is_empty()&&!s.starts_with('#')){
                 let result:Result<ReadResponse>=client.post("/v1/read",&ReadRequest{url:url.into(),refresh:false,renderer:Renderer::Auto,language:default_language(),library:library.clone(),selector:None,actor:None}).await;
                 match result{Ok(r)=>{
-                    if matches!(format,Output::Jsonl){output(&json!({"ok":true,"url":url,"document":r.document}),format)?;}else{document(&r.document,format)?;}
+                    if matches!(format,Output::Jsonl){output(&json!({"ok":true,"url":url,"document":r.document}),format)?;}else{document(&r.document,format,false,false)?;}
                 },Err(e)=>{errors+=1;
                     if matches!(format,Output::Jsonl){output(&json!({"ok":false,"url":url,"error":e.to_string()}),format)?;}else{eprintln!("{}: {e:#}",render::terminal_safe(url));}
                 }}

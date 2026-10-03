@@ -12,7 +12,7 @@ documents = ["webtool-engine/documents"]
 ocr = ["webtool-engine/ocr"]
 crw-browser = ["webtool-engine/crw-browser"]
 [dependencies]
-webtool-protocol.workspace = true
+webtool-protocol = { workspace = true, features = ["openapi"] }
 webtool-engine.workspace = true
 anyhow.workspace = true
 axum.workspace = true
@@ -26,6 +26,8 @@ tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 uuid.workspace = true
+utoipa.workspace = true
+utoipa-axum.workspace = true
 [dev-dependencies]
 http-body-util.workspace = true
 tower.workspace = true

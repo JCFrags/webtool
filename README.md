@@ -6,16 +6,36 @@ There is no TUI, alternate screen, browser-control interface, or default LLM wor
 
 ## Delivery status
 
-The `0.1.0-alpha.1` packages are local candidates, not published or installed.
-See [alpha notes](docs/ALPHA.md), [source access](docs/SOURCE-ACCESS.md),
-[third-party records](docs/THIRD-PARTY.md), and [artifact evidence](docs/STATUS.md).
-The installed server was restored without replacement. Earlier packaged doctor
-and saved-read failures were connection refusal; both passed after restoration.
-Candidate-2 passes checksums, unpacked versions, doctor and one saved read, with
-zero unresolved bounded material gaps. Build/source: 33ad146a9d456d4f653da00c2ae298446cdf4f31.
-Use `scripts/package-local.sh --out-dir runtime/dist/candidate-2/` from a clean
-committed checkpoint; existing outputs are never overwritten. Distribution still
-requires the documented source-access/availability conditions, not future promises.
+[v0.1.0-alpha.1](https://github.com/JCFrags/webtool/releases/tag/v0.1.0-alpha.1)
+is published from build/source `33ad146a9d456d4f653da00c2ae298446cdf4f31`.
+Its tags and assets remain unchanged. See [alpha notes](docs/ALPHA.md),
+[source access](docs/SOURCE-ACCESS.md), [third-party records](docs/THIRD-PARTY.md),
+and [artifact evidence](docs/STATUS.md). Distribution requires the documented
+source-access and availability conditions. This is not general legal clearance.
+
+The approved [delivery plan](docs/DELIVERY-PLAN.md) expands the Rust-centered core:
+web search/reading, app connectors, code and scholarly research, durable crawls,
+historical sources, and bounded media work. Optional configurable cloud/local LLM
+answers are the final milestone, after accepted remote/local core delivery.
+The core source is implemented and locally accepted with the limits below.
+The user approved normal checked delivery through [PR #24](https://github.com/JCFrags/webtool/pull/24)
+and activation of the accepted core. This README is not proof of current service
+health or installation. See the [roadmap](docs/ROADMAP.md) and
+[verified status](docs/STATUS.md).
+
+[Search ad exclusion](docs/SEARCH.md) remains unchanged. Recognized paid and
+sponsored results are excluded before ranking and output. This does not guarantee
+detection of concealed ads or unknown future markup. New provider and API work
+must preserve this filtering boundary. Existing installed settings and historical
+snapshots are unchanged until a verified replacement is deliberately activated.
+
+Historical installation evidence includes read improvements and the search-ad
+filter from clean build `c9ad49b6ecbbd9afde300cf24f335f8ccf2b9800`. That installed
+reader passed the disclosure/overlay diagnostic and FDA article check through HTTP.
+The earlier DuckDuckGo/Brave and paid/organic checks remain historical evidence.
+That historical installation is separate from the published alpha and the new
+research core.
+See STATUS for exact proof and remaining limits.
 
 The normal server now includes native PDF text reading through pinned Xberg.
 A two-page public PDF passed URL read, local ingestion, page-location checks,
@@ -24,31 +44,44 @@ tables also passed the preceding bounded milestone. This is not a full V1 releas
 
 One short YouTube video also passed English caption read/find/export through yt-dlp.
 Lightpanda 0.3.6 passed local JavaScript and public quote-page capture.
-OCR, Office formats, Chromium, fastCRW, and Docker remain unverified. No model
-downloads or full Rust tests were run. See [STATUS.md](docs/STATUS.md) for exact
-commands, evidence, and limits. Historical archive logs are not current results.
+OCR, Office formats, Chromium, fastCRW runtime use, and Docker remain unverified.
+The integrated core passed the existing workspace tests and documents/crw compile
+checks. `cargo fmt` was unavailable. No model download or LLM call occurred.
+See [STATUS.md](docs/STATUS.md) for evidence and limits. Historical archive logs
+are not current results.
 
 ## What is implemented in source
 
 | Area | Current implementation |
 |---|---|
 | CLI | Ordinary commands, text and Markdown output, JSON, JSONL batches, stderr warnings, meaningful failure exits |
-| Shared service | Axum API, concurrent requests, bounded processing, one server-local SQLite database |
-| Search | Native DuckDuckGo, Brave, Startpage, and Yahoo adapters, result deduplication, reciprocal-rank merging |
-| Reading | HTTP/HTML, pinned GitHub files and immediate directories, original-byte retention, explicit selection |
+| Shared service | Axum API, generated OpenAPI, Python/TypeScript client examples, bounded stdio MCP, one server-local SQLite database |
+| Search | DuckDuckGo, Brave, Startpage, and Yahoo parsing, shared provider budgets, explicit partial results, paid-result exclusion, reciprocal-rank merging |
+| Reading | Bounded HTML decoding, HTTP/HTML, pinned GitHub files and immediate directories, original-byte retention, explicit selection |
 | Libraries | Shared named collections, references to saved documents, attributed notes and tags |
 | Local search | SQLite FTS5 keyword search, literal matching, optional regex matching |
 | Extraction | Tables, code, links, images, metadata, outlines, CSS selections, JSON pointers |
 | Imports | Files and stdin uploaded from the client, including native text, structured data, feed, caption, and notebook readers |
-| Crawling | Incremental library attachment and progress, bounded same-origin HTTP jobs, robots, cancellation and restart status |
-| Browser helpers | Explicit Lightpanda or Chromium DOM capture, plus an experimental fastCRW integration |
+| Crawling | Incremental library attachment, bounded same-origin HTTP jobs, durable frontier, explicit resume, bounded sitemap trees, robots and cancellation |
+| Browser helpers | Bounded Auto Lightpanda recovery and explicit DOM capture; Chromium and fastCRW remain unverified |
 | Documents | Default Xberg native PDF text with reported pages and labeled supplemental tables; Office formats unverified |
-| Media | Configured yt-dlp: provided/automatic YouTube captions, exact language selection, timestamped storage and original export; no media download |
+| Code/docs | Revision-pinned repository discovery/maps, selected-file search/read, explicit docs.rs releases, and optional external indexes with coverage limits |
+| Scholarly | arXiv/OpenAlex discovery, Crossref metadata, rights-aware arXiv inspection, and explicit permitted PMC OAI/JATS selection |
+| Archives | Explicit bounded Wayback lookup/read with selected capture identity and replay limits |
+| Media | Bounded yt-dlp discovery and caption selection. Single-video/native-audio jobs require separate permission and finite operator/caller allocations, and default disabled |
 | Bibliography | DOI metadata retrieval as BibTeX, RIS, or CSL JSON |
 | Exports | Markdown, JSON, retained originals, and selected tables as CSV |
 
-The default packages compile; optional integrations remain unverified.
+The default packages compile and the integrated workspace checks passed.
+Actual narrow CLI/HTTP/MCP checks used the same backend. These checks do not prove
+all provider access, source fidelity, or installed activation. Optional indexes
+have synthetic-response evidence only. Live media transfers remain unverified.
 Some integration boundaries are intentionally marked experimental.
+
+Focused workflows and limits: [code/docs](docs/CODE.md),
+[optional indexes](docs/EXTERNAL-CODE.md), [scholarly](docs/SCHOLARLY.md),
+[PMC](docs/PMC.md), [archives](docs/ARCHIVES.md), [crawl](docs/CRAWL.md),
+[video/captions](docs/VIDEO.md), and [media jobs](docs/MEDIA-JOBS.md).
 
 ## Install and connect
 
@@ -56,7 +89,8 @@ Use a current stable Rust toolchain and the system build tools needed by Cargo.
 Clone this repository, then use the small local installer. It builds optimized
 binaries with the committed lockfile and normal features. It does not use sudo,
 edit shell profiles, manage services or download browsers, media helpers or models.
-Cargo may download locked Rust dependencies. No published binary release/tag yet.
+Cargo may download locked Rust dependencies. The published alpha is also available
+for its documented Linux/glibc/OpenSSL targets; later source changes are not in those assets.
 
 ### Client machine
 
@@ -131,14 +165,20 @@ file's or binary's directory. A relative data directory produces a warning. Use
 absolute config/data paths and absolute configured helper paths for installed
 startup. No checkout-local working directory is required with these explicit paths.
 
-This project's preserved deployment uses:
+For an existing source checkout, use its preserved configuration and data:
 
 ```sh
 cd /tmp
-/home/mainpc/.local/bin/webtoold \
-  --config /home/mainpc/Projects/webtool/runtime/media-config.toml \
-  --data-dir /home/mainpc/Projects/webtool/data
+"$HOME/.local/bin/webtoold" \
+  --config /absolute/path/webtool/runtime/media-config.toml \
+  --data-dir /absolute/path/webtool/data
 ```
+
+Before schema-2 activation, retain a consistent prior database, original objects,
+previous binaries, and matching install receipts. Schema-1 binaries refuse schema
+2. Rollback restores the prior database, never lowers `user_version`. Keep media
+downloads disabled without separate permission and operator allocations. See
+[CRAWL.md](docs/CRAWL.md) and [MEDIA-JOBS.md](docs/MEDIA-JOBS.md).
 
 Start only one process for this data directory. The command does not install a
 system service. No systemd, Docker, firewall, TLS, account or automatic-update
@@ -163,6 +203,18 @@ The installer runs the release build for installation. Keep binaries, data and
 smoke artifacts outside Git. Full tests and optional integration checks remain
 manual. See docs/STATUS.md for the bounded installed two-client proof and limits.
 
+## Search without paid placements
+
+Ordinary `webtool search QUERY` excludes recognized ads on the server for all
+output formats. It checks paid result containers and badges before discarding
+HTML context, and checks ad-click links before and after URL decoding. The policy
+is always on. Organic (unpaid) results for merchant sites remain eligible, as do
+pages that discuss advertising. Saved-library search is unchanged.
+
+No filter can guarantee detection of undisclosed promotion or future provider
+markup. Empty results, provider errors and rate limits remain visible; there is
+no unfiltered fallback. See [search policy and limits](docs/SEARCH.md).
+
 ## Everyday text output
 
 The default view uses readable entries for `saved`, `library list/items`, jobs
@@ -173,15 +225,56 @@ progress; text results retain state, counts, limits, errors and saved IDs.
 `extract code`, `tables`, `links` and `outline` show the selected material rather
 than its JSON wrapper. Block extracts retain their source locations. Link records
 have no individual source positions, and the output says so instead of guessing.
-Document reading separates headings, prose, fenced code, tables and captions.
+Ordinary reading shows a compact title/source header, the full saved ID once,
+and main content without selectors or per-block diagnostic labels. Use
+`read SOURCE --details` for provenance and full mapping warnings. Page numbers and
+caption timestamps remain visible. Links and images stay available through
+`extract` and JSON, but default read does not append link inventories or image URLs.
 Code lines are not wrapped or prefixed. Tabs and whitespace are retained; terminal
 control characters are visibly escaped in human views, not in stored data.
+Raw MathML is not displayed as prose. Equations without faithful available notation
+are marked as requiring the source, not flattened into an invented expression.
 
-Rectangular ASCII tables use an aligned grid when it fits 88 columns. Headers are
-labeled only when source flags identify them. Wide, ragged, merged, multiline,
-tabbed or non-ASCII tables use labeled rows/cells with explicit header/span values.
-Empty cells and zero values remain visible. Supplemental tables keep their label.
-No terminal-width detection, color, pager, TUI or interactive behavior is involved.
+Read example, with the old source locator abbreviated:
+
+````text
+Before: Code (rust) [b4 | HTML html:nth-of-type(1) > ...]
+```
+#![allow(unused)]
+
+After:
+```rust
+#![allow(unused)]
+````
+
+The code bytes are unchanged. The source locator is available with `--details`.
+
+ASCII tables use aligned grids when they fit 88 columns, including multiline
+cells, row headers and horizontal spans. A full-width heading stays above its
+columns. Wider, non-ASCII or uncertain layouts use compact rows and source labels,
+not per-cell diagnostic dumps. Real spans, empty cells, zero values and supplemental
+table labels remain visible. No terminal-width detection, color, pager or TUI is
+involved.
+
+`webtool read URL --format markdown` prints Markdown source for that command.
+It does not save a default setting or render a Markdown preview. Merged tables
+use HTML inside Markdown to preserve their structure. Use `webtool export ID
+--kind markdown -o page.md` to save a file for a Markdown-aware application.
+
+Ordinary HTML reads exclude explicit navigation, page-footer landmarks and modal
+widgets before content selection. Email-signup overlays need an email field plus
+fixed positioning or a widget marker. An article that discusses newsletters is
+not removed merely for its words. Originals and all-page links remain complete.
+Explicit CSS can still select those regions.
+
+Collapsed content already delivered in HTML does not need a click. Native details
+summaries retain a paragraph boundary. Main/article disclosure buttons retain
+labels for unique same-scope panels, without changing visibility state. The reader
+does not expand menus or forms, fetch click-loaded panels, or bypass access gates.
+If a selected paired panel is empty, `disclosure_content_unavailable` stays on
+stderr. Missing/ambiguous target IDs and arbitrary custom controls remain limited.
+Cell text retains list-item and line-break boundaries; this is not complete layout
+or interactive-page coverage.
 
 `--format json` and `jsonl` keep their existing schemas and framing. Markdown
 exports are unchanged. Other structured extracts still use their existing output.
@@ -203,8 +296,7 @@ shared.txt
   Source: upload:shared.txt
 ```
 
-This is the bounded everyday presentation pass before a clearly labeled alpha,
-not a published release or a claim of general extraction accuracy.
+These are bounded readability improvements, not a claim of general extraction accuracy.
 
 ## Read and search
 
@@ -213,12 +305,34 @@ webtool search "Rust async cancellation"
 webtool read https://example.com
 webtool read https://example.com --selector body
 webtool read https://example.com --refresh
+webtool read https://example.com --details
 webtool --format json read https://example.com
 webtool --format markdown read https://example.com
 webtool find "$DOC_ID" "timeout" --ignore-case
 webtool extract "$DOC_ID" links
 webtool extract "$DOC_ID" css --expression "main table"
 ```
+
+Ordinary Auto web reads try HTTP first. Main-content selection keeps all-page link
+discovery separate for `map`, crawl, and `extract links`. Article comments are not
+appended as a separate section. Critical failure and partial-content warnings stay
+on stderr; repetitive mapping diagnostics are condensed unless `--details` is used.
+
+If HTTP extraction has no readable main content or shows an empty application
+container with script/loading signals, Auto can try the configured Lightpanda once.
+Scripts, a root element, low confidence, or short content alone do not trigger it.
+Network errors, access denials, challenges, and size/rate limits are not retried
+through a browser. Rendered login, challenge, or loading-only pages are not accepted
+as articles. A failed attempt returns usable partial HTTP content with a warning,
+or an actionable error. No other browser or extractor is tried.
+
+The operation deadline includes queueing, HTTP, parsing and recovery, using the
+existing HTTP plus helper timeouts (120 seconds with defaults). The helper keeps
+its own resource bounds. Metadata records the accepted renderer and selection
+reason. When rendering follows HTTP, it retains the HTTP response separately from
+the DOM original. Repeated reads reuse accepted cached results; `--refresh` retries.
+Explicit `--renderer http`, `--renderer lightpanda`, and `--selector` remain explicit.
+Native GitHub/arXiv/caption routing and HTTP-only crawling remain separate.
 
 A successful URL read is saved automatically.
 Adding it to a library creates a reference, not a second document copy.
@@ -265,7 +379,11 @@ Saved-ID citations are offline preprint references, not substituted journal arti
 BibTeX uses literal-name braces and syntax escaping; CSL uses literal names. Existing
 DOI negotiation remains compatible, including RIS. Saved-paper RIS is unsupported.
 
-Resolver identity is `arxiv-abstract-html/2`. HTTP reads to arXiv hosts share a
+The earlier proof above used `arxiv-abstract-html/2`. Current
+`arxiv-abstract-html/3` additionally requires selected-version full-text license
+evidence before PDF retrieval. Open metadata does not grant source-file reuse.
+See [SCHOLARLY.md](docs/SCHOLARLY.md) for current selection and rights rules.
+HTTP reads to arXiv hosts share a
 process-wide connection gate and three seconds after completion before the next
 request. Coordinate external processes separately. Normal Auto paper reads cache
 for one day; `--refresh` bypasses that document cache. No automatic retry/fallback.
@@ -322,7 +440,9 @@ case. See docs/STATUS.md for exact evidence and export comparison commands.
 | HTML | Selected content, code, tables, image references, and original-element matching when unambiguous |
 | Xberg (default server) | Native PDF text verified on one two-page input. Office, spreadsheet, image, ebook, and email formats are not verified |
 
-Non-UTF-8 HTML and text are rejected rather than silently corrupted.
+HTML uses bounded source-aware decoding and reports assumptions or replacement
+characters. Originals remain exact. XHTML and other text formats retain their
+restricted UTF-8 rules. See [ENCODING.md](docs/ENCODING.md).
 Image-only scans cannot be read without OCR, which is unavailable in the normal build.
 Figure extraction and downloadable figure assets are not complete.
 No formula recalculation, notebook execution, video transcription, or document editing is performed.
@@ -392,9 +512,16 @@ interrupted jobs. Progress stays on stderr; JSON stdout remains machine-readable
 Basic robots directives and per-origin delays are implemented, not full RFC conformance.
 `jobs JOB_ID --cancel` stops pending work without removing saved documents. Ctrl-C
 while waiting only stops the client wait. A running job becomes `interrupted`
-after an unclean server restart; queued jobs are rescheduled. The frontier is not
-persisted for exact continuation. This is not a complete-site archive.
-Map reads one page or sitemap and does not recursively expand sitemap indexes.
+after an unclean server restart. Queued jobs also become interrupted. Startup
+makes no hidden fetch or rescheduling request. The bounded frontier is persisted
+in additive schema 2. Use `jobs JOB_ID --resume` explicitly when pending work and
+attempt budget remain. Completed failures and exclusions are not retried. Old
+jobs have no resumable frontier. This is not a complete-site archive.
+
+Crawl can expand opt-in explicit or robots-advertised sitemap trees under separate
+candidate, attempt, depth, body, and scope limits. Compressed sitemap metadata is
+refused. `map` still reads one page or sitemap without recursive index expansion.
+See [CRAWL.md](docs/CRAWL.md) for charging, interruptions, and schema rollback.
 
 ## PDF reading (normal server)
 
@@ -446,7 +573,7 @@ The existing binary matched its published SHA-256; no installation was needed.
 Set its path in the ignored `runtime/media-config.toml`, preserving yt-dlp settings:
 
 ```toml
-lightpanda_path = "/home/mainpc/.local/bin/lightpanda"
+lightpanda_path = "/absolute/path/to/lightpanda"
 browser_wait_ms = 2000 # existing key: edit it, do not add a duplicate
 ```
 
@@ -463,8 +590,9 @@ Persistent background activity can time out. No other browser is tried automatic
 
 The JSON envelope supplies actual HTTP status and final URL when available. Missing
 status remains null; missing final URL keeps the requested URL with a warning.
-Only decoded DOM content is retained as `rendered_dom`, not the JSON envelope or
-original HTTP bytes. Read warnings, original-export messages, and the download
+Decoded DOM content is retained as `rendered_dom`, not the helper JSON envelope.
+After automatic recovery, the initial HTTP bytes remain a separate `http_response`
+artifact in read metadata. Read warnings, original-export messages, and the download
 filename identify the DOM snapshot. HTML selectors refer to that retained snapshot;
 ambiguous text fragments remain derived. DOM `<base>` links are resolved without
 rewriting retained bytes. Helper stderr remains separate and visible as warnings.
@@ -484,12 +612,14 @@ Its configuration and API compatibility still require compilation and integratio
 ## YouTube captions
 
 `read` defaults to `--renderer auto`: YouTube watch/youtu.be URLs use captions;
-other URLs keep HTTP reading. `--renderer captions` forces caption selection.
+ordinary web URLs use HTTP-first reading with the bounded JavaScript recovery above. `--renderer captions` forces caption selection.
 Explicit `--renderer http` or `--selector` keeps HTML selection; no hidden HTML
 fallback occurs when caption retrieval fails. The existing `media` command also
 uses the caption path. `--language` defaults to `en` and must match a track exactly.
 Provided subtitles are preferred; automatic captions are labeled. No translation,
-transcription, browser cookies, login sessions, proxies, or audio/video downloads.
+transcription, browser cookies, login sessions, or proxies. Separate explicit
+single-media preview/jobs are described in [MEDIA-JOBS.md](docs/MEDIA-JOBS.md).
+They default disabled and do not establish provider access permission.
 
 Install the official PyPI distribution (using an existing uv installation):
 
@@ -560,4 +690,6 @@ Prefer library integrations over importing entire upstream servers.
 Do not add quality profiles, automatic extractor chains, or a TUI.
 Add source format support only with fidelity fixtures and explicit limitations.
 
-See [architecture](docs/ARCHITECTURE.md), [API](docs/API.md), [status](docs/STATUS.md), and [sources](docs/SOURCES.md).
+See [architecture](docs/ARCHITECTURE.md), [API](docs/API.md), [MCP](docs/MCP.md),
+[HTML decoding](docs/ENCODING.md), [explicit archives](docs/ARCHIVES.md),
+[status](docs/STATUS.md), and [sources](docs/SOURCES.md).

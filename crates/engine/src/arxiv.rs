@@ -10,13 +10,14 @@ use tokio::{sync::{Mutex,MutexGuard},time::Instant};
 use url::Url;
 use crate::fetch::{self,Fetched};
 
-pub const VERSION:&str="arxiv-abstract-html/2";
+pub const VERSION:&str="arxiv-abstract-html/3";
 static IDS:LazyLock<Regex>=LazyLock::new(||Regex::new(r"^(?P<id>(?:[0-9]{2}(?:0[1-9]|1[0-2])\.[0-9]{4,5}|[a-z][a-z-]*(?:\.[A-Z]{2})?/[0-9]{2}(?:0[1-9]|1[0-2])[0-9]{3}))(?:v(?P<version>[1-9][0-9]{0,8}))?$").expect("constant regex"));
 static GATE:LazyLock<Mutex<Instant>>=LazyLock::new(||Mutex::new(Instant::now()));
 /// One shared connection, with three seconds after completion/cancellation before
 /// the next request. This is deliberately more conservative than start spacing.
 pub struct Slot(MutexGuard<'static,Instant>);
-impl Drop for Slot{fn drop(&mut self){*self.0=Instant::now()+Duration::from_secs(3);}}
+impl Drop for Slot{fn drop(&mut self){*self.0=(*self.0).max(Instant::now()+Duration::from_secs(3));}}
+impl Slot{pub fn cooldown(&mut self,delay:Duration){*self.0=(*self.0).max(Instant::now()+delay);}}
 pub async fn slot()->Slot{
     let next=GATE.lock().await;tokio::time::sleep_until(*next).await;Slot(next)
 }
@@ -42,6 +43,8 @@ pub fn identify(url:&Url)->Result<Option<Identity>>{
     #[serde(default)] pub source_dates:std::collections::BTreeMap<String,String>,
     #[serde(default)] pub citation_authors:Vec<String>,
     #[serde(default)] pub metadata_origin:String,
+    /// License links for the selected version, not an associated journal paper.
+    #[serde(default)] pub license_evidence:Vec<String>,
     pub abstract_url:String,pub pdf_url:String,
 }
 fn selector(css:&str)->Selector{Selector::parse(css).expect("constant selector")}
@@ -79,7 +82,7 @@ pub async fn resolve(client:&reqwest::Client,wanted:&Identity,max:usize)->Result
     let paper=parse_html(&response.bytes,&response.resolved,wanted)?;
     Ok((paper,response))
 }
-fn parse_html(bytes:&[u8],resolved:&str,wanted:&Identity)->Result<Paper>{
+pub(crate) fn parse_html(bytes:&[u8],resolved:&str,wanted:&Identity)->Result<Paper>{
     let source=std::str::from_utf8(bytes).context("arxiv_invalid_metadata: HTML is not UTF-8")?;
     let doc=Html::parse_document(source);let base=fetch::validated_url(resolved)?;
     // This article-specific row says "for this version". Neither a canonical
@@ -137,13 +140,40 @@ fn parse_html(bytes:&[u8],resolved:&str,wanted:&Identity)->Result<Paper>{
         let target=if value.to_ascii_lowercase().starts_with("10.48550/arxiv."){&mut arxiv_doi}else{&mut doi};
         if target.as_ref().is_some_and(|s|s!=&value){bail!("arxiv_invalid_metadata: conflicting DOI identifiers");}*target=Some(value);
     }
+    let license_evidence=doc.select(&selector(".full-text .abs-license a[href]"))
+        .filter_map(|e|e.value().attr("href")).map(str::to_owned).collect();
     let full=selected.full();
     Ok(Paper{resolver:VERSION.into(),id:selected.id,version,versioned_id:full.clone(),requested_id:wanted.full(),title,authors,abstract_text,categories,primary_category,
         published:meta(&doc,"citation_date")?,updated:Some(date),doi,arxiv_doi,journal_reference:one(&doc,"#abs .jref")?,source_dates,citation_authors,
-        metadata_origin:"official arXiv abstract-page HTML".into(),abstract_url:format!("https://arxiv.org/abs/{full}"),pdf_url:format!("https://arxiv.org/pdf/{full}")})
+        metadata_origin:"official arXiv abstract-page HTML".into(),license_evidence,abstract_url:format!("https://arxiv.org/abs/{full}"),pdf_url:format!("https://arxiv.org/pdf/{full}")})
 }
 
+impl Paper {
+    pub fn rights(&self)->webtool_protocol::ScholarlyRights {
+        use webtool_protocol::{ReuseDecision,ScholarlyRights};
+        let license=if self.license_evidence.len()==1 {self.license_evidence.first().cloned()}else{None};
+        let decision=license.as_deref().map(reuse_decision).unwrap_or(ReuseDecision::Unknown);
+        ScholarlyRights {decision,license,evidence_url:Some(self.abstract_url.clone()),basis:match decision {
+            ReuseDecision::Permitted=>"The selected arXiv version reports a supported CC0, CC BY, or CC BY-SA license. Preserve attribution, license, and applicable share-alike terms.",
+            ReuseDecision::NotPermitted=>"The arXiv distribution license does not establish permission for this service to redistribute full text.",
+            ReuseDecision::Unknown=>"The selected version has missing, ambiguous, or unsupported reuse terms. Metadata and links only.",
+        }.into()}
+    }
+}
+fn reuse_decision(value:&str)->webtool_protocol::ReuseDecision {
+    use webtool_protocol::ReuseDecision::*;
+    let Ok(url)=Url::parse(value) else{return Unknown;};
+    if !matches!(url.scheme(),"http"|"https")||url.query().is_some()||url.fragment().is_some()||!url.username().is_empty()||url.password().is_some(){return Unknown;}
+    match (url.host_str(),url.path().trim_end_matches('/')) {
+        (Some("creativecommons.org"|"www.creativecommons.org"),"/publicdomain/zero/1.0"|"/licenses/by/3.0"|"/licenses/by/4.0"|"/licenses/by-sa/3.0"|"/licenses/by-sa/4.0")=>Permitted,
+        (Some("arxiv.org"|"info.arxiv.org"),path) if path.starts_with("/licenses/")=>NotPermitted,
+        _=>Unknown,
+    }
+}
 pub async fn pdf(client:&reqwest::Client,paper:&Paper,max:usize)->Result<Fetched>{
+    if paper.rights().decision!=webtool_protocol::ReuseDecision::Permitted {
+        bail!("arxiv_reuse_not_established: the selected version has no supported full-text reuse basis; use scholarly arXiv inspection for saved metadata and links");
+    }
     let mut fetched=get(client,&paper.pdf_url,max,"PDF").await?;
     let returned=identify(&fetch::validated_url(&fetched.resolved)?)?.context("arxiv_identity_mismatch: PDF redirected outside supported paper URLs")?;
     if returned.full()!=paper.versioned_id || !Url::parse(&fetched.resolved)?.path().starts_with("/pdf/"){
@@ -184,4 +214,23 @@ pub fn citation(document:&webtool_protocol::Document,format:&str)->Result<Value>
         },_=>bail!("citation_format_unsupported: saved arXiv papers support bibtex or csl; DOI RIS behavior is unchanged"),
     };
     Ok(json!({"document_id":document.id,"format":format,"source":p.abstract_url,"version":p.versioned_id,"metadata_source":if p.metadata_origin.is_empty(){"retained legacy arXiv metadata"}else{&p.metadata_origin},"text":text}))
+}
+
+#[cfg(test)]
+mod scholarly_tests {
+    use super::*;
+    #[test]
+    fn selected_license_and_version_are_independent_of_latest_history() {
+        let html=r#"<html><head><meta name="citation_title" content="Selected paper"><meta name="citation_author" content="Literal Author"><meta name="citation_abstract" content="Abstract"></head><body><div id="abs"><div class="arxividv"><a href="/abs/2401.12345v1">for this version</a></div></div><div class="submission-history"><strong><a href="/abs/2401.12345v2">[v2]</a></strong> Tue, 2 Jan 2024 03:04:05 UTC<br><strong>[v1]</strong> Mon, 1 Jan 2024 03:04:05 UTC<br></div><div class="full-text"><div class="abs-license"><a href="https://creativecommons.org/licenses/by/4.0/">license</a></div></div></body></html>"#;
+        let wanted=Identity{id:"2401.12345".into(),version:Some("1".into())};
+        let p=parse_html(html.as_bytes(),"https://arxiv.org/abs/2401.12345v1",&wanted).unwrap();
+        assert_eq!(p.version,"1");assert_eq!(p.source_dates["selected_submission"],"2024-01-01T03:04:05+00:00");
+        assert_eq!(p.rights().decision,webtool_protocol::ReuseDecision::Permitted);
+        let ambiguous=html.replace("</div></div></body>","<a href=\"https://arxiv.org/licenses/nonexclusive-distrib/1.0/\">other</a></div></div></body>");
+        assert_eq!(parse_html(ambiguous.as_bytes(),"https://arxiv.org/abs/2401.12345v1",&wanted).unwrap().rights().decision,webtool_protocol::ReuseDecision::Unknown);
+        let contradiction=html.replace("arxividv\"><a href=\"/abs/2401.12345v1", "arxividv\"><a href=\"/abs/2401.12345v2");
+        assert!(parse_html(contradiction.as_bytes(),"https://arxiv.org/abs/2401.12345v1",&wanted).is_err());
+        assert_eq!(reuse_decision("https://creativecommons.org/licenses/by-nc/4.0/"),webtool_protocol::ReuseDecision::Unknown);
+        assert_eq!(reuse_decision("https://example.org/licenses/by/4.0/"),webtool_protocol::ReuseDecision::Unknown);
+    }
 }

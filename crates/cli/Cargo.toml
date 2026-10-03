@@ -19,3 +19,6 @@ url.workspace = true
 csv.workspace = true
 toml.workspace = true
 tempfile.workspace = true
+rmcp = { version = "=3.5.0", default-features = false, features = ["server", "transport-io"] }
+tokio-util = { workspace = true, features = ["codec"] }
+futures-util.workspace = true

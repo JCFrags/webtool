@@ -1,15 +1,36 @@
-use std::{collections::HashMap,time::{Duration,Instant}};
-use anyhow::{bail,Result};
-use futures_util::{stream,StreamExt};
+use std::collections::HashMap;
 use webtool_protocol::*;
-use crate::config::Config;
+mod organic;
+#[cfg(feature="web-search")]
+mod json;
+#[cfg(feature="web-search")]
+struct ProviderResults {
+    items: Vec<SearchResult>,
+    warnings: Vec<Warning>,
+}
+#[cfg(feature="web-search")]
+mod service;
+#[cfg(feature="web-search")]
+pub(crate) use service::SearchService;
+#[cfg(not(feature="web-search"))]
+#[derive(Clone)]
+pub(crate) struct SearchService;
+#[cfg(not(feature="web-search"))]
+impl SearchService {
+    pub(crate) fn new(_: &crate::config::Config) -> anyhow::Result<Self> { Ok(Self) }
+    pub(crate) async fn search(&self, _: SearchRequest) -> anyhow::Result<SearchResponse> {
+        anyhow::bail!("this server was built without web-search")
+    }
+}
 
 pub fn merge(rows:Vec<(String,Vec<SearchResult>)>,limit:usize)->Vec<SearchResult>{
     let mut merged:HashMap<String,SearchResult>=HashMap::new();
+    let mut provider_seen:HashMap<String,std::collections::HashSet<String>>=HashMap::new();
     for (provider,items) in rows{
-        let mut seen=std::collections::HashSet::new();
+        let seen=provider_seen.entry(provider.clone()).or_default();
         for (index,mut item) in items.into_iter().enumerate(){
             let Ok(url)=crate::fetch::validated_url(&item.url)else{continue;};
+            if organic::paid_url(&url){continue;}
             let key=url.to_string();if !seen.insert(key.clone()){continue;}
             let entry=merged.entry(key.clone()).or_insert_with(||{
                 item.url=key;item.score=0.0;item.providers.clear();item
@@ -22,51 +43,10 @@ pub fn merge(rows:Vec<(String,Vec<SearchResult>)>,limit:usize)->Vec<SearchResult
     results.sort_by(|a,b|b.score.total_cmp(&a.score).then_with(||a.url.cmp(&b.url)));
     results.truncate(limit);results
 }
-pub async fn search(request:SearchRequest,config:&Config)->Result<SearchResponse>{
-    if request.query.trim().is_empty()||request.query.len()>4096{bail!("query must contain 1 to 4096 bytes");}
-    if !(1..=50).contains(&request.limit){bail!("search limit must be between 1 and 50");}
-    #[cfg(feature="web-search")]{
-        use std::sync::Arc;
-        use metadata_search_engine_rs::engines::{build_http_client,BraveEngine,DuckDuckGoEngine,StartpageEngine,YahooEngine,SearchEngine};
-        let client=Arc::new(build_http_client()?);
-        let mut engines:Vec<Arc<dyn SearchEngine>>=Vec::new();
-        for name in &config.search_engines{
-            let engine:Arc<dyn SearchEngine>=match name.as_str(){
-                "duckduckgo"=>Arc::new(DuckDuckGoEngine::new(client.clone())),
-                "brave"=>Arc::new(BraveEngine::new(client.clone())),
-                "startpage"=>Arc::new(StartpageEngine::new(client.clone())),
-                "yahoo"=>Arc::new(YahooEngine::new(client.clone())),_=>continue,
-            };engines.push(engine);
-        }
-        let now=Instant::now();let q=request.query.clone();let limit=request.limit;
-        let timeout=config.request_timeout_seconds;
-        let pending=engines.into_iter().map(|engine|{
-            let q=q.clone();async move{
-                let name=engine.name().to_string();
-                let result=tokio::time::timeout(Duration::from_secs(timeout),engine.search(&q,limit)).await;
-                let result=match result{
-                    Ok(Ok(results))=>Ok(results.into_iter().map(|r|SearchResult{title:r.title,url:r.url,snippet:r.snippet.unwrap_or_default(),score:0.0,providers:vec![],document_id:None}).collect::<Vec<_>>()),
-                    Ok(Err(e))=>Err(e.to_string()),Err(_)=>Err("provider timeout".into()),
-                };(name,result)
-            }
-        }).collect::<Vec<_>>();
-        let answers=stream::iter(pending).buffer_unordered(4).collect::<Vec<_>>().await;
-        let mut rows=Vec::new();let mut warnings=Vec::new();
-        for (name,result) in answers{
-            match result{
-                Ok(items)=>{
-                    if items.is_empty(){warnings.push(Warning::new("provider_empty",format!("{name} returned no parsed results. This can mean no matches or an upstream page change.")));}
-                    rows.push((name,items));
-                },Err(e)=>warnings.push(Warning::new("provider_error",format!("{name}: {e}"))),
-            }
-        }
-        Ok(SearchResponse{query:request.query,results:merge(rows,limit),warnings,elapsed_ms:now.elapsed().as_millis() as u64})
-    }
-    #[cfg(not(feature="web-search"))]{let _=config;bail!("this server was built without web-search");}
-}
 #[cfg(test)]mod tests{
     use super::*;
     fn r(url:&str)->SearchResult{SearchResult{title:"T".into(),url:url.into(),snippet:"snippet".into(),score:0.0,providers:vec![],document_id:None}}
     #[test]fn duplicates_merge_without_deleting_query_parameters(){let rows=vec![("a".into(),vec![r("https://x.test/a?x=1#part"),r("https://x.test/a?x=2")]),("b".into(),vec![r("https://x.test/a?x=1")])];let out=merge(rows,10);assert_eq!(out.len(),2);assert_eq!(out[0].providers.len(),2);}
-    #[test]fn duplicates_from_one_provider_do_not_boost_rank(){let out=merge(vec![("a".into(),vec![r("https://a.test"),r("https://a.test")])],10);assert_eq!(out[0].score,1.0/61.0);}
+    #[test]fn duplicates_from_one_provider_do_not_boost_rank(){let out=merge(vec![("a".into(),vec![r("https://a.test"),r("https://a.test")]),("a".into(),vec![r("https://a.test")])],10);assert_eq!(out[0].score,1.0/61.0);}
+    #[test]fn paid_urls_cannot_contribute_merge_votes(){let out=merge(vec![("a".into(),vec![r("https://example.org/?gclid=paid"),r("https://example.org/?topic=ads")])],10);assert_eq!(out.len(),1);assert_eq!(out[0].url,"https://example.org/?topic=ads");}
 }

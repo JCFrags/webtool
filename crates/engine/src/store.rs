@@ -18,10 +18,11 @@ impl Store {
         let store = Self { database: root.join("webtool.sqlite3"), root };
         store.run(|c| {
             let version: u32 = c.pragma_query_value(None, "user_version", |r| r.get(0))?;
-            if version > 1 { bail!("database schema {version} is newer than this application"); }
+            if version > 2 { bail!("database schema {version} is newer than this application"); }
             c.pragma_update(None, "journal_mode", "WAL")?;
             let tx = c.transaction()?;
-            tx.execute_batch(SCHEMA)?;
+            if version < 1 { tx.execute_batch(SCHEMA)?; }
+            if version < 2 { tx.execute_batch(include_str!("../../../migrations/002_crawl_frontier.sql"))?; }
             tx.commit()?;
             Ok(())
         }).await?;
@@ -56,11 +57,73 @@ impl Store {
         }
         Ok(Artifact { sha256, media_type: media_type.into(), size: bytes.len() as u64, role: role.into() })
     }
+    /// Stream a validated native file into the existing content-addressed object store.
+    /// Caller owns publication/cancel coordination. Never removes accepted objects.
+    pub async fn put_file(&self, path: &Path, media_type: &str, role: &str, max: u64, deadline: tokio::time::Instant) -> Result<Artifact> {
+        use tokio::io::AsyncReadExt;
+        let mut options = tokio::fs::OpenOptions::new(); options.read(true);
+        #[cfg(unix)] { options.custom_flags(nix::libc::O_NOFOLLOW); }
+        let mut input = options.open(path).await?;
+        if !input.metadata().await?.is_file() { bail!("media_validation_failed: input is not regular"); }
+        let temp = self.root.join("objects").join(format!(".{}.tmp", uuid::Uuid::new_v4()));
+        let result = async {
+            let mut output = tokio::fs::OpenOptions::new().write(true).create_new(true).open(&temp).await?;
+            let mut hash = Sha256::new(); let mut size = 0u64; let mut buffer = vec![0u8;64*1024];
+            loop {
+                if tokio::time::Instant::now()>=deadline {bail!("media_deadline: object copy deadline reached");}
+                let n = input.read(&mut buffer).await?; if n == 0 { break; }
+                size = size.checked_add(n as u64).context("media_budget_exceeded: object size overflow")?;
+                if size > max { bail!("media_budget_exceeded: object exceeds retained-byte limit"); }
+                hash.update(&buffer[..n]); output.write_all(&buffer[..n]).await?;
+            }
+            output.sync_all().await?; drop(output);
+            let sha256 = hex::encode(hash.finalize()); let dest = self.artifact_path(&sha256)?;
+            // Atomic no-replace publication. Another snapshot can already own these bytes.
+            match tokio::fs::hard_link(&temp, &dest).await {
+                Ok(()) => {}, Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                    let m = tokio::fs::symlink_metadata(&dest).await?;
+                    if !m.is_file() || m.file_type().is_symlink() || m.len() != size { bail!("saved artifact checksum mismatch"); }
+                }, Err(e) => return Err(e.into()),
+            }
+            Ok(Artifact {sha256,media_type:media_type.into(),size,role:role.into()})
+        }.await;
+        let _ = tokio::fs::remove_file(&temp).await;
+        result
+    }
+    /// All queued/active media reservations, including jobs beyond the list display cap.
+    pub async fn media_reservations(&self, excluding: Option<String>) -> Result<(u64,u64)> {
+        self.run(move |c| {
+            let mut q=c.prepare("SELECT payload FROM jobs WHERE state IN ('queued','running')")?;
+            let mut staging=0u64; let mut objects=0u64;
+            for row in q.query_map([],|r|r.get::<_,String>(0))? {
+                let j:Job=serde_json::from_str(&row?)?;
+                if Some(&j.id)==excluding.as_ref() { continue; }
+                if let JobRequest::Media(r)=j.request {
+                    staging=staging.checked_add(r.max_bytes.saturating_add(4*1024*1024)).context("media_budget_exceeded: reservation overflow")?;
+                    objects=objects.checked_add(r.max_bytes).context("media_budget_exceeded: reservation overflow")?;
+                }
+            }
+            Ok((staging,objects))
+        }).await
+    }
     pub fn artifact_path(&self, hash: &str) -> Result<PathBuf> {
         if hash.len() != 64 || !hash.bytes().all(|c| c.is_ascii_hexdigit()) {
             bail!("invalid artifact identifier");
         }
         Ok(self.root.join("objects").join(hash))
+    }
+    pub async fn open_artifact(&self, artifact: &Artifact) -> Result<tokio::fs::File> {
+        use tokio::io::{AsyncReadExt, AsyncSeekExt};
+        let mut options=tokio::fs::OpenOptions::new(); options.read(true);
+        #[cfg(unix)] { options.custom_flags(nix::libc::O_NOFOLLOW); }
+        let mut file=options.open(self.artifact_path(&artifact.sha256)?).await?;
+        let m=file.metadata().await?;
+        if !m.is_file() || m.len()!=artifact.size { bail!("saved artifact checksum mismatch"); }
+        let mut hash=Sha256::new();let mut buffer=vec![0u8;64*1024];
+        loop {let n=file.read(&mut buffer).await?;if n==0 {break;}hash.update(&buffer[..n]);}
+        if hex::encode(hash.finalize())!=artifact.sha256 {bail!("saved artifact checksum mismatch");}
+        file.seek(std::io::SeekFrom::Start(0)).await?;
+        Ok(file)
     }
     pub async fn bytes(&self, artifact: &Artifact) -> Result<Vec<u8>> {
         let bytes = tokio::fs::read(self.artifact_path(&artifact.sha256)?).await?;
@@ -173,11 +236,7 @@ impl Store {
         }).await
     }
     pub async fn put_job(&self, job: Job) -> Result<()> {
-        self.run(move |c| {
-            let state=serde_json::to_value(&job.state)?.as_str().unwrap_or("failed").to_owned();
-            c.execute("INSERT INTO jobs(id,state,created_at,updated_at,payload) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at,payload=excluded.payload",
-                params![job.id,state,job.created_at,job.updated_at,serde_json::to_string(&job)?])?; Ok(())
-        }).await
+        self.run(move |c| write_job(c, &job)).await
     }
     pub async fn job(&self, id: &str) -> Result<Job> {
         let id=id.to_owned(); self.run(move |c| {
@@ -194,6 +253,13 @@ impl Store {
     }
 }
 
+pub(crate) fn write_job(c: &Connection, job: &Job) -> Result<()> {
+    let state=serde_json::to_value(&job.state)?.as_str().unwrap_or("failed").to_owned();
+    c.execute("INSERT INTO jobs(id,state,created_at,updated_at,payload) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at,payload=excluded.payload",
+        params![job.id,state,job.created_at,job.updated_at,serde_json::to_string(job)?])?;
+    Ok(())
+}
+
 pub fn validate_library(name:&str)->Result<()> {
     if name.is_empty() || name.len()>80 || !name.bytes().all(|c|c.is_ascii_alphanumeric()||b"-_".contains(&c)) {
         bail!("library names must contain 1 to 80 ASCII letters, digits, hyphens, or underscores");
@@ -206,9 +272,18 @@ pub fn validate_library(name:&str)->Result<()> {
         assert!(validate_library("papers-2026").is_ok());
     }
     #[tokio::test] async fn schema_and_library_roundtrip() {
-        let t=tempfile::tempdir().unwrap(); let s=Store::open(t.path()).await.unwrap();
+        let t=tempfile::tempdir().unwrap();
+        // Start with schema 1 to verify the additive migration preserves old rows.
+        let c=Connection::open(t.path().join("webtool.sqlite3")).unwrap();
+        c.execute_batch(SCHEMA).unwrap();
+        c.execute("INSERT INTO libraries(name,description,created_at) VALUES('preserved','Before migration','2026-01-01T00:00:00Z')",[]).unwrap();
+        drop(c);
+        let s=Store::open(t.path()).await.unwrap();
         s.create_library(LibraryCreate{name:"papers".into(),description:"Research".into()}).await.unwrap();
-        assert_eq!(s.libraries().await.unwrap()[0].name,"papers");
+        let libraries=s.libraries().await.unwrap();
+        assert_eq!(libraries[0].name,"papers");
+        assert_eq!(libraries[1].description,"Before migration");
+        s.run(|c|{assert_eq!(c.pragma_query_value::<u32,_>(None,"user_version",|r|r.get(0))?,2);Ok(())}).await.unwrap();
         assert!(s.require_library("missing").await.is_err());
     }
     #[tokio::test] async fn original_hash_roundtrip() {

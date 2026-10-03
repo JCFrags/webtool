@@ -5,8 +5,11 @@ use webtool_engine::{config::Config, Engine};
 use serde_json::{json, Value};
 
 async fn app() -> (tempfile::TempDir, axum::Router) {
+    app_with_limit(Config::default().max_bytes).await
+}
+async fn app_with_limit(max_bytes: usize) -> (tempfile::TempDir, axum::Router) {
     let directory = tempfile::tempdir().unwrap();
-    let e = Engine::new(Config { data_dir:directory.path().into(),..Default::default() }).await.unwrap();
+    let e = Engine::new(Config { data_dir:directory.path().into(),max_bytes,..Default::default() }).await.unwrap();
     (directory,webtool_server::router(e))
 }
 async fn json_response(app: axum::Router, method: &str, path: &str, value: Value) -> (StatusCode, Value) {
@@ -53,6 +56,136 @@ async fn multipart_upload_retains_exact_original_bytes() {
     assert_eq!(response.headers()["content-disposition"],"attachment");
     assert_eq!(&to_bytes(response.into_body(),1024).await.unwrap()[..],b"exact evidence 0");
 }
+async fn problem_response(app: axum::Router, request: Request<Body>, expected: StatusCode, code: &str) {
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), expected);
+    assert_eq!(response.headers()["content-type"], "application/json");
+    let body = to_bytes(response.into_body(), 1024).await.unwrap();
+    let value: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(value["code"], code);
+    assert!(value["message"].as_str().unwrap().len() < 256);
+    assert!(!value["message"].as_str().unwrap().contains("PRIVATE_MARKER"));
+}
+
+#[tokio::test]
+async fn http_rejections_use_problem_json_without_echoing_input() {
+    let (_directory, app) = app().await;
+    for (method, path, content_type, body, status, code) in [
+        ("POST", "/v1/read", "application/json", "{PRIVATE_MARKER", StatusCode::BAD_REQUEST, "invalid_json"),
+        ("POST", "/v1/read", "application/json", r#"{"url":0,"PRIVATE_MARKER":true}"#, StatusCode::UNPROCESSABLE_ENTITY, "invalid_request"),
+        ("POST", "/v1/read", "text/plain", "PRIVATE_MARKER", StatusCode::UNSUPPORTED_MEDIA_TYPE, "unsupported_media_type"),
+        ("GET", "/v1/documents?limit=PRIVATE_MARKER", "application/json", "", StatusCode::BAD_REQUEST, "invalid_query"),
+        ("GET", "/v1/documents/%FF", "application/json", "", StatusCode::BAD_REQUEST, "invalid_path"),
+        ("POST", "/v1/ingest", "multipart/form-data", "PRIVATE_MARKER", StatusCode::BAD_REQUEST, "invalid_multipart"),
+        ("POST", "/v1/ingest", "multipart/form-data; boundary=x", "--x\r\nPRIVATE_MARKER", StatusCode::BAD_REQUEST, "invalid_multipart"),
+        ("PUT", "/v1/read", "application/json", "", StatusCode::METHOD_NOT_ALLOWED, "method_not_allowed"),
+        ("GET", "/v1/PRIVATE_MARKER", "application/json", "", StatusCode::NOT_FOUND, "not_found"),
+    ] {
+        let request = Request::builder().method(method).uri(path).header("content-type", content_type).body(Body::from(body)).unwrap();
+        problem_response(app.clone(), request, status, code).await;
+    }
+}
+
+#[tokio::test]
+async fn json_and_multipart_limits_use_413_problem() {
+    let (_directory, app) = app_with_limit(1024).await;
+    let json = json!({"url":"x".repeat(1024 + 256 * 1024)}).to_string();
+    let request = Request::builder().method("POST").uri("/v1/read")
+        .header("content-type", "application/json").body(Body::from(json)).unwrap();
+    problem_response(app.clone(), request, StatusCode::PAYLOAD_TOO_LARGE, "size_limit").await;
+    // Check the per-file limit and the extractor's total-body limit separately.
+    for length in [1025, 1024 + 256 * 1024] {
+        let body = format!("--x\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.txt\"\r\n\r\n{}\r\n--x--\r\n", "x".repeat(length));
+        let request = Request::builder().method("POST").uri("/v1/ingest")
+            .header("content-type", "multipart/form-data; boundary=x").body(Body::from(body)).unwrap();
+        problem_response(app.clone(), request, StatusCode::PAYLOAD_TOO_LARGE, "size_limit").await;
+    }
+}
+
+#[tokio::test]
+async fn generated_contract_covers_operations_and_actual_tagged_blocks() {
+    let (_directory, app) = app().await;
+    let (status, spec) = json_response(app.clone(), "GET", "/openapi.json", Value::Null).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(spec["openapi"], "3.1.0");
+    let paths = spec["paths"].as_object().unwrap();
+    let expected = [
+        ("health", vec!["get"]), ("read", vec!["post"]), ("read/batch", vec!["post"]), ("search", vec!["post"]), ("ingest", vec!["post"]),
+        ("documents", vec!["get"]), ("documents/{id}", vec!["get"]), ("documents/{id}/original", vec!["get"]),
+        ("documents/{id}/find", vec!["post"]), ("documents/{id}/extract", vec!["post"]),
+        ("documents/{id}/annotations", vec!["get", "post"]), ("libraries", vec!["get", "post"]),
+        ("libraries/{name}/items", vec!["get", "post"]), ("crawl", vec!["post"]), ("jobs", vec!["get"]),
+        ("jobs/{id}", vec!["get"]), ("jobs/{id}/cancel", vec!["post"]), ("jobs/{id}/resume", vec!["post"]),
+        ("map", vec!["post"]), ("media", vec!["post"]), ("cite", vec!["post"]),
+        ("archive/lookup", vec!["post"]), ("archive/read", vec!["post"]),
+        ("code/discover", vec!["post"]), ("code/map", vec!["post"]),
+        ("code/search", vec!["post"]), ("code/file", vec!["post"]), ("docs/read", vec!["post"]),
+        ("scholarly/search", vec!["post"]), ("scholarly/doi", vec!["post"]), ("scholarly/arxiv", vec!["post"]), ("scholarly/pmc", vec!["post"]),
+        ("external/providers", vec!["get"]), ("external/sourcegraph/search", vec!["post"]),
+        ("external/sourcegraph/verify", vec!["post"]), ("external/context7/libraries", vec!["post"]), ("external/context7/context", vec!["post"]),
+        ("video/search", vec!["post"]), ("video/tracks", vec!["post"]), ("video/captions", vec!["post"]),
+        ("video/formats", vec!["post"]), ("video/download", vec!["post"]),
+        ("jobs/{id}/artifacts/{artifact}", vec!["get"]),
+    ];
+    let mut ids = std::collections::HashSet::new();
+    assert_eq!(paths.len(), expected.len());
+    for (path, methods) in expected {
+        for method in methods {
+            let operation = &paths[&format!("/v1/{path}")][method];
+            assert!(ids.insert(operation["operationId"].as_str().unwrap()));
+            assert!(operation["responses"]["200"]["content"].is_object());
+            assert!(operation["responses"]["200"]["description"].is_string());
+            assert_eq!(operation["responses"]["500"]["content"]["application/json"]["schema"]["$ref"], "#/components/schemas/Problem");
+        }
+    }
+    assert_eq!(ids.len(), 46);
+    assert_eq!(paths["/v1/ingest"]["post"]["requestBody"]["content"]["multipart/form-data"]["schema"]["$ref"], "#/components/schemas/IngestForm");
+    assert!(paths["/v1/documents/{id}/original"]["get"]["responses"]["200"]["content"]["application/octet-stream"].is_object());
+    let original_schema = &paths["/v1/documents/{id}/original"]["get"]["responses"]["200"]["content"]["application/octet-stream"]["schema"];
+    assert_eq!(original_schema["type"], "string");
+    assert_eq!(original_schema["format"], "binary");
+    let media_schema = &paths["/v1/jobs/{id}/artifacts/{artifact}"]["get"]["responses"]["200"]["content"]["application/octet-stream"]["schema"];
+    assert_eq!(media_schema["type"], "string");
+    assert_eq!(media_schema["format"], "binary");
+    let schemas = &spec["components"]["schemas"];
+    fn check_refs(value: &Value, schemas: &Value) {
+        match value {
+            Value::Object(object) => {
+                if let Some(reference) = object.get("$ref") {
+                    let name = reference.as_str().unwrap().strip_prefix("#/components/schemas/").unwrap();
+                    assert!(schemas.get(name).is_some(), "Missing schema {name}");
+                }
+                for value in object.values() { check_refs(value, schemas); }
+            },
+            Value::Array(values) => for value in values { check_refs(value, schemas); },
+            _ => {},
+        }
+    }
+    check_refs(&spec, schemas);
+    assert_eq!(schemas["Problem"]["required"], json!(["code", "message"]));
+    assert_eq!(schemas["IngestForm"]["properties"]["file"]["format"], "binary");
+    assert_eq!(schemas["Content"]["oneOf"].as_array().unwrap().len(), 9);
+    assert_eq!(schemas["Locator"]["oneOf"].as_array().unwrap().len(), 9);
+    let body = "--x\r\nContent-Disposition: form-data; name=\"file\"; filename=\"note.txt\"\r\n\r\nExact source line.\r\n--x--\r\n";
+    let response = app.oneshot(Request::builder().method("POST").uri("/v1/ingest")
+        .header("content-type", "multipart/form-data; boundary=x").body(Body::from(body)).unwrap()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let document: Value = serde_json::from_slice(&to_bytes(response.into_body(), 1024 * 1024).await.unwrap()).unwrap();
+    for block in document["blocks"].as_array().unwrap() {
+        for (field, schema, tag) in [("content", "Content", "type"), ("locator", "Locator", "kind")] {
+            let value = &block[field];
+            let variant = schemas[schema]["oneOf"].as_array().unwrap().iter()
+                .find(|variant| variant["properties"][tag]["enum"][0] == value[tag]).unwrap();
+            for required in variant["required"].as_array().unwrap() {
+                assert!(value.get(required.as_str().unwrap()).is_some());
+            }
+            for key in value.as_object().unwrap().keys() {
+                assert!(variant["properties"].get(key).is_some());
+            }
+        }
+    }
+}
+
 #[tokio::test]
 async fn invalid_scheme_is_not_retrieved() {
     let (_directory,app)=app().await;
