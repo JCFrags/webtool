@@ -123,8 +123,9 @@ impl Frontier {
                 tx.execute("INSERT INTO crawl_frontier(job_id,ordinal,kind,url,depth,state,attempts,interruptions,document_id,reason) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(job_id,kind,url) DO UPDATE SET state=excluded.state,attempts=excluded.attempts,interruptions=excluded.interruptions,document_id=excluded.document_id,reason=excluded.reason",
                     params![value.id,i,e.kind.text(),e.url,e.depth,e.state.text(),e.attempts,e.interruptions,e.document_id,e.reason])?;
             }
-            if let (Some(library),Some(id))=(&value.request.library,attachment) {
-                tx.execute("INSERT OR IGNORE INTO library_items(library,document_id,added_by,added_at) VALUES(?,?,?,?)",params![library,id,value.request.actor,value.updated_at])?;
+            let crawl=value.request.crawl().context("crawl checkpoint has no crawl request")?;
+            if let (Some(library),Some(id))=(&crawl.library,attachment) {
+                tx.execute("INSERT OR IGNORE INTO library_items(library,document_id,added_by,added_at) VALUES(?,?,?,?)",params![library,id,crawl.actor,value.updated_at])?;
             }
             tx.commit().context("commit crawl checkpoint")?;
             Ok(())

@@ -11,6 +11,7 @@ mod mcp;
 mod code;
 mod external_code;
 mod scholarly;
+mod media_jobs;
 
 #[derive(Parser)]
 #[command(name="webtool",version,about="Search, read, extract, and save sources through a shared server",after_help="No TUI. Results go to stdout. Warnings and progress go to stderr. Use --format json for scripts.")]
@@ -102,6 +103,12 @@ enum Command{
     Batch{file:PathBuf,#[arg(long)]library:Option<String>},
 }
 #[derive(Subcommand)]enum VideoCommand{
+    /// Observe exact source format identities. No media transfer or rights guarantee.
+    Formats{url:String},
+    /// Submit one preview-checked bounded video or native-audio job.
+    Download(media_jobs::DownloadArgs),
+    /// Export one accepted job artifact to a client-local file.
+    Export(media_jobs::ExportArgs),
     /// Search supplied metadata without fetching each video. Quote the literal query.
     Search{query:String,#[arg(long,default_value_t=5)]limit:usize},
     /// List untranslated VTT tracks without signed URLs. No caption download.
@@ -157,7 +164,9 @@ impl Client{
         let mut previous=String::new();
         loop{
             let job:Job=self.get(&format!("/v1/jobs/{id}")).await?;
-            let mut message=format!("{id}: {:?}, {} visited attempts, {} saved, {} failed (limits: {} attempts, depth {})",job.state,job.visited,job.document_ids.len(),job.failed,job.request.max_pages,job.request.max_depth);
+            let mut message=if let Some(r)=job.request.crawl() {format!("{id}: {:?}, {} visited attempts, {} saved, {} failed (limits: {} attempts, depth {})",job.state,job.visited,job.document_ids.len(),job.failed,r.max_pages,r.max_depth)}
+                else {format!("{id}: {:?}",job.state)};
+            if let Some(m)=&job.media {message.push_str(&format!(", {:?}, {} transferred bytes, total={}",m.progress.stage,m.progress.transferred_bytes,m.progress.total_bytes.map(|n|n.to_string()).unwrap_or_else(||"unknown".into())));}
             if let Some(p)=&job.progress{message.push_str(&format!(", {} charged, {} pending, {} active, {} interrupted attempts",p.attempted,p.pending,p.active,p.interrupted));}
             if message!=previous{eprintln!("{}",render::terminal_safe(&message));previous=message;}
             if job.state.terminal(){return Ok(job);}
@@ -367,7 +376,7 @@ async fn run(cli:Cli)->Result<()>{
                     return output(&v,format);}
                 let resumed:Option<Job>=if resume{Some(client.post(&format!("/v1/jobs/{id}/resume"),&CrawlResumeRequest{max_pages}).await?)}else{None};
                 let j:Job=if wait{client.wait(&id).await?}else if let Some(j)=resumed{j}else{client.get(&format!("/v1/jobs/{id}")).await?};job_output(&j,format)?;
-                if wait && matches!(j.state,JobState::Failed|JobState::Interrupted){bail!("crawl did not complete successfully");}Ok(())
+                if wait && matches!(j.state,JobState::Failed|JobState::Interrupted){bail!("job did not complete successfully");}Ok(())
             }else{let jobs:Vec<Job>=client.get("/v1/jobs").await?;
                 if human(format){
                     if jobs.is_empty(){stdout("No jobs.\n")?;}
@@ -376,6 +385,9 @@ async fn run(cli:Cli)->Result<()>{
         },
         Command::Media{url,language,library}=>{let d:Document=client.post("/v1/media",&json!({"url":url,"language":language,"library":library})).await?;document(&d,format,false,false)},
         Command::Video{action}=>match action{
+            VideoCommand::Formats{url}=>media_jobs::formats(&client,url,format).await,
+            VideoCommand::Download(args)=>media_jobs::download(&client,args,format).await,
+            VideoCommand::Export(args)=>media_jobs::export(&client,args).await,
             VideoCommand::Search{query,limit}=>{
                 let response:VideoSearchResponse=client.post("/v1/video/search",&VideoSearchRequest{query,limit}).await?;
                 warnings(&response.warnings,true);

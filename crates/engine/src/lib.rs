@@ -7,6 +7,7 @@ pub mod config;
 pub mod fetch;
 pub mod jobs;
 pub mod media;
+pub mod media_jobs;
 pub mod readers;
 mod read_recovery;
 pub mod search;
@@ -37,6 +38,9 @@ pub struct Engine {
     operation_slots:Arc<Semaphore>,
     submission_lock:Arc<Mutex<()>>,
     network:Arc<Semaphore>,parse_slots:Arc<Semaphore>,browser_slots:Arc<Semaphore>,
+    media_job_slot:Arc<Semaphore>,
+    job_finished:Arc<tokio::sync::Notify>,
+    shutting_down:Arc<std::sync::atomic::AtomicBool>,
     job_slots:Arc<Semaphore>,locks:Arc<Mutex<HashMap<String,Weak<Mutex<()>>>>>,
     job_tokens:Arc<Mutex<HashMap<String,CancellationToken>>>,
     crawl_pacing:Arc<Mutex<HashMap<String,tokio::time::Instant>>>,
@@ -54,6 +58,8 @@ impl Engine {
         let media_service=media::MediaService::new(&config);
         Ok(Self {store,client,search,archive,code,external_code,scholarly,media_service,operation_slots:Arc::new(Semaphore::new(config.network_concurrency + config.parse_concurrency)),submission_lock:Arc::new(Mutex::new(())),network:Arc::new(Semaphore::new(config.network_concurrency)),
             parse_slots:Arc::new(Semaphore::new(config.parse_concurrency)),browser_slots:Arc::new(Semaphore::new(config.browser_concurrency)),
+            media_job_slot:Arc::new(Semaphore::new(1)),job_finished:Arc::new(tokio::sync::Notify::new()),
+            shutting_down:Arc::new(std::sync::atomic::AtomicBool::new(false)),
             job_slots:Arc::new(Semaphore::new(config.job_concurrency)),config:Arc::new(config),
             locks:Arc::new(Mutex::new(HashMap::new())),job_tokens:Arc::new(Mutex::new(HashMap::new())),
             crawl_pacing:Arc::new(Mutex::new(HashMap::new()))})
@@ -69,6 +75,8 @@ impl Engine {
             Capability{name:"documents".into(),available:cfg!(feature="documents"),detail:"Compiled Xberg document support for native PDF text and structured tables. This is not OCR or a guarantee of format accuracy.".into()},
             Capability{name:"ocr".into(),available:cfg!(feature="ocr"),detail:if cfg!(feature="ocr"){"OCR feature compiled; configured backend/model readiness is not verified.".into()}else{"OCR is not compiled. Image-only scans require OCR; native PDF text does not.".into()}},
             Capability{name:"crw_browser".into(),available:cfg!(feature="crw-browser")&&self.config.crw_renderer.is_some(),detail:"Experimental fastCRW adapter.".into()},
+            Capability{name:"media_download".into(),available:media_jobs::limits(&self.config).is_ok(),
+                detail:"Disabled without explicit finite operator budgets and existing absolute helper paths. No source request or helper compatibility test is made here. Single video/native audio only; resume is unsupported.".into()},
             helper("lightpanda",&self.config.lightpanda_path),helper("chromium",&self.config.chromium_path),
             Capability{name:"yt_dlp".into(),available:self.config.ytdlp_path.as_ref().is_some_and(|p|media::executable(p)),
                 detail:format!("Configured executable checked locally; no YouTube request made. JS runtime: {}. Track availability and runtime compatibility require an actual read.",self.config.ytdlp_js_runtime.as_deref().unwrap_or("yt-dlp default (Deno)"))},

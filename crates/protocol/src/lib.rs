@@ -9,6 +9,8 @@ mod archive;
 pub use archive::*;
 mod batch;
 pub use batch::*;
+mod media_jobs;
+pub use media_jobs::*;
 
 pub const API_VERSION: &str = "v1";
 pub const EXTRACTION_VERSION: &str = "webtool-0.1.0-schema1";
@@ -271,13 +273,14 @@ impl JobState {
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Job {
-    pub id: String, pub state: JobState, pub request: CrawlRequest,
+    pub id: String, pub state: JobState, pub request: JobRequest,
     pub created_at: String, pub updated_at: String,
     pub document_ids: Vec<String>, pub visited: usize,
     /// Completed unsuccessful page attempts. Old saved jobs default to zero.
     #[serde(default)] pub failed: usize,
     /// Absent on historical jobs that have no persistent frontier.
     #[serde(default, skip_serializing_if = "Option::is_none")] pub progress: Option<CrawlProgress>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub media: Option<MediaJob>,
     pub warnings: Vec<Warning>, pub error: Option<String>,
 }
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]

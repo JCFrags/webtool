@@ -17,6 +17,7 @@ mod contract;
 mod error;
 mod external_code;
 mod scholarly;
+mod media_jobs;
 use contract::*;
 use error::{ApiError, ApiJson, ApiMultipart, ApiPath, ApiQuery};
 
@@ -55,6 +56,7 @@ pub fn api_router() -> OpenApiRouter<Engine> {
         .merge(code::router())
         .merge(external_code::router())
         .merge(scholarly::routes())
+        .merge(media_jobs::router())
 }
 
 pub fn router(engine: Engine) -> Router {

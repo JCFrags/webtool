@@ -21,7 +21,9 @@ impl Engine {
             if !job.state.terminal() {
                 job.state=JobState::Interrupted;
                 job.error=Some("Server stopped before this job finished. Explicit resume is required; saved documents remain available.".into());
-                if let Some(mut frontier)=Frontier::load(&self.store,&job.id).await? {
+                if matches!(job.request,JobRequest::Media(_)) {
+                    self.recover_media(&mut job).await?;
+                } else if let Some(mut frontier)=Frontier::load(&self.store,&job.id).await? {
                     frontier.interrupt_active();
                     frontier.checkpoint(&self.store,&mut job,None).await?;
                 } else {
@@ -43,49 +45,52 @@ impl Engine {
         if let Some(name)=&request.library { self.store.require_library(name).await?; }
         self.require_job_capacity().await?;
         let now=Utc::now().to_rfc3339();
-        let mut job=Job { id:uuid::Uuid::new_v4().to_string(),state:JobState::Queued,request,created_at:now.clone(),updated_at:now,
-            document_ids:vec![],visited:0,failed:0,progress:None,warnings:vec![Warning::new("crawl_scope","Bounded same-origin HTTP crawl, not a complete-site archive. Started attempts consume budget, including interruptions. Visited counts completed attempts only."),Warning::new("crawl_policy","Robots metadata uses a stricter bounded policy: same-origin redirects, identity encoding, UTF-8, and no assumption of permission on errors. This is not full RFC 9309 conformance.")],error:None };
+        let mut job=Job { id:uuid::Uuid::new_v4().to_string(),state:JobState::Queued,request:JobRequest::Crawl(request.clone()),created_at:now.clone(),updated_at:now,
+            document_ids:vec![],visited:0,failed:0,progress:None,media:None,warnings:vec![Warning::new("crawl_scope","Bounded same-origin HTTP crawl, not a complete-site archive. Started attempts consume budget, including interruptions. Visited counts completed attempts only."),Warning::new("crawl_policy","Robots metadata uses a stricter bounded policy: same-origin redirects, identity encoding, UTF-8, and no assumption of permission on errors. This is not full RFC 9309 conformance.")],error:None };
         let mut frontier=Frontier::default();
         frontier.admit(Kind::Page,base.to_string(),0,None);
-        for sitemap in &job.request.sitemaps { frontier.admit(Kind::Sitemap,fetch::validated_url(sitemap)?.to_string(),0,None); }
+        for sitemap in &request.sitemaps { frontier.admit(Kind::Sitemap,fetch::validated_url(sitemap)?.to_string(),0,None); }
         frontier.checkpoint(&self.store,&mut job,None).await?;
         self.schedule(job.clone()).await;
         Ok(job)
     }
-    async fn require_job_capacity(&self)->Result<()> {
+    pub(crate) async fn require_job_capacity(&self)->Result<()> {
+        if self.shutting_down.load(std::sync::atomic::Ordering::SeqCst) { bail!("job queue is full"); }
         if self.store.jobs().await?.iter().filter(|j|!j.state.terminal()).count()>=100 { bail!("job queue is full"); }
         Ok(())
     }
     pub async fn resume(&self,id:&str,request:CrawlResumeRequest)->Result<Job> {
         let _submission=self.submission_lock.lock().await;
         let mut job=self.store.job(id).await?;
+        let crawl=job.request.crawl().context("media_resume_unsupported: submit a new preview-checked media job")?.clone();
         if !matches!(job.state,JobState::Interrupted|JobState::Cancelled|JobState::Partial) || self.job_tokens.lock().await.contains_key(id) {
             bail!("crawl_not_resumable: job must be interrupted, cancelled, or partial with no active worker");
         }
         let mut frontier=Frontier::load(&self.store,id).await?.context("crawl_not_resumable: historical job has no saved frontier")?;
-        let max=request.max_pages.unwrap_or(job.request.max_pages);
-        if max<job.request.max_pages || max>500 { bail!("crawl_invalid_request: resume may only keep or increase the total page budget up to 500"); }
+        let max=request.max_pages.unwrap_or(crawl.max_pages);
+        if max<crawl.max_pages || max>500 { bail!("crawl_invalid_request: resume may only keep or increase the total page budget up to 500"); }
         frontier.requeue_interrupted();
         let p=frontier.progress();
         let pages=p.pending>0 && p.attempted<max;
         let maps=p.sitemap_pending>0 && p.sitemap_attempted<SITEMAP_LIMIT;
-        let discovery=!frontier.sitemaps_seeded && job.request.discover_sitemaps;
+        let discovery=!frontier.sitemaps_seeded && crawl.discover_sitemaps;
         if !pages && !maps && !discovery { bail!("crawl_not_resumable: no pending work within the budget; increase max_pages if page attempts remain"); }
         self.require_job_capacity().await?;
-        if let Some(name)=&job.request.library { self.store.require_library(name).await?; }
-        job.request.max_pages=max; job.state=JobState::Queued; job.error=None;
+        if let Some(name)=&crawl.library { self.store.require_library(name).await?; }
+        job.request.crawl_mut().expect("crawl request checked").max_pages=max; job.state=JobState::Queued; job.error=None;
         warn_once(&mut job,"crawl_resumed","Explicit resume retains saved documents and prior attempt charges. Interrupted requests may be fetched again; completed failures and exclusions are not retried.");
         frontier.checkpoint(&self.store,&mut job,None).await?;
         self.schedule(job.clone()).await;
         Ok(job)
     }
-    async fn schedule(&self,job:Job) {
+    pub(crate) async fn schedule(&self,job:Job) {
         let token=CancellationToken::new(); self.job_tokens.lock().await.insert(job.id.clone(),token.clone());
         let engine=self.clone();
         tokio::spawn(async move {
             let id=job.id.clone();
+            let is_media=matches!(job.request,JobRequest::Media(_));
             let result=std::panic::AssertUnwindSafe(engine.execute_job(job,token)).catch_unwind().await;
-            let error=match result { Ok(Ok(()))=>None,Ok(Err(e))=>Some(format!("{e:#}").chars().take(2000).collect::<String>()),Err(_)=>Some("crawl worker panicked".into()) };
+            let error=match result { Ok(Ok(()))=>None,Ok(Err(e))=>Some(if is_media { "media_helper_failed: worker failed; staging may require operator inspection".into() } else {format!("{e:#}").chars().take(2000).collect::<String>()}),Err(_)=>Some("job worker panicked".into()) };
             if let Some(error)=error {
                 let save=async {
                     let mut job=engine.store.job(&id).await?;
@@ -97,15 +102,27 @@ impl Engine {
                 if let Err(e)=save { tracing::error!(error=%e,"cannot persist failed job"); }
             }
             engine.job_tokens.lock().await.remove(&id);
+            engine.job_finished.notify_waiters();
         });
     }
     pub async fn cancel(&self,id:&str)->Result<serde_json::Value> {
+        let _submission=self.submission_lock.lock().await;
         let job=self.store.job(id).await?;
         if job.state.terminal() { return Ok(json!({"id":id,"cancel_requested":false,"state":job.state})); }
         if let Some(token)=self.job_tokens.lock().await.get(id) { token.cancel(); }
         Ok(json!({"id":id,"cancel_requested":true,"state":job.state}))
     }
-    pub async fn stop_jobs(&self) { for token in self.job_tokens.lock().await.values() { token.cancel(); } }
+    pub async fn stop_jobs(&self) {
+        self.shutting_down.store(true,std::sync::atomic::Ordering::SeqCst);
+        { let _submission=self.submission_lock.lock().await;
+          for token in self.job_tokens.lock().await.values() { token.cancel(); } }
+        // Do not return from graceful shutdown while owned helpers or cleanup remain.
+        loop {
+            let done=self.job_finished.notified(); tokio::pin!(done); done.as_mut().enable();
+            if self.job_tokens.lock().await.is_empty() { break; }
+            done.await;
+        }
+    }
     async fn pace(&self,origin:&str,delay:Duration) {
         let when={let mut map=self.crawl_pacing.lock().await;
             let now=tokio::time::Instant::now();map.retain(|_,until|*until>now);
@@ -117,11 +134,13 @@ impl Engine {
         frontier.checkpoint(&self.store,job,None).await
     }
     async fn execute_job(&self,mut job:Job,token:CancellationToken)->Result<()> {
+        if matches!(job.request,JobRequest::Media(_)) { return self.execute_media_job(job,token).await; }
+        let request=job.request.crawl().context("crawl_invalid_request: wrong job type")?.clone();
         let mut frontier=Frontier::load(&self.store,&job.id).await?.context("crawl has no persistent frontier")?;
         let permit=tokio::select! { result=self.job_slots.acquire()=>Some(result?),_=token.cancelled()=>None };
         let Some(_permit)=permit else { return self.cancelled(&mut frontier,&mut job).await; };
         job.state=JobState::Running; frontier.checkpoint(&self.store,&mut job,None).await?;
-        let base=fetch::validated_url(&job.request.url)?; let origin=base.origin().ascii_serialization();
+        let base=fetch::validated_url(&request.url)?; let origin=base.origin().ascii_serialization();
         let metadata_client=crawl_client(&self.config,&base,None,true)?;
         let robots=tokio::select! {
             r=async {
@@ -135,7 +154,7 @@ impl Engine {
         engine.client=crawl_client(&self.config,&base,Some(robots.clone()),false)?;
         let metadata_client=crawl_client(&self.config,&base,Some(robots.clone()),true)?;
         if !frontier.sitemaps_seeded {
-            if job.request.discover_sitemaps {
+            if request.discover_sitemaps {
                 for url in &robots.sitemaps { admit(&mut frontier,&mut job,&base,&robots,Kind::Sitemap,url,0,None); }
                 if robots.sitemap_truncated { warn_once(&mut job,"sitemap_limit","Robots sitemap discovery stopped at 32 declarations."); }
             }
@@ -192,7 +211,7 @@ impl Engine {
         loop {
             if token.is_cancelled() { break; }
             if results.is_empty() { level=frontier.next(Kind::Page,None).map(|i|frontier.entries[i].depth); }
-            while level.is_some() && results.len()<self.config.crawl_concurrency && frontier.progress().attempted<job.request.max_pages && !token.is_cancelled() {
+            while level.is_some() && results.len()<self.config.crawl_concurrency && frontier.progress().attempted<request.max_pages && !token.is_cancelled() {
                 let Some(i)=frontier.next(Kind::Page,level) else { break; };
                 let entry=frontier.entries[i].clone();
                 if !robots.allowed(&target(&fetch::validated_url(&entry.url)?)) {
@@ -210,7 +229,7 @@ impl Engine {
                 });
             }
             if results.is_empty() {
-                if frontier.progress().attempted>=job.request.max_pages || frontier.next(Kind::Page,None).is_none() { break; }
+                if frontier.progress().attempted>=request.max_pages || frontier.next(Kind::Page,None).is_none() { break; }
                 continue;
             }
             let next=tokio::select! { biased; _=token.cancelled()=>break, r=results.next()=>r };
@@ -295,7 +314,7 @@ fn admit(frontier:&mut Frontier,job:&mut Job,base:&Url,robots:&Robots,kind:Kind,
     let reason=if url.origin()!=base.origin() { Some(("crawl_scope_excluded","URL leaves the crawl origin")) }
         else if directory.is_some_and(|prefix|!url.path().starts_with(prefix)) { Some(("sitemap_scope_excluded","URL leaves the sitemap directory scope")) }
         else if !robots.allowed(&target(&url)) { Some(("robots_excluded","robots.txt disallows this URL")) }
-        else if depth>if kind==Kind::Page { job.request.max_depth } else { SITEMAP_DEPTH } { Some((if kind==Kind::Page { "depth_limit_reached" } else { "sitemap_depth_limit" },"URL exceeds the configured page depth or supported sitemap depth")) }
+        else if depth>if kind==Kind::Page { job.request.crawl().expect("crawl dispatch checked").max_depth } else { SITEMAP_DEPTH } { Some((if kind==Kind::Page { "depth_limit_reached" } else { "sitemap_depth_limit" },"URL exceeds the configured page depth or supported sitemap depth")) }
         else { None };
     if !frontier.admit(kind,url.to_string(),depth,reason.map(|(_,text)|text.into())) {
         warn_once(job,if kind==Kind::Page { "frontier_limit" } else { "sitemap_limit" },"Candidate admission limit reached, including excluded URLs.");

@@ -27,13 +27,23 @@ pub fn libraries(items:&[Library])->String{
 }
 
 pub fn job(j:&Job)->String{
-    let mut out=format!("Job {} | {:?}\nSource: {}\nVisited attempts: {} | Saved: {} | Failed: {}\nLimits: {} pages, depth {}\n",
-        j.id,j.state,j.request.url,j.visited,j.document_ids.len(),j.failed,j.request.max_pages,j.request.max_depth);
+    let mut out=format!("Job {} | {:?}\nSource: {}\n",j.id,j.state,j.request.url());
+    if let Some(r)=j.request.crawl() {
+        out.push_str(&format!("Visited attempts: {} | Saved: {} | Failed: {}\nLimits: {} pages, depth {}\n",j.visited,j.document_ids.len(),j.failed,r.max_pages,r.max_depth));
+        if let Some(l)=&r.library {out.push_str(&format!("Library: {l}\n"));}
+    }
+    if let Some(m)=&j.media {
+        let p=&m.progress;
+        out.push_str(&format!("Media: {:?} | transferred bytes: {} | total: {}\n",p.stage,p.transferred_bytes,p.total_bytes.map(|n|n.to_string()).unwrap_or_else(||"unknown".into())));
+        if let Some(r)=&m.result {
+            out.push_str(&format!("Output artifact: {}\n",r.output_id));
+            for a in &r.artifacts {out.push_str(&format!("Artifact {} | {} | {} bytes | {} seconds | {}\n",a.id,a.artifact.role,a.artifact.size,a.duration_seconds,a.container));}
+        }
+    }
     if let Some(p)=&j.progress{
         out.push_str(&format!("Page frontier: {} candidates | {} charged attempts | {} pending | {} active | {} excluded | {} interrupted attempts\n",p.candidates,p.attempted,p.pending,p.active,p.excluded,p.interrupted));
         out.push_str(&format!("Sitemaps: {} candidates | {} charged attempts | {} pending | {} active | {} interrupted attempts\n",p.sitemaps,p.sitemap_attempted,p.sitemap_pending,p.sitemap_active,p.sitemap_interrupted));
     }
-    if let Some(l)=&j.request.library{out.push_str(&format!("Library: {l}\n"));}
     if !j.created_at.is_empty(){out.push_str(&format!("Created: {}\n",j.created_at));}
     if !j.updated_at.is_empty(){out.push_str(&format!("Updated: {}\n",j.updated_at));}
     out.push_str(&format!("Warnings: {} (details on stderr)\n",j.warnings.len()));

@@ -2,8 +2,9 @@
 
 Video operations use the server's configured yt-dlp helper without an API key.
 They are explicit, separate from ordinary web search, and make no LLM calls.
-They do not download audio/video, transcribe, translate, enrich each search result,
-or process playlists. Source access and permitted media use remain separate gates.
+Search and caption operations do not download audio/video, transcribe, translate,
+enrich each search result, or process playlists. Explicit opt-in single-media
+jobs use separate capacity. See [MEDIA-JOBS.md](MEDIA-JOBS.md). Source access and permitted media use remain separate gates.
 Public visibility does not establish permission for every use. Provider terms and
 unofficial extraction can restrict this path.
 
@@ -109,10 +110,12 @@ playlists. Retries are zero. Denial, rate limit, login, or token requirements do
 not trigger cookies, token plugins, proxy/client changes, another provider, or a
 helper installation. Existing explicit JavaScript runtime configuration is used.
 
-The runner collects bounded output. It is not streaming media progress or resumable
-staging. Media transfer jobs, playlist traversal, download cancellation/resume,
-rights/retention policy, and their CLI/API interfaces are not implemented here.
-They require a separate permitted-source and job-interface milestone.
+The caption runner collects bounded output. It is not streaming media progress
+or resumable staging. A separate [single-media job route](MEDIA-JOBS.md) adds
+explicit format preview, constrained transfers, common polling/cancel, retained
+artifacts, and client-local export. It does not change this legacy caption runner.
+Playlists, conversion, transcription, and compatible media resume remain unsupported.
+Media access permission and operator allocations remain separate gates.
 
 Implementation sources checked against yt-dlp `2026.08.19`:
 

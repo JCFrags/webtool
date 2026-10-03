@@ -25,6 +25,8 @@ pub struct Config {
     pub ytdlp_path: Option<PathBuf>,
     /// yt-dlp runtime spec, e.g. node:/usr/bin/node. None uses yt-dlp defaults.
     pub ytdlp_js_runtime: Option<String>,
+    /// Absent by default. Every media allocation must be supplied by the operator.
+    pub media_download: Option<MediaDownloadConfig>,
     pub browser_no_sandbox: bool,
     pub browser_wait_ms: u64,
     /// Used only by the optional fastCRW adapter. No fallback ladder is implicit.
@@ -45,7 +47,7 @@ impl Default for Config {
             search: SearchConfig::default(), external_code: crate::external_code::ExternalCodeConfig::default(),
             lightpanda_path: None, chromium_path: None, ytdlp_path: None, ytdlp_js_runtime: None,
             browser_no_sandbox: false, browser_wait_ms: 2000,
-            crw_renderer: None, document_config: None,
+            crw_renderer: None, document_config: None, media_download: None,
         }
     }
 }
@@ -89,8 +91,38 @@ impl Config {
         if seen.contains("brave") && seen.contains("brave_api") {
             bail!("choose brave or brave_api, not both: they use the same upstream index");
         }
+        if let Some(media) = &self.media_download { media.validate()?; }
         self.search.validate()?;
         self.external_code.validate()?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MediaDownloadConfig {
+    pub ffmpeg_path: PathBuf, pub ffprobe_path: PathBuf,
+    pub max_job_bytes: u64, pub max_duration_seconds: u64,
+    pub max_width: u32, pub max_height: u32,
+    /// Conservative budget for existing objects plus all queued/active media reservations.
+    pub storage_bytes: u64, pub staging_bytes: u64, pub free_space_reserve_bytes: u64,
+    /// Whole job lifetime, including its queue wait.
+    pub timeout_seconds: u64,
+}
+impl MediaDownloadConfig {
+    fn validate(&self) -> Result<()> {
+        if self.max_job_bytes == 0 || self.max_job_bytes > u64::MAX / 8
+            || self.storage_bytes == 0 || self.storage_bytes > u64::MAX / 8
+            || self.staging_bytes == 0 || self.staging_bytes > u64::MAX / 8
+            || self.free_space_reserve_bytes > u64::MAX / 8
+            || self.max_duration_seconds == 0 || self.max_duration_seconds > 86400
+            || self.timeout_seconds == 0 || self.timeout_seconds > 86400
+            || self.max_width == 0 || self.max_height == 0 {
+            bail!("media_download requires explicit finite bytes, duration, dimensions, storage, staging, free-space reserve, and timeout ceilings");
+        }
+        if !self.ffmpeg_path.is_absolute() || !self.ffprobe_path.is_absolute() {
+            bail!("media_download helper paths must be absolute");
+        }
         Ok(())
     }
 }
