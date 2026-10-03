@@ -12,6 +12,8 @@ webtool scholar search openalex 'graph neural networks' --limit 5
 webtool scholar doi 10.1234/example
 webtool scholar arxiv 2401.12345v2
 webtool scholar arxiv 2401.12345v2 --full-text
+webtool scholar pmc pmc:PMC3974642.1
+webtool scholar pmc pmc:PMC3974642.1 --full-text --expected-datestamp 2014-04-08
 ```
 
 Search defaults to five results and accepts limits from 1 to 20. arXiv queries
@@ -49,20 +51,24 @@ saved snapshots and offline citations remain unchanged and readable.
 
 ## HTTP contract
 
-All three operations are explicit POST routes:
+All four operations are explicit POST routes:
 
 | Route | Request |
 | --- | --- |
 | `/v1/scholarly/search` | `provider` (`arxiv` or `openalex`), `query`, optional `limit` and `refresh` |
 | `/v1/scholarly/doi` | `doi`, optional `refresh` |
 | `/v1/scholarly/arxiv` | exact-version `id`, optional `full_text` and `refresh` |
+| `/v1/scholarly/pmc` | namespaced `id`, optional `full_text`, `refresh`, and `expected_datestamp` |
 
 The response contains `snapshot`, `document_id`, `cached`, `age_seconds`,
 `warnings`, and nullable `full_text_error`. The same snapshot is stored in
 `Document.metadata.scholarly`. Atom, JSON, or selected arXiv HTML is retained
 as the original artifact before normalization. A permitted full-text record
 has the PDF original and retains the metadata artifact in arXiv provenance.
-Source HTTP status and exact version remain explicit.
+Source HTTP status and exact version remain explicit. The PMC route retains OAI
+front matter and, after reuse/selection checks, full JATS. Its `.N` suffix asserts
+the delivered version, not arbitrary historical retrieval. See [PMC.md](PMC.md)
+for source-currency fields, rights gates, structures, and fidelity limits.
 
 Provider queries and selected metadata are cached for one day. `observed_at`
 and `age_seconds` describe the retained observation, not a later cache
@@ -103,12 +109,12 @@ content requests. A rate or budget limit stops that provider operation.
 Required response-shape or identity failures are errors. Invalid individual
 results produce an explicitly partial collection when usable results remain.
 
-This slice does not implement scholarly full-text search, general PDF license
-inference, bulk acquisition, JATS structure, reference resolution, or journal
-version substitution. The next structured-paper task is one explicit Europe
-PMC/PMC JATS route with source identity/version and item-specific reuse checks,
-then focused section, table, formula, and reference preservation. Do not treat
-the current limited generic XML reader as that completed route.
+This service does not implement scholarly full-text search, general PDF license
+inference, bulk acquisition, or journal-version substitution. The explicit PMC
+route has a separate narrow JATS reader. It preserves supported structures and
+reference labels, with derived XML ranges and explicit partial/source-required
+warnings. Europe PMC REST remains unimplemented and unverified. Generic XML
+reading is not this PMC route and does not gain JATS fidelity from it.
 
 ## Focused development checks
 

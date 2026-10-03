@@ -6,7 +6,7 @@ use webtool_protocol::*;
 use crate::{contract::HttpErrors, error::ApiJson, ApiResult};
 
 pub(crate) fn routes() -> OpenApiRouter<Engine> {
-    OpenApiRouter::new().routes(routes!(search)).routes(routes!(doi)).routes(routes!(arxiv))
+    OpenApiRouter::new().routes(routes!(search)).routes(routes!(doi)).routes(routes!(arxiv)).routes(routes!(pmc))
 }
 /// Search one explicit metadata provider, at most 20 results. Abstracts are not full text.
 #[utoipa::path(post, path = "/v1/scholarly/search", operation_id = "searchScholarly", tag = "scholarly",
@@ -25,4 +25,10 @@ async fn doi(State(e): State<Engine>, ApiJson(r): ApiJson<ScholarlyDoiRequest>) 
     request_body = ScholarlyArxivRequest, responses((status = 200, description = "Selected metadata, or explicitly permitted full text. Check content_state and full_text_error.", body = ScholarlyResponse), HttpErrors))]
 async fn arxiv(State(e): State<Engine>, ApiJson(r): ApiJson<ScholarlyArxivRequest>) -> ApiResult<ScholarlyResponse> {
     Ok(Json(e.scholarly_arxiv(r).await?))
+}
+/// Select PMC OAI metadata or reusable JATS. A version suffix asserts the returned version, not historical retrieval.
+#[utoipa::path(post, path = "/v1/scholarly/pmc", operation_id = "inspectScholarlyPmc", tag = "scholarly",
+    request_body = ScholarlyPmcRequest, responses((status = 200, description = "Selected metadata or explicitly permitted full JATS. Inspect content_state, partial, warnings, and full_text_error.", body = ScholarlyResponse), HttpErrors))]
+async fn pmc(State(e): State<Engine>, ApiJson(r): ApiJson<ScholarlyPmcRequest>) -> ApiResult<ScholarlyResponse> {
+    Ok(Json(e.scholarly_pmc(r).await?))
 }

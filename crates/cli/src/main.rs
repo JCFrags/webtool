@@ -91,7 +91,7 @@ enum Command{
     Media{url:String,#[arg(long,default_value="en")]language:String,#[arg(long)]library:Option<String>},
     /// Search flat video metadata, list caption tracks, or save an explicitly selected track.
     Video{#[command(subcommand)]action:VideoCommand},
-    /// Cite a saved arXiv paper offline, or retrieve a DOI citation.
+    /// Cite a saved arXiv or PMC paper offline, or retrieve a DOI citation.
     Cite{#[arg(value_name="DOI_OR_DOCUMENT_ID")]doi:String,#[arg(long="as",default_value="bibtex",value_parser=["bibtex","ris","csl"])]style:String},
     /// Export a saved document. Existing files require --force.
     Export{document:String,#[arg(long,value_enum,default_value="markdown")]kind:ExportKind,#[arg(long,default_value_t=1)]table:usize,#[arg(short,long)]output:PathBuf,#[arg(long)]force:bool},

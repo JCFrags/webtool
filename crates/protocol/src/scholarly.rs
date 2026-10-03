@@ -6,9 +6,9 @@ use crate::{Problem, Warning};
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum ScholarlyProvider { Arxiv, Openalex, Crossref }
+pub enum ScholarlyProvider { Arxiv, Openalex, Crossref, Pmc }
 impl ScholarlyProvider {
-    pub fn name(self) -> &'static str { match self { Self::Arxiv => "arxiv", Self::Openalex => "openalex", Self::Crossref => "crossref" } }
+    pub fn name(self) -> &'static str { match self { Self::Arxiv => "arxiv", Self::Openalex => "openalex", Self::Crossref => "crossref", Self::Pmc => "pmc" } }
 }
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,6 +29,17 @@ pub struct ScholarlyArxivRequest {
     pub id: String,
     #[serde(default)] pub full_text: bool,
     #[serde(default)] pub refresh: bool,
+}
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScholarlyPmcRequest {
+    /// pmc:PMCdigits, optionally .N to assert the version returned by OAI.
+    /// This route cannot request an arbitrary historical PMC version.
+    pub id: String,
+    #[serde(default)] pub full_text: bool,
+    #[serde(default)] pub refresh: bool,
+    /// Exact OAI datestamp assertion, not a publication date or observation time.
+    #[serde(default)] pub expected_datestamp: Option<String>,
 }
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]

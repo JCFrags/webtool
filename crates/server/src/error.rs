@@ -57,6 +57,10 @@ impl From<anyhow::Error> for ApiError {
             return Self { status: StatusCode::from_u16(domain.status_code()).expect("domain status"),
                 code: domain.code(), message: domain.to_string() };
         }
+        if let Some(domain) = error.downcast_ref::<webtool_engine::scholarly::pmc::PmcError>() {
+            return Self { status: StatusCode::from_u16(domain.http_status()).expect("PMC status"),
+                code: domain.code(), message: domain.to_string() };
+        }
         if let Some(error) = error.downcast_ref::<webtool_engine::scholarly::ScholarlyError>() {
             return Self::new(StatusCode::from_u16(error.http_status()).expect("valid scholarly status"), error.code(), error.message());
         }

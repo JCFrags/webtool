@@ -1,6 +1,7 @@
 //! Explicit, source-backed scholarly discovery. No provider fanout or LLM calls.
 mod parse;
 mod transport;
+pub mod pmc;
 use std::time::Duration;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -62,14 +63,15 @@ impl ScholarlyError {
     } }
 }
 #[derive(Clone)]
-pub(crate) struct ScholarlyService { arxiv: ProviderClient, openalex: ProviderClient, crossref: ProviderClient, timeout: Duration }
+pub(crate) struct ScholarlyService { arxiv: ProviderClient, openalex: ProviderClient, crossref: ProviderClient, pmc: ProviderClient, timeout: Duration }
 impl ScholarlyService {
     pub fn new(config: &Config) -> Result<Self> {
         let timeout = Duration::from_secs(config.request_timeout_seconds);
         let cap = config.max_bytes.min(4 * 1024 * 1024);
         Ok(Self { arxiv: ProviderClient::new(ScholarlyProvider::Arxiv, timeout, cap)?,
             openalex: ProviderClient::new(ScholarlyProvider::Openalex, timeout, cap)?,
-            crossref: ProviderClient::new(ScholarlyProvider::Crossref, timeout, cap)?, timeout })
+            crossref: ProviderClient::new(ScholarlyProvider::Crossref, timeout, cap)?,
+            pmc: ProviderClient::new(ScholarlyProvider::Pmc, timeout, cap)?, timeout })
     }
 }
 fn key(operation: &str, input: &str, limit: usize) -> String {
@@ -101,7 +103,7 @@ impl Engine {
         tokio::time::timeout(self.scholarly.timeout, self.scholarly_search_inner(request)).await.map_err(|_| ScholarlyError::Timeout)?
     }
     async fn scholarly_search_inner(&self, request: ScholarlySearchRequest) -> Result<ScholarlyResponse> {
-        if request.query.trim().is_empty() || request.query.len() > 4096 || !(1..=20).contains(&request.limit) || request.provider == ScholarlyProvider::Crossref { return Err(ScholarlyError::InvalidRequest.into()); }
+        if request.query.trim().is_empty() || request.query.len() > 4096 || !(1..=20).contains(&request.limit) || !matches!(request.provider, ScholarlyProvider::Arxiv | ScholarlyProvider::Openalex) { return Err(ScholarlyError::InvalidRequest.into()); }
         let _operation = self.operation_slots.acquire().await?;
         let cache_key = key(request.provider.name(), &request.query, request.limit);
         let lock = self.scholarly_lock(&cache_key).await; let _same_source = lock.lock().await;
@@ -109,7 +111,7 @@ impl Engine {
         let (mut url, client, mime) = match request.provider {
             ScholarlyProvider::Arxiv => (url::Url::parse("https://export.arxiv.org/api/query")?, &self.scholarly.arxiv, "application/atom+xml"),
             ScholarlyProvider::Openalex => (url::Url::parse("https://api.openalex.org/works")?, &self.scholarly.openalex, "application/json"),
-            ScholarlyProvider::Crossref => unreachable!(),
+            ScholarlyProvider::Crossref | ScholarlyProvider::Pmc => unreachable!(),
         };
         if request.provider == ScholarlyProvider::Arxiv {
             url.query_pairs_mut().append_pair("search_query", &request.query).append_pair("start", "0").append_pair("max_results", &request.limit.to_string());
@@ -122,7 +124,7 @@ impl Engine {
         let permit = self.parse_slots.clone().acquire_owned().await?;
         let collection = tokio::task::spawn_blocking(move || { let _permit = permit; match provider {
             ScholarlyProvider::Arxiv => parse::arxiv(&bytes, limit),
-            ScholarlyProvider::Openalex => parse::openalex(&bytes, limit), ScholarlyProvider::Crossref => unreachable!(),
+            ScholarlyProvider::Openalex => parse::openalex(&bytes, limit), ScholarlyProvider::Crossref | ScholarlyProvider::Pmc => unreachable!(),
         } }).await??;
         let d = self.save_scholarly(raw, original, provider, Some(request.query), collection, None).await?;
         self.store.cache(cache_key, d.id.clone()).await?; response(&d, false)

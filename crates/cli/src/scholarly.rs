@@ -26,12 +26,23 @@ pub enum Command {
         #[arg(long)] full_text: bool,
         #[arg(long)] refresh: bool,
     },
+    /// Inspect PMC OAI metadata. A .N suffix asserts the returned version, not historical retrieval.
+    Pmc {
+        /// Namespaced ID, such as pmc:PMC3974642.1.
+        id: String,
+        /// Request reusable JATS only after item-specific identity, currency, and rights checks.
+        #[arg(long)] full_text: bool,
+        #[arg(long)] refresh: bool,
+        /// Assert the exact source OAI datestamp, not a publication or observation date.
+        #[arg(long)] expected_datestamp: Option<String>,
+    },
 }
 pub async fn run(client: &Client, command: Command, format: Output) -> Result<()> {
     let result: ScholarlyResponse = match command {
         Command::Search { provider, query, limit, refresh } => client.post("/v1/scholarly/search", &ScholarlySearchRequest { provider: provider.into(), query: query.join(" "), limit, refresh }).await?,
         Command::Doi { doi, refresh } => client.post("/v1/scholarly/doi", &ScholarlyDoiRequest { doi, refresh }).await?,
         Command::Arxiv { id, full_text, refresh } => client.post("/v1/scholarly/arxiv", &ScholarlyArxivRequest { id, full_text, refresh }).await?,
+        Command::Pmc { id, full_text, refresh, expected_datestamp } => client.post("/v1/scholarly/pmc", &ScholarlyPmcRequest { id, full_text, refresh, expected_datestamp }).await?,
     };
     warnings(&result.warnings, true);
     if human(format) { stdout(&render::terminal_safe(&text(&result)))?; } else { output(&result, format)?; }
@@ -41,7 +52,7 @@ pub async fn run(client: &Client, command: Command, format: Output) -> Result<()
 fn text(result: &ScholarlyResponse) -> String {
     let s = &result.snapshot;
     let mut out = format!("Provider: {}\nSaved ID: {}\nObserved: {} | age {} seconds{}\n{}\n\n", s.provider.name(), result.document_id, s.observed_at, result.age_seconds,
-        if result.cached { " | cached" } else { "" }, if s.partial { "Partial metadata. See warnings and retained original." } else { "Metadata only unless a record explicitly says full_text_read." });
+        if result.cached { " | cached" } else { "" }, if s.partial { "Partial result. See warnings and retained original." } else { "Metadata only unless a record explicitly says full_text_read." });
     for (index, record) in s.records.iter().enumerate() {
         out.push_str(&format!("{}. {}\n   Identity: {}\n   Content state: {:?}\n", index+1, record.title, record.id, record.content_state));
         for (name, value) in &record.identifiers { out.push_str(&format!("   {name}: {value}\n")); }

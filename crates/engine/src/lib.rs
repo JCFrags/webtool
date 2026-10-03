@@ -399,7 +399,9 @@ impl Engine {
     pub async fn citation(&self,doi:&str,format:&str)->Result<Value>{
         let input=doi.trim();
         if input.len()==64 && input.bytes().all(|b|b.is_ascii_hexdigit()) {
-            return arxiv::citation(&self.store.document(input).await?,format);
+            let document = self.store.document(input).await?;
+            if document.metadata.get("pmc").is_some() { return scholarly::pmc::citation(&document,format); }
+            return arxiv::citation(&document,format);
         }
         let doi=doi.trim().trim_start_matches("https://doi.org/").trim_start_matches("doi:");
         if !doi.starts_with("10.")||!doi.contains('/')||doi.chars().any(char::is_whitespace){bail!("expected a DOI such as 10.1234/example");}

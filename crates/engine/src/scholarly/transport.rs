@@ -43,7 +43,12 @@ impl ProviderClient {
         let mut arxiv_slot = if self.provider == ScholarlyProvider::Arxiv { Some(crate::arxiv::slot().await) } else { None };
         // Reserve spacing before sending so cancellation cannot erase pacing.
         budget.next = Instant::now() + budget.spacing;
-        let response = self.client.get(url).send().await.map_err(|e|
+        let mut request = self.client.get(url);
+        if self.provider == ScholarlyProvider::Pmc {
+            // PMC OAI requests compression. reqwest decodes it before the byte cap.
+            request = request.header(reqwest::header::ACCEPT_ENCODING, "gzip, deflate");
+        }
+        let response = request.send().await.map_err(|e|
             if e.is_timeout() { ScholarlyError::Timeout } else { ScholarlyError::ProviderFailed })?;
         let status = response.status();
         let cooldown = cooldown(response.headers(), status);
