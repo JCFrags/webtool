@@ -67,6 +67,11 @@ These values have different meanings:
 
 The metadata cache lasts one day. The full-text cache binds the selected front
 hash and datestamp as well as identity. Refresh does not rewrite old saved IDs.
+For offline inspection, reproduce the exact insertion-ordered JSON fields from
+`scholarly::key`. Alphabetical sorting changes the current hash. Check both exact
+cache keys and their original `checked_at` values before a cache-only diagnostic.
+If either entry is absent or expired, stop rather than allow a live retrieval.
+Do not change cache timestamps to make old observations eligible.
 The selected source's article type is an attributed status claim. This is not an
 exhaustive correction, retraction, or journal-version search.
 

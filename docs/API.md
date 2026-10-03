@@ -146,9 +146,10 @@ retained DOM snapshot, not original HTTP response bytes. Its download header is
 use `Content-Disposition: attachment`.
 
 `cite` accepts `doi` or its compatibility alias `document_id`, plus `format`.
-Do not send both identifiers. A saved arXiv document ID uses retained metadata
-without a network request. DOI input retrieves bibliography metadata. Formats are
-`bibtex`, `ris`, and `csl`; saved arXiv papers support `bibtex` and `csl` only.
+Do not send both identifiers. A saved arXiv or PMC document ID uses retained
+metadata without a network request. DOI input retrieves bibliography metadata.
+Formats are `bibtex`, `ris`, and `csl`. Saved arXiv and PMC papers support
+`bibtex` and `csl` only.
 
 `map` returns a tagged `page_links`, `urlset`, or `sitemapindex` value. It does not
 expand nested sitemaps. Crawl requests can opt in to bounded expansion with
@@ -309,7 +310,14 @@ stopped afterward. The locked CLI/server build and 2 unit plus 8 API tests passe
 This local proof did not contact a public provider, test every source format or
 helper, or establish third-party OpenAPI generator compatibility.
 
+A later combined loopback check verified forty paths, forty-three unique operation
+IDs, and all 694 schema references. The CLI, HTTP batch, and eighteen-tool stdio
+MCP connector used the same saved documents. Synthetic optional-index responses
+stayed labeled as index claims. Cached partial PMC JATS preserved its retained
+first-party identity without a new retrieval. No public provider was contacted.
+See [MCP.md](MCP.md) for the exercised scope.
+
 `webtool_server::api_router()` exposes the collected Axum routes and contract.
 `webtool_server::router(engine)` adds the specification endpoint and error/limit
-layers. A future adapter can mount beside that router and use the same engine;
-this slice does not implement MCP or another operation backend.
+layers. Another adapter can mount beside that router and use the same engine.
+The stdio MCP connector forwards HTTP operations, not a second backend.

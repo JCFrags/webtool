@@ -238,6 +238,19 @@ listener stopped within their recorded lifetime. This does not verify successful
 external domain reads through MCP, all argument combinations, or every agent
 application. The underlying domain proofs remain separate.
 
+A later combined check listed eighteen object-root tools with thirteen resolved
+local schema references. The same backend exposed forty HTTP paths and forty-three
+unique operation IDs. An ordered batch, cache reuse, shared-library access, CLI
+saved-ID read, and exact original export used one document. Three synthetic
+provider requests exercised Sourcegraph search and Context7 library/context
+selection. Selected Sourcegraph lines matched retained synthetic file/map seeds
+without another request. This is not first-party source verification.
+Cached PMC JATS retained its original ID, partial state, twenty source-required
+formula images, eight unfetched external objects, and offline CSL citation. No
+new PMC retrieval or live optional-provider call occurred. All private processes
+and listeners stopped within the recorded lifetime. This does not establish
+live provider access, all tool arguments, or installed activation.
+
 Keep the root `type: "object"` on every input schema. Schemars tagged enums emit
 object alternatives without that root type, which `rmcp 3.5.0` rejects at runtime.
 A successful build does not catch this failure. Exercise `tools/list` after schema
