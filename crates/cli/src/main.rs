@@ -36,6 +36,8 @@ enum Command{
     Doctor,
     /// Search the web, or a saved library. Use --library '*' for all saved documents.
     Search{#[arg(required=true,num_args=1..)]query:Vec<String>,#[arg(long,default_value_t=10)]limit:usize,#[arg(long)]library:Option<String>},
+    /// Explicit historical capture lookup and reading. Never a live-read fallback.
+    Archive{#[command(subcommand)]action:ArchiveCommand},
     /// Read a URL or a saved document ID. URLs are retained automatically.
     Read{source:String,#[arg(long)]refresh:bool,#[arg(long,value_enum,default_value="auto")]renderer:Browser,
         #[arg(long,default_value="en")]language:String,
@@ -74,6 +76,14 @@ enum Command{
     Batch{file:PathBuf,#[arg(long)]library:Option<String>},
 }
 #[derive(Subcommand)]enum ConfigCommand{Show}
+#[derive(Subcommand)]enum ArchiveCommand{
+    /// List captures at or before --at (UTC YYYYMMDDhhmmss), newest first.
+    Lookup{url:String,#[arg(long)]at:String,#[arg(long,default_value_t=30)]within_days:u16,
+        #[arg(long,default_value_t=3)]limit:usize,#[arg(long)]refresh:bool},
+    /// Read one exact selected UTC capture. Redirects and live fallback are refused.
+    Read{url:String,#[arg(long)]timestamp:String,#[arg(long)]refresh:bool,
+        #[arg(long)]library:Option<String>,#[arg(long)]actor:Option<String>,#[arg(long)]details:bool},
+}
 #[derive(Subcommand)]enum LibraryCommand{
     List,
     Create{name:String,#[arg(long,default_value="")]description:String},
@@ -220,6 +230,23 @@ async fn run(cli:Cli)->Result<()>{
                 if result.results.is_empty(){stdout("No results returned.\n")?;}
             }else{output(&result,format)?;}
             if result.results.is_empty()&&!result.warnings.is_empty(){bail!("search returned no results and reported provider warnings");}Ok(())
+        },
+        Command::Archive{action}=>match action{
+            ArchiveCommand::Lookup{url,at,within_days,limit,refresh}=>{
+                let result:ArchiveLookupResponse=client.post("/v1/archive/lookup",&ArchiveLookupRequest{url,at,within_days,limit,refresh}).await?;
+                warnings(&result.warnings,true);
+                if human(format){
+                    stdout(&render::terminal_safe(&format!("Historical candidates for {}\nUTC interval: {} through {} (at or before)\nIndex checked: {}{}\n",result.requested_url,result.earliest_at,result.requested_at,result.retrieved_at,if result.cached{" (cached)"}else{""})))?;
+                    for c in &result.captures{stdout(&render::terminal_safe(&format!("{} | capture HTTP {} | {}\n  {}\n",c.timestamp,c.capture_status.map(|s|s.to_string()).unwrap_or_else(||"unknown".into()),c.media_type.as_deref().unwrap_or("unknown"),c.replay_url)))?;}
+                    if result.captures.is_empty(){stdout("No matching capture returned. No page was read.\n")?;}
+                    Ok(())
+                }else{output(&result,format)}
+            },
+            ArchiveCommand::Read{url,timestamp,refresh,library,actor,details}=>{
+                let result:ReadResponse=client.post("/v1/archive/read",&ArchiveReadRequest{url,timestamp,refresh,library,actor}).await?;
+                if result.cached{eprintln!("Using saved historical capture. Pass --refresh to check the same capture again.");}
+                document(&result.document,format,details,true)
+            },
         },
         Command::Read{source,refresh,renderer,language,selector,library,actor,start_block,end_block,page,details}=>{
             let mut d=if source.starts_with("https://")||source.starts_with("http://"){

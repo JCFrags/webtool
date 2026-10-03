@@ -25,6 +25,8 @@ pub fn api_router() -> OpenApiRouter<Engine> {
         .routes(routes!(health))
         .routes(routes!(read))
         .routes(routes!(search))
+        .routes(routes!(archive_lookup))
+        .routes(routes!(archive_read))
         .routes(routes!(ingest))
         .routes(routes!(documents))
         .routes(routes!(document))
@@ -79,6 +81,20 @@ async fn read(State(e): State<Engine>, ApiJson(r): ApiJson<ReadRequest>) -> ApiR
     request_body = SearchRequest, responses((status = 200, description = "Successful operation.", body = SearchResponse), HttpErrors))]
 async fn search(State(e): State<Engine>, ApiJson(r): ApiJson<SearchRequest>) -> ApiResult<SearchResponse> {
     Ok(Json(e.search(r).await?))
+}
+
+/// Inspect up to three historical capture candidates at or before an exact UTC date.
+#[utoipa::path(post, path = "/v1/archive/lookup", operation_id = "lookupArchive", tag = "archives",
+    request_body = ArchiveLookupRequest, responses((status = 200, description = "Bounded capture index, not page evidence.", body = ArchiveLookupResponse), HttpErrors))]
+async fn archive_lookup(State(e): State<Engine>, ApiJson(r): ApiJson<ArchiveLookupRequest>) -> ApiResult<ArchiveLookupResponse> {
+    Ok(Json(e.archive_lookup(r).await?))
+}
+
+/// Read one explicitly selected capture. No redirect, browser, or live fallback.
+#[utoipa::path(post, path = "/v1/archive/read", operation_id = "readArchive", tag = "archives",
+    request_body = ArchiveReadRequest, responses((status = 200, description = "Saved historical replay with separate capture and replay status.", body = ReadResponse), HttpErrors))]
+async fn archive_read(State(e): State<Engine>, ApiJson(r): ApiJson<ArchiveReadRequest>) -> ApiResult<ReadResponse> {
+    Ok(Json(e.archive_read(r).await?))
 }
 
 /// Retrieve a saved document without a network read.

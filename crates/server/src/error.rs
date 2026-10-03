@@ -70,6 +70,16 @@ fn legacy_engine_error(message: &str) -> Option<ApiError> {
     use StatusCode as S;
     let prefix = message.split_once(':').map(|(code, _)| code).unwrap_or(message);
     let (status, code, safe) = match prefix {
+        "archive_invalid_request" => (S::BAD_REQUEST, "archive_invalid_request", "Use one original HTTP(S) URL, an exact UTC timestamp YYYYMMDDhhmmss, a lookback of 0 to 3660 days, and 1 to 3 candidates."),
+        "archive_timeout" => (S::GATEWAY_TIMEOUT, "archive_timeout", "The archive operation deadline was reached."),
+        "archive_rate_limited" => (S::TOO_MANY_REQUESTS, "archive_rate_limited", "The archive requested a cooldown. No retry was attempted."),
+        "archive_size_limit" => (S::PAYLOAD_TOO_LARGE, "archive_size_limit", "The archive response exceeds its byte limit."),
+        "archive_unavailable" => (S::NOT_FOUND, "archive_unavailable", "The exact capture is unavailable or the index reports an unsuccessful capture. No alternate capture was read."),
+        "archive_redirect_refused" => (S::BAD_GATEWAY, "archive_redirect_refused", "The archive returned a redirect. It was not followed, including live-web or different-date targets."),
+        "archive_identity_mismatch" => (S::BAD_GATEWAY, "archive_identity_mismatch", "Replay identity does not confirm the selected original URL and capture time."),
+        "archive_upstream_failed" => (S::BAD_GATEWAY, "archive_upstream_failed", "The archive request or capture index validation failed."),
+        "archive_content_unavailable" => (S::UNPROCESSABLE_ENTITY, "archive_content_unavailable", "The capture contains no usable HTTP text or displays an access challenge. No fallback was attempted."),
+        "archive_format_unsupported" => (S::UNPROCESSABLE_ENTITY, "archive_format_unsupported", "This archive route supports HTML, XHTML, plain text, and Markdown only."),
         "arxiv_rate_limited" => (S::TOO_MANY_REQUESTS, "arxiv_rate_limited", "arXiv rate limit reached."),
         "arxiv_version_unavailable" | "arxiv_empty_result" => (S::NOT_FOUND, "arxiv_unavailable", "The requested arXiv paper or version is unavailable."),
         "arxiv_invalid_identifier" => (S::BAD_REQUEST, "arxiv_invalid_identifier", "Use a supported arXiv identifier with an optional version."),

@@ -117,6 +117,7 @@ async fn generated_contract_covers_operations_and_actual_tagged_blocks() {
         ("libraries/{name}/items", vec!["get", "post"]), ("crawl", vec!["post"]), ("jobs", vec!["get"]),
         ("jobs/{id}", vec!["get"]), ("jobs/{id}/cancel", vec!["post"]),
         ("map", vec!["post"]), ("media", vec!["post"]), ("cite", vec!["post"]),
+        ("archive/lookup", vec!["post"]), ("archive/read", vec!["post"]),
     ];
     let mut ids = std::collections::HashSet::new();
     assert_eq!(paths.len(), expected.len());
@@ -129,7 +130,7 @@ async fn generated_contract_covers_operations_and_actual_tagged_blocks() {
             assert_eq!(operation["responses"]["500"]["content"]["application/json"]["schema"]["$ref"], "#/components/schemas/Problem");
         }
     }
-    assert_eq!(ids.len(), 22);
+    assert_eq!(ids.len(), 24);
     assert_eq!(paths["/v1/ingest"]["post"]["requestBody"]["content"]["multipart/form-data"]["schema"]["$ref"], "#/components/schemas/IngestForm");
     assert!(paths["/v1/documents/{id}/original"]["get"]["responses"]["200"]["content"]["application/octet-stream"].is_object());
     let original_schema = &paths["/v1/documents/{id}/original"]["get"]["responses"]["200"]["content"]["application/octet-stream"]["schema"];

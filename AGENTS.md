@@ -229,6 +229,26 @@ The CLI must not depend on the engine package.
 Clients must not open the server's database file.
 The Python scripts are development checks, not application components.
 
+### Shared Cargo targets across worktrees
+
+Use an external build lock for every Cargo command when workers share a target
+directory. Copy diagnostic binaries to a private evidence directory before you
+release that lock. Another worktree can overwrite the target's binaries.
+
+A lock prevents concurrent writes, but it does not make Cargo's cached workspace
+artifacts source-exact. The observed dependency files use relative workspace
+paths. Cargo reused another worktree's protocol artifact when its build was newer
+than this worktree's source mtimes. This caused missing local types and an extra
+`Job` field from the other source without compiling the local protocol.
+
+After you acquire the lock, update mtimes for the existing crate roots
+`crates/protocol/src/lib.rs`, `crates/engine/src/lib.rs`,
+`crates/server/src/lib.rs`, and `crates/cli/src/main.rs`, plus existing workspace
+`build.rs` files, before Cargo runs. Change no file contents and touch only the
+current worktree. This forced the current packages to compile and preserved shared
+dependencies. A per-worktree target also avoids this reuse, but do not duplicate
+large build trees or remove another worker's evidence only for recovery.
+
 ## Deferred optional integration boundaries
 
 Xberg 1.1.1's existing APIs compiled with the committed lockfile; no dependency

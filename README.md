@@ -653,4 +653,5 @@ Do not add quality profiles, automatic extractor chains, or a TUI.
 Add source format support only with fidelity fixtures and explicit limitations.
 
 See [architecture](docs/ARCHITECTURE.md), [API](docs/API.md), [MCP](docs/MCP.md),
-[HTML decoding](docs/ENCODING.md), [status](docs/STATUS.md), and [sources](docs/SOURCES.md).
+[HTML decoding](docs/ENCODING.md), [explicit archives](docs/ARCHIVES.md),
+[status](docs/STATUS.md), and [sources](docs/SOURCES.md).

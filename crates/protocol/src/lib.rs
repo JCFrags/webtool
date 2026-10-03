@@ -3,6 +3,9 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+mod archive;
+pub use archive::*;
+
 pub const API_VERSION: &str = "v1";
 pub const EXTRACTION_VERSION: &str = "webtool-0.1.0-schema1";
 
