@@ -66,11 +66,20 @@ enum Command{
     Notes{document:String},
     /// Submit a bounded, same-origin crawl. Robots rules are respected.
     Crawl{url:String,#[arg(long,default_value_t=20)]max_pages:usize,#[arg(long,default_value_t=2)]max_depth:usize,
-        #[arg(long)]library:Option<String>,#[arg(long)]actor:Option<String>,#[arg(long)]wait:bool},
+        #[arg(long)]library:Option<String>,#[arg(long)]actor:Option<String>,#[arg(long)]wait:bool,
+        /// Add an explicit same-origin sitemap root. Repeat for up to eight roots.
+        #[arg(long="sitemap")]sitemaps:Vec<String>,
+        /// Discover sitemap roots from robots.txt, without guessing paths.
+        #[arg(long)]discover_sitemaps:bool},
     /// List links from a page or URLs from a sitemap, without article extraction.
     Map{url:String,#[arg(long,default_value_t=100)]limit:usize},
     /// List jobs or inspect one. --wait polls status with progress on stderr.
-    Jobs{id:Option<String>,#[arg(long,requires="id",conflicts_with="cancel")]wait:bool,#[arg(long,requires="id")]cancel:bool},
+    Jobs{id:Option<String>,#[arg(long,requires="id",conflicts_with="cancel")]wait:bool,
+        #[arg(long,requires="id",conflicts_with="resume")]cancel:bool,
+        /// Resume only pending/interrupted work from the saved frontier.
+        #[arg(long,requires="id")]resume:bool,
+        /// Increase the total attempt budget on resume, including prior attempts.
+        #[arg(long,requires="resume")]max_pages:Option<usize>},
     /// Retrieve existing captions through yt-dlp. No video download or transcription.
     Media{url:String,#[arg(long,default_value="en")]language:String,#[arg(long)]library:Option<String>},
     /// Cite a saved arXiv paper offline, or retrieve a DOI citation.
@@ -126,7 +135,8 @@ impl Client{
         let mut previous=String::new();
         loop{
             let job:Job=self.get(&format!("/v1/jobs/{id}")).await?;
-            let message=format!("{id}: {:?}, {} visited attempts, {} saved, {} failed (limits: {} pages, depth {})",job.state,job.visited,job.document_ids.len(),job.failed,job.request.max_pages,job.request.max_depth);
+            let mut message=format!("{id}: {:?}, {} visited attempts, {} saved, {} failed (limits: {} attempts, depth {})",job.state,job.visited,job.document_ids.len(),job.failed,job.request.max_pages,job.request.max_depth);
+            if let Some(p)=&job.progress{message.push_str(&format!(", {} charged, {} pending, {} active, {} interrupted attempts",p.attempted,p.pending,p.active,p.interrupted));}
             if message!=previous{eprintln!("{}",render::terminal_safe(&message));previous=message;}
             if job.state.terminal(){return Ok(job);}
             tokio::select!{
@@ -320,18 +330,19 @@ async fn run(cli:Cli)->Result<()>{
             if human(format){stdout(&presentation::documents(&v))}else{output(&v,format)}},
         Command::Note{document,actor,text,tags}=>{document_id(&document)?;let a:Annotation=client.post(&format!("/v1/documents/{document}/annotations"),&AnnotationCreate{actor,note:text,tags}).await?;output(&a,format)},
         Command::Notes{document}=>{document_id(&document)?;let a:Vec<Annotation>=client.get(&format!("/v1/documents/{document}/annotations")).await?;output(&a,format)},
-        Command::Crawl{url,max_pages,max_depth,library,actor,wait}=>{
-            let j:Job=client.post("/v1/crawl",&CrawlRequest{url,max_pages,max_depth,library,actor}).await?;
+        Command::Crawl{url,max_pages,max_depth,library,actor,wait,sitemaps,discover_sitemaps}=>{
+            let j:Job=client.post("/v1/crawl",&CrawlRequest{url,max_pages,max_depth,sitemaps,discover_sitemaps,library,actor}).await?;
             let j=if wait{client.wait(&j.id).await?}else{j};job_output(&j,format)?;
             if matches!(j.state,JobState::Failed|JobState::Interrupted){bail!("crawl did not complete successfully");}Ok(())
         },
         Command::Map{url,limit}=>{let v:Value=client.post("/v1/map",&json!({"url":url,"limit":limit})).await?;output(&v,format)},
-        Command::Jobs{id,wait,cancel}=>{
+        Command::Jobs{id,wait,cancel,resume,max_pages}=>{
             if let Some(id)=id{
                 if cancel{let v:Value=client.post(&format!("/v1/jobs/{id}/cancel"),&json!({})).await?;
                     if human(format){return stdout(&render::terminal_safe(&format!("Job {id}: cancellation requested={} | state={}\n",v["cancel_requested"].as_bool().map(|b|b.to_string()).unwrap_or_else(||"unknown".into()),v["state"].as_str().unwrap_or("unknown"))));}
                     return output(&v,format);}
-                let j:Job=if wait{client.wait(&id).await?}else{client.get(&format!("/v1/jobs/{id}")).await?};job_output(&j,format)?;
+                let resumed:Option<Job>=if resume{Some(client.post(&format!("/v1/jobs/{id}/resume"),&CrawlResumeRequest{max_pages}).await?)}else{None};
+                let j:Job=if wait{client.wait(&id).await?}else if let Some(j)=resumed{j}else{client.get(&format!("/v1/jobs/{id}")).await?};job_output(&j,format)?;
                 if wait && matches!(j.state,JobState::Failed|JobState::Interrupted){bail!("crawl did not complete successfully");}Ok(())
             }else{let jobs:Vec<Job>=client.get("/v1/jobs").await?;
                 if human(format){

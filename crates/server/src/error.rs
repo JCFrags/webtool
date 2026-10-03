@@ -145,6 +145,8 @@ fn legacy_validation_error(message: &str) -> Option<ApiError> {
         "map limit must be between 1 and 5000" => Some(ApiError::bad_request("Map limit must be between 1 and 5000.")),
         "crawl limits are 1 to 500 pages and 0 to 8 levels" => Some(ApiError::bad_request("Crawl limits are 1 to 500 pages and 0 to 8 levels.")),
         "job queue is full" => Some(ApiError::new(S::SERVICE_UNAVAILABLE, "queue_full", "The job queue is full. Try again later.")),
+        _ if message.starts_with("crawl_invalid_request:") => Some(ApiError::bad_request("Use bounded same-origin crawl inputs. Resume may only increase the total attempt budget, up to 500.")),
+        _ if message.starts_with("crawl_not_resumable:") => Some(ApiError::new(S::CONFLICT, "crawl_not_resumable", "Resume requires a durable interrupted, cancelled, or partial job with pending work and remaining budget. Increase max_pages if needed.")),
         "actor must not be empty" | "too many or oversized tags" => Some(ApiError::bad_request("Supply an actor and at most 64 tags of up to 100 bytes each.")),
         "upload exceeds configured size limit" | "note exceeds 65536 bytes" | "citation response exceeds one megabyte" | "caption file exceeds configured byte limit" | "rendered page exceeds configured size limit" => Some(ApiError::size_limit()),
         "expected a DOI such as 10.1234/example" | "format must be bibtex, ris, or csl" => Some(ApiError::bad_request("Supply a DOI or saved paper ID and a supported citation format: bibtex, ris, or csl.")),

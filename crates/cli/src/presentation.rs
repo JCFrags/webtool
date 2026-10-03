@@ -29,6 +29,10 @@ pub fn libraries(items:&[Library])->String{
 pub fn job(j:&Job)->String{
     let mut out=format!("Job {} | {:?}\nSource: {}\nVisited attempts: {} | Saved: {} | Failed: {}\nLimits: {} pages, depth {}\n",
         j.id,j.state,j.request.url,j.visited,j.document_ids.len(),j.failed,j.request.max_pages,j.request.max_depth);
+    if let Some(p)=&j.progress{
+        out.push_str(&format!("Page frontier: {} candidates | {} charged attempts | {} pending | {} active | {} excluded | {} interrupted attempts\n",p.candidates,p.attempted,p.pending,p.active,p.excluded,p.interrupted));
+        out.push_str(&format!("Sitemaps: {} candidates | {} charged attempts | {} pending | {} active | {} interrupted attempts\n",p.sitemaps,p.sitemap_attempted,p.sitemap_pending,p.sitemap_active,p.sitemap_interrupted));
+    }
     if let Some(l)=&j.request.library{out.push_str(&format!("Library: {l}\n"));}
     if !j.created_at.is_empty(){out.push_str(&format!("Created: {}\n",j.created_at));}
     if !j.updated_at.is_empty(){out.push_str(&format!("Updated: {}\n",j.updated_at));}

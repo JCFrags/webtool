@@ -44,6 +44,7 @@ compatibility. Clients must inspect warnings, source status, and artifact roles.
 | GET | `/v1/jobs` | List recent jobs and active work |
 | GET | `/v1/jobs/{id}` | Read persistent status and results |
 | POST | `/v1/jobs/{id}/cancel` | Request cancellation |
+| POST | `/v1/jobs/{id}/resume` | Explicitly resume a durable crawl |
 | POST | `/v1/map` | List page links or sitemap locations |
 | POST | `/v1/media` | Retrieve metadata and existing captions |
 | POST | `/v1/cite` | Retrieve DOI bibliography metadata |
@@ -129,10 +130,26 @@ without a network request. DOI input retrieves bibliography metadata. Formats ar
 `bibtex`, `ris`, and `csl`; saved arXiv papers support `bibtex` and `csl` only.
 
 `map` returns a tagged `page_links`, `urlset`, or `sitemapindex` value. It does not
-expand nested sitemaps. Job cancellation returns the state at request time and
-`cancel_requested`. Poll the job for final cancellation. An already terminal job
-returns `cancel_requested: false`. Successful operations currently return 200,
-including ingest, library creation, and crawl submission.
+expand nested sitemaps. Crawl requests can opt in to bounded expansion with
+`sitemaps: ["https://example.com/sitemap.xml"]`, `discover_sitemaps: true`, or both.
+These fields default to an empty list and false.
+
+Job cancellation returns the state at request time and `cancel_requested`. Poll
+for final cancellation. An already terminal job returns `cancel_requested: false`.
+Queued/running jobs become interrupted after server restart. No saved job is
+silently scheduled. Resume accepts `{}` or `{"max_pages":40}` and retains the
+frontier, completed attachments, and past attempt charges. The optional limit is
+a new total budget, up to 500. Only durable interrupted/cancelled/partial jobs with
+pending or interrupted work and remaining budget can resume. Historical jobs with
+no frontier, active workers, unsupported states, or exhausted work return 409
+`crawl_not_resumable`. Completed failures and exclusions are not retried.
+
+New jobs include optional `progress` with page and sitemap candidate, attempt,
+pending/active, exclusion, and interruption counts. `visited` still counts
+completed page attempts. Interrupted attempts consume budget but do not increment
+`visited`. See [CRAWL.md](CRAWL.md) for transaction/crash semantics, scheduling,
+robots policy, and sitemap bounds. Successful operations return 200, including
+ingest, library creation, crawl submission, and accepted resume.
 
 ## Error boundary
 
@@ -148,6 +165,7 @@ HTTP application and extractor failures return `application/json` with the share
 | 400 | `invalid_json`, `invalid_query`, `invalid_path`, `invalid_multipart`, `invalid_request` | Malformed input or a recognized validation failure |
 | 404 | `not_found` | Unknown route or saved resource |
 | 405 | `method_not_allowed` | Wrong method for a registered route |
+| 409 | `crawl_not_resumable` | No supported saved work within the current state/budget |
 | 413 | `size_limit` | Request, file, metadata, or source byte limit |
 | 415 | `unsupported_media_type` | A JSON endpoint needs a JSON content type |
 | 422 | `invalid_request`, `capability_unavailable` | JSON field types do not match, or a known capability is unavailable |

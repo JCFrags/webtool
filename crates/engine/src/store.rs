@@ -18,10 +18,11 @@ impl Store {
         let store = Self { database: root.join("webtool.sqlite3"), root };
         store.run(|c| {
             let version: u32 = c.pragma_query_value(None, "user_version", |r| r.get(0))?;
-            if version > 1 { bail!("database schema {version} is newer than this application"); }
+            if version > 2 { bail!("database schema {version} is newer than this application"); }
             c.pragma_update(None, "journal_mode", "WAL")?;
             let tx = c.transaction()?;
-            tx.execute_batch(SCHEMA)?;
+            if version < 1 { tx.execute_batch(SCHEMA)?; }
+            if version < 2 { tx.execute_batch(include_str!("../../../migrations/002_crawl_frontier.sql"))?; }
             tx.commit()?;
             Ok(())
         }).await?;
@@ -173,11 +174,7 @@ impl Store {
         }).await
     }
     pub async fn put_job(&self, job: Job) -> Result<()> {
-        self.run(move |c| {
-            let state=serde_json::to_value(&job.state)?.as_str().unwrap_or("failed").to_owned();
-            c.execute("INSERT INTO jobs(id,state,created_at,updated_at,payload) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at,payload=excluded.payload",
-                params![job.id,state,job.created_at,job.updated_at,serde_json::to_string(&job)?])?; Ok(())
-        }).await
+        self.run(move |c| write_job(c, &job)).await
     }
     pub async fn job(&self, id: &str) -> Result<Job> {
         let id=id.to_owned(); self.run(move |c| {
@@ -194,6 +191,13 @@ impl Store {
     }
 }
 
+pub(crate) fn write_job(c: &Connection, job: &Job) -> Result<()> {
+    let state=serde_json::to_value(&job.state)?.as_str().unwrap_or("failed").to_owned();
+    c.execute("INSERT INTO jobs(id,state,created_at,updated_at,payload) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at,payload=excluded.payload",
+        params![job.id,state,job.created_at,job.updated_at,serde_json::to_string(job)?])?;
+    Ok(())
+}
+
 pub fn validate_library(name:&str)->Result<()> {
     if name.is_empty() || name.len()>80 || !name.bytes().all(|c|c.is_ascii_alphanumeric()||b"-_".contains(&c)) {
         bail!("library names must contain 1 to 80 ASCII letters, digits, hyphens, or underscores");
@@ -206,9 +210,18 @@ pub fn validate_library(name:&str)->Result<()> {
         assert!(validate_library("papers-2026").is_ok());
     }
     #[tokio::test] async fn schema_and_library_roundtrip() {
-        let t=tempfile::tempdir().unwrap(); let s=Store::open(t.path()).await.unwrap();
+        let t=tempfile::tempdir().unwrap();
+        // Start with schema 1 to verify the additive migration preserves old rows.
+        let c=Connection::open(t.path().join("webtool.sqlite3")).unwrap();
+        c.execute_batch(SCHEMA).unwrap();
+        c.execute("INSERT INTO libraries(name,description,created_at) VALUES('preserved','Before migration','2026-01-01T00:00:00Z')",[]).unwrap();
+        drop(c);
+        let s=Store::open(t.path()).await.unwrap();
         s.create_library(LibraryCreate{name:"papers".into(),description:"Research".into()}).await.unwrap();
-        assert_eq!(s.libraries().await.unwrap()[0].name,"papers");
+        let libraries=s.libraries().await.unwrap();
+        assert_eq!(libraries[0].name,"papers");
+        assert_eq!(libraries[1].description,"Before migration");
+        s.run(|c|{assert_eq!(c.pragma_query_value::<u32,_>(None,"user_version",|r|r.get(0))?,2);Ok(())}).await.unwrap();
         assert!(s.require_library("missing").await.is_err());
     }
     #[tokio::test] async fn original_hash_roundtrip() {

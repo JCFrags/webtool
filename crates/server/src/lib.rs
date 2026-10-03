@@ -41,6 +41,7 @@ pub fn api_router() -> OpenApiRouter<Engine> {
         .routes(routes!(jobs))
         .routes(routes!(job))
         .routes(routes!(cancel))
+        .routes(routes!(resume))
         .routes(routes!(map))
         .routes(routes!(media))
         .routes(routes!(cite))
@@ -225,6 +226,15 @@ async fn job(State(e): State<Engine>, ApiPath(id): ApiPath<String>) -> ApiResult
     params(("id" = String, Path)), responses((status = 200, description = "Successful operation.", body = CancelResponse), HttpErrors))]
 async fn cancel(State(e): State<Engine>, ApiPath(id): ApiPath<String>) -> ApiResult<Value> {
     Ok(Json(e.cancel(&id).await?))
+}
+
+/// Explicitly resume a durable interrupted, cancelled, or partial crawl.
+/// Past attempt charges remain. Only pending and interrupted entries can run.
+#[utoipa::path(post, path = "/v1/jobs/{id}/resume", operation_id = "resumeJob", tag = "jobs",
+    params(("id" = String, Path)), request_body = CrawlResumeRequest,
+    responses((status = 200, description = "Resumed job queued with its retained frontier and budget.", body = Job), HttpErrors))]
+async fn resume(State(e): State<Engine>, ApiPath(id): ApiPath<String>, ApiJson(r): ApiJson<CrawlResumeRequest>) -> ApiResult<Job> {
+    Ok(Json(e.resume(&id, r).await?))
 }
 
 /// List page links or sitemap locations. Nested sitemap expansion is not performed.

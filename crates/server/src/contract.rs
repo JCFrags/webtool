@@ -136,6 +136,8 @@ pub(crate) enum HttpErrors {
     NotFound(Problem),
     #[response(status = 405, description = "Method not allowed for this route.")]
     MethodNotAllowed(Problem),
+    #[response(status = 409, description = "The crawl job has no resumable work in its current state or budget.")]
+    Conflict(Problem),
     #[response(status = 413, description = "Request, upload, or source byte limit exceeded.")]
     TooLarge(Problem),
     #[response(status = 415, description = "The JSON endpoint requires Content-Type: application/json.")]

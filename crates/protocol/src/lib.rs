@@ -226,8 +226,34 @@ pub struct CrawlRequest {
     pub url: String,
     #[serde(default = "twenty")] pub max_pages: usize,
     #[serde(default = "two")] pub max_depth: usize,
+    /// Explicit sitemap roots. Discovery is bounded and stays on the crawl origin.
+    #[serde(default)] pub sitemaps: Vec<String>,
+    /// Also use same-origin Sitemap records from robots.txt. No guessed sitemap paths.
+    #[serde(default)] pub discover_sitemaps: bool,
     #[serde(default)] pub library: Option<String>,
     #[serde(default)] pub actor: Option<String>,
+}
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CrawlResumeRequest {
+    /// Optional new total attempt budget, including attempts before resume (maximum 500).
+    #[serde(default)] pub max_pages: Option<usize>,
+}
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CrawlProgress {
+    pub candidates: usize,
+    pub attempted: usize,
+    pub pending: usize,
+    pub active: usize,
+    pub excluded: usize,
+    /// Cumulative interrupted page attempts. These consume the page budget.
+    pub interrupted: usize,
+    pub sitemaps: usize,
+    pub sitemap_attempted: usize,
+    pub sitemap_pending: usize,
+    pub sitemap_active: usize,
+    pub sitemap_interrupted: usize,
 }
 fn twenty() -> usize { 20 }
 fn two() -> usize { 2 }
@@ -246,6 +272,8 @@ pub struct Job {
     pub document_ids: Vec<String>, pub visited: usize,
     /// Completed unsuccessful page attempts. Old saved jobs default to zero.
     #[serde(default)] pub failed: usize,
+    /// Absent on historical jobs that have no persistent frontier.
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub progress: Option<CrawlProgress>,
     pub warnings: Vec<Warning>, pub error: Option<String>,
 }
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]

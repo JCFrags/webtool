@@ -171,9 +171,9 @@ async fn failed_upload_does_not_create_a_document() {
 async fn running_jobs_become_interrupted_on_restart() {
     let (_directory, e) = engine().await;
     let job = Job { id:"restart-test".into(), state:JobState::Running,
-        request:CrawlRequest { url:"https://example.invalid".into(),max_pages:1,max_depth:0,library:None,actor:None },
+        request:CrawlRequest { url:"https://example.invalid".into(),max_pages:1,max_depth:0,sitemaps:vec![],discover_sitemaps:false,library:None,actor:None },
         created_at:"2026-01-01T00:00:00Z".into(),updated_at:"2026-01-01T00:00:00Z".into(),
-        document_ids:vec![],visited:0,warnings:vec![],error:None };
+        document_ids:vec![],visited:0,failed:0,progress:None,warnings:vec![],error:None };
     e.store.put_job(job).await.unwrap();
     e.recover_jobs().await.unwrap();
     assert_eq!(e.store.job("restart-test").await.unwrap().state, JobState::Interrupted);
