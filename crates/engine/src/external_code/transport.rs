@@ -31,7 +31,7 @@ impl ExternalCodeService {
             gate: Mutex::new(Gate { next: Instant::now(), blocked: Instant::now(), starts: VecDeque::new() }) });
         Ok(Self { client: reqwest::Client::builder().user_agent(&config.user_agent)
             .redirect(reqwest::redirect::Policy::none()).referer(false).no_proxy()
-            .connect_timeout(Duration::from_secs(5)).build()?,
+            .retry(reqwest::retry::never()).connect_timeout(Duration::from_secs(5)).build()?,
             sourcegraph: provider(config.external_code.sourcegraph.clone()),
             context7: provider(config.external_code.context7.clone()),
             max_bytes: config.external_code.max_bytes.min(config.max_bytes) })
