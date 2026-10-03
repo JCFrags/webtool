@@ -2,6 +2,7 @@ pub mod arxiv;
 mod archive;
 pub mod code;
 pub mod documentation;
+pub mod external_code;
 pub mod config;
 pub mod fetch;
 pub mod jobs;
@@ -30,6 +31,7 @@ pub struct Engine {
     search:search::SearchService,
     archive:archive::ArchiveService,
     code:code::CodeService,
+    external_code:external_code::ExternalCodeService,
     scholarly:scholarly::ScholarlyService,
     media_service:media::MediaService,
     operation_slots:Arc<Semaphore>,
@@ -47,9 +49,10 @@ impl Engine {
         let search=search::SearchService::new(&config)?;
         let archive=archive::ArchiveService::new(&config)?;
         let code=code::CodeService::new(&config)?;
+        let external_code=external_code::ExternalCodeService::new(&config)?;
         let scholarly=scholarly::ScholarlyService::new(&config)?;
         let media_service=media::MediaService::new(&config);
-        Ok(Self {store,client,search,archive,code,scholarly,media_service,operation_slots:Arc::new(Semaphore::new(config.network_concurrency + config.parse_concurrency)),submission_lock:Arc::new(Mutex::new(())),network:Arc::new(Semaphore::new(config.network_concurrency)),
+        Ok(Self {store,client,search,archive,code,external_code,scholarly,media_service,operation_slots:Arc::new(Semaphore::new(config.network_concurrency + config.parse_concurrency)),submission_lock:Arc::new(Mutex::new(())),network:Arc::new(Semaphore::new(config.network_concurrency)),
             parse_slots:Arc::new(Semaphore::new(config.parse_concurrency)),browser_slots:Arc::new(Semaphore::new(config.browser_concurrency)),
             job_slots:Arc::new(Semaphore::new(config.job_concurrency)),config:Arc::new(config),
             locks:Arc::new(Mutex::new(HashMap::new())),job_tokens:Arc::new(Mutex::new(HashMap::new())),

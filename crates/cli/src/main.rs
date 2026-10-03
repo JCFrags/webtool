@@ -9,6 +9,7 @@ mod settings;
 mod presentation;
 mod mcp;
 mod code;
+mod external_code;
 mod scholarly;
 
 #[derive(Parser)]
@@ -44,6 +45,8 @@ enum Command{
     Code{#[command(subcommand)]action:code::CodeCommand},
     /// Read an explicit docs.rs release page or published source. Never selects latest.
     Docs(code::DocsArgs),
+    /// Explicit optional code/documentation indexes. No default provider or hidden calls.
+    External{#[command(subcommand)]action:external_code::Command},
     /// Search the web, or a saved library. Use --library '*' for all saved documents.
     Search{#[arg(required=true,num_args=1..)]query:Vec<String>,#[arg(long,default_value_t=10)]limit:usize,#[arg(long)]library:Option<String>},
     /// Explicit historical capture lookup and reading. Never a live-read fallback.
@@ -254,6 +257,7 @@ async fn run(cli:Cli)->Result<()>{
             }else{let mut value=serde_json::to_value(&h)?;value["build_commit"]=json!(h.build_commit.as_deref().unwrap_or("unknown"));value["endpoint"]=json!(client.base);value["endpoint_source"]=json!(source);output(&value,format)}
         },
         Command::Code{action}=>code::run(&client,action,format).await,
+        Command::External{action}=>external_code::run(&client,action,format).await,
         Command::Docs(args)=>code::docs(&client,args,format).await,
         Command::Search{query,limit,library}=>{
             let result:SearchResponse=client.post("/v1/search",&SearchRequest{query:query.join(" "),limit,library}).await?;

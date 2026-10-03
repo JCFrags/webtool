@@ -199,8 +199,10 @@ not migrate all existing engine errors.
 
 ## Remaining work
 
-Context7 and Sourcegraph are not implemented in this slice. They remain separate
-optional-provider work, not hidden calls or completed roadmap capabilities.
+Explicit optional Context7 and Sourcegraph adapters are described in
+[EXTERNAL-CODE.md](EXTERNAL-CODE.md). Both default to unconfigured. Their indexed
+snippets do not replace this first-party workflow or establish exact publisher
+source. The adapters have synthetic proof, not live authenticated acceptance.
 Symbol navigation, regex/glob search, revision comparison, issue/PR/release reads,
 complete-repository ingestion, and exact crate archive source are not implemented.
 No universal index coverage, extraction accuracy, redistribution permission, or

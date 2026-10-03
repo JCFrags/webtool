@@ -292,6 +292,8 @@ pub struct Health { pub version: String, pub api_version: String,
 
 pub mod code;
 pub use code::*;
+mod external_code;
+pub use external_code::*;
 pub mod render;
 pub mod video;
 pub use video::*;

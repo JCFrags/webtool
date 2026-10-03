@@ -19,6 +19,7 @@ pub struct Config {
     pub user_agent: String,
     pub search_engines: Vec<String>,
     pub search: SearchConfig,
+    pub external_code: crate::external_code::ExternalCodeConfig,
     pub lightpanda_path: Option<PathBuf>,
     pub chromium_path: Option<PathBuf>,
     pub ytdlp_path: Option<PathBuf>,
@@ -41,7 +42,7 @@ impl Default for Config {
             request_timeout_seconds: 30, helper_timeout_seconds: 90,
             cache_seconds: 3600, user_agent: "webtool/0.1 (+shared research reader)".into(),
             search_engines: vec!["duckduckgo".into(), "brave".into()],
-            search: SearchConfig::default(),
+            search: SearchConfig::default(), external_code: crate::external_code::ExternalCodeConfig::default(),
             lightpanda_path: None, chromium_path: None, ytdlp_path: None, ytdlp_js_runtime: None,
             browser_no_sandbox: false, browser_wait_ms: 2000,
             crw_renderer: None, document_config: None,
@@ -89,6 +90,7 @@ impl Config {
             bail!("choose brave or brave_api, not both: they use the same upstream index");
         }
         self.search.validate()?;
+        self.external_code.validate()?;
         Ok(())
     }
 }
