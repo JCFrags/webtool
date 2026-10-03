@@ -262,6 +262,9 @@ OCR/ONNX model readiness and fastCRW APIs still require separate work. Do not
 upgrade the search dependency from =0.3.1 (0.3.2 creates a search-tui cycle).
 
 The fastCRW adapter is experimental and does not own the crawler yet.
+The locked crw-renderer 0.34.0 `fetch` takes `render_js: Option<bool>` before
+`wait_for_ms: Option<u64>`. Keep the browser wait in the latter argument.
+A successful feature check does not establish runtime behavior or source-access policy.
 The current crawler is application-owned, not a completed fastCRW fork.
 Do not import upstream CLI, server, cache, authentication, or unrelated agent features to fix an adapter.
 

@@ -180,12 +180,12 @@ async fn crw(url:&str,config:&Config)->Result<Fetched>{
     let renderer_config:RendererConfig=serde_json::from_value(value)?;
     let r=crw_renderer::FallbackRenderer::new(&renderer_config,&config.user_agent,None,&StealthConfig::default())?;
     let deadline=Deadline::from_request_ms(config.helper_timeout_seconds*1000);
-    let result=r.fetch(url,&HashMap::new(),Some(config.browser_wait_ms),None,None,deadline).await?;
+    let result=r.fetch(url,&HashMap::new(),None,Some(config.browser_wait_ms),None,deadline).await?;
     if result.html.len()>config.max_bytes{bail!("rendered page exceeds configured size limit");}
     if !(200..300).contains(&result.status_code){bail!("rendered source returned HTTP {}",result.status_code);}
     Ok(Fetched{bytes:result.html.into_bytes(),resolved:result.final_url.unwrap_or_else(||url.into()),
         content_type:Some("text/html".into()),status:Some(result.status_code),version:None,role:"rendered_dom".into(),
-        warnings:vec![Warning::new("experimental_crw_adapter","This optional adapter has not been compiled or integration-tested in the delivery environment.")]})
+        warnings:vec![Warning::new("experimental_crw_adapter","This optional adapter is compile-checked only. Runtime behavior has not been integration-tested in the delivery environment.")]})
 }
 
 #[cfg(test)]mod tests{
