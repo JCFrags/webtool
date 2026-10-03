@@ -61,6 +61,11 @@ Use a fresh ordinary URL read to verify selection, link resolution, and retrieva
 intermediate parser builds in isolated data directories so cache identity cannot
 reuse another implementation of the same uncommitted parser revision.
 
+For original exports, use `export ID --kind original --output /path/to/file`.
+The output is a file path. `--output -` creates a literal file named `-`, not
+stdout. Read the exported file to compare bytes. Preserve existing files unless
+replacement is intended and explicitly selected with `--force`.
+
 ## Preserved follow-up: truthful, fast page reads
 
 The reported page failures have a bounded correction, installed and verified from
@@ -397,23 +402,34 @@ GitHub/arXiv/caption routes and HTTP-only crawling remain separate.
 Chromium's historical timeout is unresolved; fastCRW is still unverified. Do not
 change browser binaries/config in place and assume cached results describe them.
 
-Crawl results are consumed with buffer_unordered and next(), never collected as
-an entire batch before publishing. Attach each usable document and persist its
-job update before waiting again. Keep same-depth batches, bounded candidate
-admission (including excluded URLs), query semantics, and fresh HTTP reads so
-ordinary-read caches cannot bypass redirect scope/robots checks. Failed attempts
-consume budget. visited counts completed attempts; failed is separate from
-extraction warnings. Zero usable results after attempted reads is Failed, not
-successful Partial. Old job payloads without failed deserialize with zero; no
-historical recount is implied. Cancellation retains saved library documents.
-One three-page/depth-one local crawl verified attachment/read/search and doctor
-while a 15-second sibling was pending, final IDs/counts and no duplicate/excluded
-fetches. No failure/cancellation/restart campaign was run.
+Crawl uses a rolling same-depth FuturesUnordered scheduler. Checkpoint and attach
+each usable document before refilling a vacant slot. Deeper work waits for its
+current-depth siblings. Keep bounded candidate admission, including exclusions,
+query semantics, and fresh HTTP reads so ordinary-read caches cannot bypass
+redirect scope or robots checks. Started attempts are charged before waits and
+network activity. Interrupted attempts keep that charge. Explicit resume can
+consume another charge for the interrupted URL. `visited` counts completed page
+attempts. Failed pages, extraction warnings, and interruptions remain separate.
+Zero usable results after attempted reads is Failed, not successful Partial.
+Cancellation retains saved library documents. Old payloads deserialize new counts
+with zero and have no resumable frontier. No historical recount is implied.
 
-The crawl frontier is not persisted.
-Running jobs become interrupted after restart, while queued jobs are rescheduled.
-Robots handling is partial and must not be described as fully RFC-compliant.
-Automatic sitemap-tree expansion is absent.
+The bounded frontier is durable in additive SQLite schema 2. Both queued and
+running jobs become interrupted at startup. Startup makes no hidden fetch or
+rescheduling request. Resume is explicit and requires pending work and remaining
+attempt budget. Completed failures and exclusions are not retried. Opt-in explicit
+or robots-advertised sitemap trees have separate candidate, attempt, depth, body,
+and scope limits. Compressed sitemap metadata is refused. Robots handling is
+stricter but is not full RFC 9309 compliance. See [CRAWL.md](docs/CRAWL.md).
+
+A private small graph verified early library use, rolling refill, cancellation,
+hard restart, and explicit resume: seven completed page entries, five saved
+documents, two failed pages, nine charged attempts, and two interruptions. The
+sitemap phase admitted 32 candidates and made eight metadata attempts. This is
+not every crash checkpoint, a large public crawl, or production migration proof.
+Before schema-2 activation, preserve a consistent prior database plus originals,
+binaries, and receipts. Schema-1 binaries refuse schema 2. Rollback restores the
+prior database, never lowers `user_version`.
 
 GitHub auto routing now supports root README, actual blob bytes, and immediate
 nonrecursive tree listings. source_resolver=github-source/2 versions cache keys.
@@ -423,12 +439,13 @@ Git trees; do not follow symlinks/submodules or replace native errors with HTML.
 Directories retain API JSON, derived locations, and explicit scope/truncation
 warnings. README link supplements are limited, not a full CommonMark parser.
 Issues, PRs, releases, and complete-repository ingestion remain unimplemented.
-The arxiv module uses official abstract-page HTML only, resolver
-arxiv-abstract-html/2. The same cond-mat/0207270v1 paper passed four-page PDF reading,
+The earlier arxiv-abstract-html/2 native resolver used official abstract-page
+HTML only. The same cond-mat/0207270v1 paper passed four-page PDF reading,
 body find, original-byte comparison and offline saved-ID BibTeX/CSL. A local probe
 returned HTTP 200 and its retained HTML matched the product's metadata artifact.
 Earlier API HTTP 500 results were local observations, not a global-outage diagnosis.
-No API requests were retried during this continuation.
+No application retry was used in that earlier pass. Wire-level retry counts were
+not measured.
 Require the "for this version" row and sole unlinked history marker to agree;
 check other identity/version links, not mere occurrence in history. Canonical
 links may be unversioned. Use the selected history timestamp for citations, not
@@ -439,9 +456,24 @@ Keep text/html arxiv_metadata provenance and PDF original separate. Citation
 metadata-origin claims come from the stored record, including legacy records.
 Shared HTTP gate/pacing and one-day cache remain. Layout changes, contradictory
 identity or missing selection evidence fail explicitly. Other identifier/version
-forms were source-inspected, not an extra paper corpus. No scholarly search.
+forms were source-inspected, not an extra paper corpus.
 
-Search supports ordinary web results only. Paid-result filtering is always on at
+Current scholarly operations explicitly select arXiv or OpenAlex discovery,
+Crossref singleton metadata, or exact-version arXiv inspection. Resolver
+arxiv-abstract-html/3 adds selected-version license evidence. Full-text reuse must
+be established before the scholarly or automatic native arXiv route fetches a PDF.
+Metadata or abstract-only content is not a paper body. Saved historical IDs and
+citations remain available. Source precision, literal author order, attributed
+status claims, rights, and observation age stay explicit. See
+[SCHOLARLY.md](docs/SCHOLARLY.md). PMC structured reading remains separate work.
+
+Pinned repository discovery, maps, selected-file search, exact file reads, and
+explicit docs.rs releases are separate from the ordinary GitHub URL resolver.
+See [CODE.md](docs/CODE.md) for revision identities and coverage limits.
+Explicit dated archive lookup/read never replaces live reading silently. See
+[ARCHIVES.md](docs/ARCHIVES.md) for capture identity and replay limits.
+
+Ordinary web search supports web results only. Paid-result filtering is always on at
 the server's HTML-to-result boundary, before URL unwrapping, limits and merging.
 The pinned library's flat result cannot preserve sponsored container context.
 Use the local result parser and retain the merge URL guard. Web search is not
@@ -449,6 +481,10 @@ cached; library search remains separate. See [SEARCH.md](docs/SEARCH.md) for
 markers, evidence and exact limitations. Do not promise absence of concealed ads
 or unknown future markup. Image, video, news, date, language and domain-filter
 interfaces remain incomplete. There are no semantic rerankers or automatic LLM calls.
+Explicit video search, track inventory, and exact-language caption origin selection
+use shared bounded helper admission. Search descriptions are metadata, not
+transcripts. No audio/video transfer jobs or transcription are implemented.
+See [VIDEO.md](docs/VIDEO.md).
 
 ## Shared connector foundations
 
