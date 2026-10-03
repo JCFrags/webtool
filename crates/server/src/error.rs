@@ -14,12 +14,12 @@ use webtool_protocol::Problem;
 pub(crate) struct ApiError {
     status: StatusCode,
     code: &'static str,
-    message: &'static str,
+    message: String,
 }
 
 impl ApiError {
     pub(crate) fn new(status: StatusCode, code: &'static str, message: &'static str) -> Self {
-        Self { status, code, message }
+        Self { status, code, message: message.into() }
     }
 
     pub(crate) fn bad_request(message: &'static str) -> Self {
@@ -53,6 +53,10 @@ impl IntoResponse for ApiError {
 
 impl From<anyhow::Error> for ApiError {
     fn from(error: anyhow::Error) -> Self {
+        if let Some(domain) = error.downcast_ref::<webtool_engine::code::CodeError>() {
+            return Self { status: StatusCode::from_u16(domain.status_code()).expect("domain status"),
+                code: domain.code(), message: domain.to_string() };
+        }
         // Match only known prefixes or exact engine validation messages. Broad
         // substrings such as "not found", "requires", or "timeout" can hide bugs.
         for cause in error.chain() {

@@ -1,5 +1,7 @@
 pub mod arxiv;
 mod archive;
+pub mod code;
+pub mod documentation;
 pub mod config;
 pub mod fetch;
 pub mod jobs;
@@ -26,6 +28,7 @@ pub struct Engine {
     pub config:Arc<Config>,pub store:Store,pub client:reqwest::Client,
     search:search::SearchService,
     archive:archive::ArchiveService,
+    code:code::CodeService,
     operation_slots:Arc<Semaphore>,
     submission_lock:Arc<Mutex<()>>,
     network:Arc<Semaphore>,parse_slots:Arc<Semaphore>,browser_slots:Arc<Semaphore>,
@@ -40,7 +43,8 @@ impl Engine {
         let client=fetch::client(&config)?;
         let search=search::SearchService::new(&config)?;
         let archive=archive::ArchiveService::new(&config)?;
-        Ok(Self {store,client,search,archive,operation_slots:Arc::new(Semaphore::new(config.network_concurrency + config.parse_concurrency)),submission_lock:Arc::new(Mutex::new(())),network:Arc::new(Semaphore::new(config.network_concurrency)),
+        let code=code::CodeService::new(&config)?;
+        Ok(Self {store,client,search,archive,code,operation_slots:Arc::new(Semaphore::new(config.network_concurrency + config.parse_concurrency)),submission_lock:Arc::new(Mutex::new(())),network:Arc::new(Semaphore::new(config.network_concurrency)),
             parse_slots:Arc::new(Semaphore::new(config.parse_concurrency)),browser_slots:Arc::new(Semaphore::new(config.browser_concurrency)),
             job_slots:Arc::new(Semaphore::new(config.job_concurrency)),config:Arc::new(config),
             locks:Arc::new(Mutex::new(HashMap::new())),job_tokens:Arc::new(Mutex::new(HashMap::new())),

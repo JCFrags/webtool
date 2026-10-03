@@ -8,6 +8,7 @@ use webtool_protocol::*;
 mod settings;
 mod presentation;
 mod mcp;
+mod code;
 
 #[derive(Parser)]
 #[command(name="webtool",version,about="Search, read, extract, and save sources through a shared server",after_help="No TUI. Results go to stdout. Warnings and progress go to stderr. Use --format json for scripts.")]
@@ -34,6 +35,10 @@ enum Command{
     Mcp,
     /// Check server reachability and report compiled or configured capabilities.
     Doctor,
+    /// Discover public repositories and navigate explicitly selected revision-pinned files.
+    Code{#[command(subcommand)]action:code::CodeCommand},
+    /// Read an explicit docs.rs release page or published source. Never selects latest.
+    Docs(code::DocsArgs),
     /// Search the web, or a saved library. Use --library '*' for all saved documents.
     Search{#[arg(required=true,num_args=1..)]query:Vec<String>,#[arg(long,default_value_t=10)]limit:usize,#[arg(long)]library:Option<String>},
     /// Explicit historical capture lookup and reading. Never a live-read fallback.
@@ -219,6 +224,8 @@ async fn run(cli:Cli)->Result<()>{
                 Ok(())
             }else{let mut value=serde_json::to_value(&h)?;value["build_commit"]=json!(h.build_commit.as_deref().unwrap_or("unknown"));value["endpoint"]=json!(client.base);value["endpoint_source"]=json!(source);output(&value,format)}
         },
+        Command::Code{action}=>code::run(&client,action,format).await,
+        Command::Docs(args)=>code::docs(&client,args,format).await,
         Command::Search{query,limit,library}=>{
             let result:SearchResponse=client.post("/v1/search",&SearchRequest{query:query.join(" "),limit,library}).await?;
             warnings(&result.warnings,true);

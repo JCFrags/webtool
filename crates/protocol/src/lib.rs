@@ -260,4 +260,6 @@ pub struct Health { pub version: String, pub api_version: String,
     #[serde(default,skip_serializing_if="Option::is_none")] pub build_commit: Option<String>,
     pub capabilities: Vec<Capability> }
 
+pub mod code;
+pub use code::*;
 pub mod render;

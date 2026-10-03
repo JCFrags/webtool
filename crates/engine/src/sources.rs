@@ -19,12 +19,12 @@ pub struct Details {
 }
 pub struct Resolved { pub fetched: Fetched, pub details: Details }
 struct Api { bytes: Vec<u8>, status: u16 }
-fn endpoint(parts: &[&str]) -> Url {
+pub(crate) fn endpoint(parts: &[&str]) -> Url {
     let mut u=Url::parse("https://api.github.com/").expect("constant URL");
     u.path_segments_mut().expect("HTTP URL").extend(parts);
     u
 }
-fn pinned(owner:&str,repo:&str,kind:&str,commit:&str,path:&str)->String {
+pub(crate) fn pinned(owner:&str,repo:&str,kind:&str,commit:&str,path:&str)->String {
     let mut u=Url::parse("https://github.com/").expect("constant URL");
     u.path_segments_mut().expect("HTTP URL").extend([owner,repo,kind,commit])
         .extend(path.split('/').filter(|p|!p.is_empty()));
@@ -75,7 +75,7 @@ fn file_path(parts:&[String])->Result<String> {
     }
     Ok(path)
 }
-fn commit_fields(v:&Value)->Result<(String,String)> {
+pub(crate) fn commit_fields(v:&Value)->Result<(String,String)> {
     let sha=field(v,"sha")?;
     if sha.len()!=40 || !sha.bytes().all(|b|b.is_ascii_hexdigit()) { bail!("github_invalid_response: commit is not an immutable SHA"); }
     let tree=v.pointer("/commit/tree/sha").and_then(Value::as_str).context("github_content_unavailable: commit has no root tree")?;
