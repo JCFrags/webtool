@@ -59,7 +59,7 @@ impl CodeService {
         let client = reqwest::Client::builder().user_agent(&config.user_agent)
             .timeout(Duration::from_secs(config.request_timeout_seconds))
             .connect_timeout(Duration::from_secs(10))
-            .redirect(reqwest::redirect::Policy::none()).build()?;
+            .redirect(reqwest::redirect::Policy::none()).retry(reqwest::retry::never()).build()?;
         let gate = || Arc::new(Mutex::new(Gate { next: Instant::now(), blocked_until: Instant::now() }));
         Ok(Self { client, github_gate: gate(), docs_gate: gate() })
     }

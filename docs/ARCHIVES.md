@@ -108,6 +108,8 @@ or a provider cooldown.
 HTTP 429 and 503 start a shared cooldown from `Retry-After` seconds or an HTTP
 date. A missing or invalid value uses 60 seconds. A huge value prevents requests
 rather than overflowing into an immediate retry. No automatic retry occurs.
+The client explicitly disables reqwest's default safe protocol-error retries, so
+one admitted request does not hide transport retries.
 The server uses its configured descriptive `webtool/` User-Agent. Configure any
 additional agent identification required by the provider before such use. No key,
 cookie, proxy rotation, or paid account is needed or added.

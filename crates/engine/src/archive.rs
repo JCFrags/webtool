@@ -42,6 +42,7 @@ impl ArchiveService {
         Ok(Self {
             client: Client::builder().user_agent(&config.user_agent)
                 .redirect(reqwest::redirect::Policy::none()).referer(false)
+                .retry(reqwest::retry::never())
                 .connect_timeout(Duration::from_secs(10))
                 .timeout(Duration::from_secs(config.request_timeout_seconds.min(30))).build()?,
             state: Arc::new(Mutex::new(State { next_start: Instant::now(), cooldown: None, cache: VecDeque::new() })),

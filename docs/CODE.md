@@ -129,6 +129,8 @@ Clients share a server-owned serialized provider gate. Repository search spaces
 the next GitHub request by six seconds. Other GitHub requests have at least one
 second between starts. docs.rs has a separate one-second gate. A rate-limit or
 access-denial response stops the operation without retry or alternate provider.
+The client also disables reqwest's default safe protocol-error retries. Coverage
+therefore does not hide transport retries within one admitted request.
 The gate blocks later requests for at least 60 seconds, or a longer supplied
 numeric `Retry-After`/GitHub reset delay, capped at one day. This is conservative
 local pacing, not a promise that provider limits cannot be reached. Rate state is
