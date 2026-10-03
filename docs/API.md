@@ -68,6 +68,9 @@ compatibility. Clients must inspect warnings, source status, and artifact roles.
 | POST | `/v1/video/search` | Bounded video discovery, not caption text |
 | POST | `/v1/video/tracks` | Safe exact-language/origin caption inventory |
 | POST | `/v1/video/captions` | Save one explicitly selected supplied caption track |
+| POST | `/v1/video/formats` | Observe stable source format IDs, without transfer or a rights guarantee |
+| POST | `/v1/video/download` | Submit one opt-in constrained video/native-audio job |
+| GET | `/v1/jobs/{id}/artifacts/{artifact}` | Stream one accepted attachment scoped to its media job |
 
 ## Examples
 
@@ -173,6 +176,19 @@ completed page attempts. Interrupted attempts consume budget but do not incremen
 robots policy, and sitemap bounds. Successful operations return 200, including
 ingest, library creation, crawl submission, and accepted resume.
 
+`Job.request` retains the old untagged crawl shape or uses `kind: "media"` for an
+explicit media request. A present invalid discriminator cannot decode as crawl.
+Media jobs use the same polling, cancellation, startup interruption, and store.
+Optional `media` carries stages, unknown progress values, and accepted artifacts.
+Media resume returns 409 `media_resume_unsupported`, with no new helper request.
+Media preview/download default disabled. An operator must configure explicit
+finite allocations and existing helpers before use. Callers select exact preview
+IDs/hashes and finite byte/duration limits. `max_bytes` counts retained inputs plus
+final output. Artifact export is streamed and checks job membership and retained
+size/hash. The route exposes no server path. Sampled staging monitoring is not a
+hard aggregate quota. No source rights or access-method permission is inferred.
+See [MEDIA-JOBS.md](MEDIA-JOBS.md) for requests, configuration, and lifecycle limits.
+
 ## Bounded batch reads
 
 `POST /v1/read/batch` composes the ordinary reader. It accepts `inputs` with one
@@ -236,7 +252,7 @@ HTTP application and extractor failures return `application/json` with the share
 | 400 | `invalid_json`, `invalid_query`, `invalid_path`, `invalid_multipart`, `invalid_request` | Malformed input or a recognized validation failure |
 | 404 | `not_found` | Unknown route or saved resource |
 | 405 | `method_not_allowed` | Wrong method for a registered route |
-| 409 | `crawl_not_resumable` | No supported saved work within the current state/budget |
+| 409 | `crawl_not_resumable`, `media_resume_unsupported` | No supported saved work within the current state/budget, or media resume is unavailable |
 | 413 | `size_limit` | Request, file, metadata, or source byte limit |
 | 415 | `unsupported_media_type` | A JSON endpoint needs a JSON content type |
 | 422 | `invalid_request`, `capability_unavailable` | JSON field types do not match, or a known capability is unavailable |

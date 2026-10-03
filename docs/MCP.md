@@ -38,7 +38,7 @@ does not require a particular model or agent application.
 | `webtool_extract` | Extract saved tables, code, links, metadata, and other structures |
 | `webtool_library` | List, create, inspect, or populate shared libraries |
 | `webtool_crawl` | Submit a persistent bounded crawl |
-| `webtool_job` | List, inspect, cancel, or explicitly resume durable crawl jobs |
+| `webtool_job` | List, inspect, or cancel common jobs, and explicitly resume durable crawls |
 | `webtool_map` | Discover bounded links or sitemap locations |
 | `webtool_cite` | Retrieve DOI citations or cite a saved arXiv or PMC paper offline |
 | `webtool_batch_read` | Ordered per-input saved references or errors for one to five ordinary reads |
@@ -47,7 +47,7 @@ does not require a particular model or agent application.
 | `webtool_docs` | Exact first-party docs.rs release page or source read |
 | `webtool_scholarly` | Explicit scholarly discovery, Crossref DOI, arXiv version, or PMC OAI/JATS selection |
 | `webtool_external` | Explicit optional Sourcegraph/Context7 index operations and retained-file verification |
-| `webtool_video` | Video discovery, safe caption inventory, or selected supplied-caption read |
+| `webtool_video` | Video discovery, caption inventory/read, or explicit opt-in format preview/media submission |
 
 Tool schemas describe the arguments. Unknown fields are rejected. Library, job,
 archive, code, scholarly, external, and video tools use an `action` tag. Search results are
@@ -55,7 +55,8 @@ discovery snippets, not evidence from destination pages. Health describes
 configuration, not live provider readiness. All connected users share libraries.
 
 The connector does not offer arbitrary HTTP paths, local-file ingestion, local
-filesystem access, binary downloads, browser control, or model calls. New HTTP
+filesystem access, binary tool output, browser control, or model calls. Accepted
+media artifacts use the fixed job-scoped HTTP attachment route. New HTTP
 features require an explicit adapter addition rather than automatic exposure.
 
 ## Explicit domain operations
@@ -97,22 +98,38 @@ features require an explicit adapter addition rather than automatic exposure.
   Provider snippets, coverage, and source URLs remain index claims, not fetched
   revision-exact publisher text. Queries leave the service. Do not send private
   code or secrets without separate transfer permission. See [EXTERNAL-CODE.md](EXTERNAL-CODE.md).
-- `webtool_video` accepts `search`, `tracks`, or `captions`. Search text is
-  discovery data. Track inventory contains no signed URLs or headers. Captions
-  require one supported video URL, literal case-sensitive language, and
-  `provided_first`, `provided`, or `automatic` choice. `provided` does not prove
-  human authorship. Actual origin remains in saved metadata. No media transfer,
-  speech recognition, translation, or playlist traversal is added. See [VIDEO.md](VIDEO.md).
+- `webtool_video` accepts `search`, `tracks`, `captions`, `formats`, or `download`.
+  Search text is discovery data. Track inventory contains no signed URLs or
+  headers. Captions require one supported video URL, literal case-sensitive
+  language, and `provided_first`, `provided`, or `automatic` choice. `provided`
+  does not prove human authorship. Actual origin remains in saved metadata.
+  See [VIDEO.md](VIDEO.md).
+  Formats and download are disabled without explicit operator allocations and
+  existing helper paths. Formats returns point-in-time stable IDs and hashes,
+  not a rights or future availability guarantee. Download requires `url`,
+  `video_id`, `selection`, positive `max_bytes` and `max_duration_seconds`, and
+  optional `max_width`/`max_height` within operator ceilings. Selection is
+  `{"mode":"video","video":{"id":"FORMAT","identity":"SHA256"},"audio":null}`
+  or `{"mode":"native_audio","audio":{"id":"FORMAT","identity":"SHA256"}}`.
+  A video-only stream needs a selected audio-only stream in `audio`. Use only
+  permitted content and access methods. The server rechecks selected identities.
+  Submission returns `job`, `poll_tool`, and the fixed artifact route template.
+  Poll or cancel with `webtool_job`. Inspect the common final state and accepted
+  artifact records in `media.result`.
+  Export only accepted listed IDs through `/v1/jobs/{id}/artifacts/{artifact}`.
+  MCP returns no binary bytes or server paths. No conversion, transcription,
+  playlist traversal, or compatible media resume is added. See [MEDIA-JOBS.md](MEDIA-JOBS.md).
 
 Refresh defaults to false wherever the current route supports it. Domain adapters
 forward only these fixed routes to the shared service. Europe PMC REST, arbitrary
-HTTP, provider configuration, and media transfer remain absent from this version.
+HTTP, provider configuration, and binary transfer through MCP remain absent.
 
 `webtool_job` with `action: "resume"` accepts `id` and optional `max_pages` as a
 new total attempt budget up to 500. It retains past charges, scope, library, and
 completed attachments. The server refuses unsupported states, old jobs without
 frontiers, exhausted work, and completed-failure retry. Omitting the total retains
-the existing budget, including a larger HTTP-created budget. See [CRAWL.md](CRAWL.md).
+the existing budget, including a larger HTTP-created budget. Media jobs return
+409 `media_resume_unsupported` and make no restart request. See [CRAWL.md](CRAWL.md).
 
 ## Batch outcomes
 

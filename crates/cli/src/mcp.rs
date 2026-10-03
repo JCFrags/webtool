@@ -144,7 +144,7 @@ enum Job {
     List,
     Get { id: String },
     Cancel { id: String },
-    /// Resume only supported durable work. Old charges remain. No completed failure retry.
+    /// Resume supported crawl work only. Media resume is unavailable. Old charges remain.
     Resume { id: String, max_pages: Option<usize> },
 }
 #[derive(Deserialize, Serialize, JsonSchema)]
@@ -346,6 +346,20 @@ enum External {
 #[serde(rename_all = "snake_case")]
 enum CaptionChoice { ProvidedFirst, Provided, Automatic }
 impl Default for CaptionChoice { fn default() -> Self { Self::ProvidedFirst } }
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct MediaPick {
+    /// Exact format ID from this video's formats observation.
+    id: String,
+    /// Stable identity SHA-256 from the same observation, not a signed URL.
+    identity: String,
+}
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(tag = "mode", rename_all = "snake_case", deny_unknown_fields)]
+enum MediaChoice {
+    Video { video: MediaPick, audio: Option<MediaPick> },
+    NativeAudio { audio: MediaPick },
+}
 #[derive(Deserialize, JsonSchema)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 enum Video {
@@ -357,6 +371,20 @@ enum Video {
         #[serde(default)] choice: CaptionChoice,
         #[serde(default)] refresh: bool,
         library: Option<String>,
+    },
+    /// Observe supported source formats. Requires opt-in operator configuration.
+    Formats { url: String },
+    /// Explicit permitted single-media job. The service rechecks selected identities.
+    Download {
+        url: String,
+        video_id: String,
+        selection: MediaChoice,
+        /// Total retained source inputs plus final output, within operator ceilings.
+        max_bytes: u64,
+        /// Required finite duration ceiling in seconds, within operator ceilings.
+        max_duration_seconds: u64,
+        max_width: Option<u32>,
+        max_height: Option<u32>,
     },
 }
 
@@ -379,7 +407,7 @@ fn tools() -> Vec<Tool> {
         tool::<Extract>("webtool_extract", "Extract saved structures, including tables, links, code, metadata, and CSS. Return bounded serialized JSON passages with exact continuation.", true, false, false),
         tool::<Library>("webtool_library", "List, create, inspect, or populate shared libraries. All users share these libraries. Add needs a saved document ID.", false, false, false),
         tool::<Crawl>("webtool_crawl", "Submit a bounded same-origin crawl to the server. Returns a persistent job ID. Disconnecting MCP does not cancel the job. Do not retry an uncertain submission automatically.", false, false, true),
-        tool::<Job>("webtool_job", "List or inspect crawl jobs, explicitly cancel one, or resume supported durable work with retained charges. Cancellation keeps saved documents. Resume changes neither source scope nor completed failures.", false, true, true),
+        tool::<Job>("webtool_job", "List or inspect common crawl/media jobs and explicitly cancel one. Resume supports durable crawl work only, with retained charges. Media resume is unavailable. Accepted documents and artifacts remain. Inspect final state after cancellation.", false, true, true),
         tool::<Map>("webtool_map", "Discover bounded links or sitemap locations through the server, without article extraction.", true, false, true),
         tool::<Cite>("webtool_cite", "Get a citation from a DOI, or cite a saved arXiv or PMC paper offline. No bibliography inference or LLM is used.", true, false, true),
         tool::<Batch>("webtool_batch_read", "Read one to five ordinary sources. Return one ordered saved-ID/cache reference or safe error per input, without full documents. Continue saved successes with webtool_document. No jobs, retries, or automatic refresh are added.", false, false, true),
@@ -388,7 +416,7 @@ fn tools() -> Vec<Tool> {
         tool::<Docs>("webtool_docs", "Read an exact first-party docs.rs crate release page or source. Return a saved passage. Choose page/source explicitly. No latest/range substitution, repository-commit inference, or browser fallback.", false, false, true),
         tool::<Scholar>("webtool_scholarly", "Search explicit arXiv/OpenAlex metadata, inspect one Crossref DOI or exact arXiv version, or select PMC OAI metadata and permitted JATS. PMC version/datestamp assertions do not select history. Return saved content-state counts, partial warnings and full-text errors. Metadata and abstracts are not paper bodies.", false, false, true),
         tool::<External>("webtool_external", "Explicit optional Sourcegraph/Context7 index operations with server-owned endpoints, credentials and budgets. Status makes no probe. Saved snippets remain third-party index claims. Verify selected saved Sourcegraph lines against a matching ordinary GitHub map/file without network. Context7 requires saved listed-version or tracked selection and uses fast=true. No source-link fetch, provider fallback, configuration write or model action.", false, false, true),
-        tool::<Video>("webtool_video", "Search bounded video discovery text, list safe exact-language VTT tracks, or save one selected caption track. Captions return a saved passage. Supplied/automatic origins stay explicit. No signed URLs, media download, transcription, translation, or playlist traversal.", false, false, true),
+        tool::<Video>("webtool_video", "Search bounded video metadata, list safe VTT tracks, or save selected captions. Explicit formats/download actions require opt-in operator budgets and exact preview identities. Download submits one permitted video/native-audio job. Poll or cancel with webtool_job. Rights and access-method permission are separate. No signed URLs, local paths, binary tool output, transcription, conversion, translation, playlist or media resume.", false, false, true),
     ]
 }
 fn args<T: DeserializeOwned>(value: Value) -> std::result::Result<T, Failure> {
@@ -756,6 +784,27 @@ impl Bridge {
                 }
             },
             "webtool_video" => match args::<Video>(value)? {
+                Video::Formats { url } => {
+                    source_url(&url)?;
+                    let response: webtool_protocol::MediaFormatsResponse = decode(self.post("/v1/video/formats",
+                        webtool_protocol::MediaFormatsRequest { url }).await?)?;
+                    Ok(json!({"evidence_kind": "media_format_observation", "inventory": response,
+                        "evidence_note": "Point-in-time source format identities, not a transfer, future availability, content rights or access-method permission. Select exact IDs and identity hashes. No signed URLs are exposed."}))
+                }
+                Video::Download { url, video_id, selection, max_bytes, max_duration_seconds, max_width, max_height } => {
+                    source_url(&url)?;
+                    if max_bytes == 0 || max_duration_seconds == 0 {
+                        return Err(Failure::invalid("media byte and duration limits must be positive and within operator ceilings"));
+                    }
+                    let job: webtool_protocol::Job = decode(self.post("/v1/video/download", json!({
+                        "kind": "media", "url": url, "video_id": video_id, "selection": selection,
+                        "max_bytes": max_bytes, "max_duration_seconds": max_duration_seconds,
+                        "max_width": max_width, "max_height": max_height
+                    })).await?)?;
+                    Ok(json!({"job": job, "poll_tool": "webtool_job",
+                        "artifact_path_template": "/v1/jobs/{id}/artifacts/{artifact}",
+                        "evidence_note": "A submitted job is not a completed transfer. Inspect final state and media.result. Export only listed accepted artifact IDs through the scoped HTTP route. No binary bytes or local filesystem access are provided. Cancellation stops a job only when requested with webtool_job."}))
+                }
                 Video::Search { query, limit } => {
                     bounded(limit, 20, "limit")?;
                     let response: webtool_protocol::VideoSearchResponse = decode(self.post("/v1/video/search",

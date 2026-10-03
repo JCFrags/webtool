@@ -489,8 +489,12 @@ or unknown future markup. Image, video, news, date, language and domain-filter
 interfaces remain incomplete. There are no semantic rerankers or automatic LLM calls.
 Explicit video search, track inventory, and exact-language caption origin selection
 use shared bounded helper admission. Search descriptions are metadata, not
-transcripts. No audio/video transfer jobs or transcription are implemented.
-See [VIDEO.md](docs/VIDEO.md).
+transcripts. Explicit single-media preview and transfer use the common jobs system
+with separate capacity. They default disabled and require finite operator/caller
+allocations and permitted sources/access methods. Exact native inputs remain
+retained beside stream-copy derivatives. Transcription, playlists and compatible
+media resume remain unsupported. See [VIDEO.md](docs/VIDEO.md) and
+[MEDIA-JOBS.md](docs/MEDIA-JOBS.md).
 
 ## Shared connector foundations
 
