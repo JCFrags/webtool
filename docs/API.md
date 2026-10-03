@@ -48,7 +48,26 @@ compatibility. Clients must inspect warnings, source status, and artifact roles.
 | POST | `/v1/jobs/{id}/resume` | Explicitly resume a durable crawl |
 | POST | `/v1/map` | List page links or sitemap locations |
 | POST | `/v1/media` | Retrieve metadata and existing captions |
-| POST | `/v1/cite` | Retrieve DOI bibliography metadata |
+| POST | `/v1/cite` | Retrieve DOI bibliography metadata or cite saved arXiv/PMC records |
+| POST | `/v1/archive/lookup` | Find bounded at-or-before capture candidates |
+| POST | `/v1/archive/read` | Read one explicitly selected historical capture |
+| POST | `/v1/code/discover` | Save bounded public repository discovery |
+| POST | `/v1/code/map` | Map a bounded explicit repository reference |
+| POST | `/v1/code/search` | Search admitted paths or selected files |
+| POST | `/v1/code/file` | Read one pinned regular file |
+| POST | `/v1/docs/read` | Read an exact docs.rs release page or source |
+| POST | `/v1/scholarly/search` | Search one explicit arXiv/OpenAlex provider |
+| POST | `/v1/scholarly/doi` | Select one Crossref DOI record |
+| POST | `/v1/scholarly/arxiv` | Inspect an exact arXiv version and optional permitted body |
+| POST | `/v1/scholarly/pmc` | Select PMC OAI metadata and optional permitted JATS |
+| GET | `/v1/external/providers` | Local optional-index readiness, without probes or secrets |
+| POST | `/v1/external/sourcegraph/search` | Search an explicit bounded Sourcegraph index |
+| POST | `/v1/external/sourcegraph/verify` | Compare selected saved index/map/file bytes without network |
+| POST | `/v1/external/context7/libraries` | Save bounded Context7 library discovery |
+| POST | `/v1/external/context7/context` | Select listed-version or tracked-index Context7 snippets |
+| POST | `/v1/video/search` | Bounded video discovery, not caption text |
+| POST | `/v1/video/tracks` | Safe exact-language/origin caption inventory |
+| POST | `/v1/video/captions` | Save one explicitly selected supplied caption track |
 
 ## Examples
 

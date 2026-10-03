@@ -465,7 +465,10 @@ be established before the scholarly or automatic native arXiv route fetches a PD
 Metadata or abstract-only content is not a paper body. Saved historical IDs and
 citations remain available. Source precision, literal author order, attributed
 status claims, rights, and observation age stay explicit. See
-[SCHOLARLY.md](docs/SCHOLARLY.md). PMC structured reading remains separate work.
+[SCHOLARLY.md](docs/SCHOLARLY.md). Explicit PMC OAI metadata and permitted JATS
+reading are documented in [PMC.md](docs/PMC.md). Version/datestamp assertions do
+not select arbitrary history. Missing formula graphics and external objects
+remain partial and source-required. Europe PMC REST is not implemented.
 
 Pinned repository discovery, maps, selected-file search, exact file reads, and
 explicit docs.rs releases are separate from the ordinary GitHub URL resolver.
@@ -493,6 +496,12 @@ errors, and Python/TypeScript client examples. The engine still uses anyhow and 
 finite server compatibility adapter, not a complete typed error model. Add newly
 introduced error prefixes explicitly rather than restoring broad substring guesses.
 See [API.md](docs/API.md).
+
+The locked reqwest 0.12.28 client retries protocol negative acknowledgments by default. For a new
+transport with a no-retry or exact-request-budget contract, set
+`retry(reqwest::retry::never())` explicitly on the client builder. No retry loop
+in application code does not establish this behavior. This requirement does not
+claim that all legacy clients already disable retries.
 
 `webtool mcp` is a bounded stdio HTTP adapter to the same server. It starts no
 listener or engine. Saved-ID passages preserve exact continuation and original

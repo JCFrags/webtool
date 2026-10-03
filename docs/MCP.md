@@ -40,16 +40,17 @@ does not require a particular model or agent application.
 | `webtool_crawl` | Submit a persistent bounded crawl |
 | `webtool_job` | List, inspect, cancel, or explicitly resume durable crawl jobs |
 | `webtool_map` | Discover bounded links or sitemap locations |
-| `webtool_cite` | Retrieve DOI citations or cite a saved arXiv paper offline |
+| `webtool_cite` | Retrieve DOI citations or cite a saved arXiv or PMC paper offline |
 | `webtool_batch_read` | Ordered per-input saved references or errors for one to five ordinary reads |
 | `webtool_archive` | Explicit capture-index lookup or selected historical read |
 | `webtool_code` | First-party public repository discover/map/search/file operations |
 | `webtool_docs` | Exact first-party docs.rs release page or source read |
-| `webtool_scholarly` | Explicit arXiv/OpenAlex search, Crossref DOI, or exact-version arXiv inspection |
+| `webtool_scholarly` | Explicit scholarly discovery, Crossref DOI, arXiv version, or PMC OAI/JATS selection |
+| `webtool_external` | Explicit optional Sourcegraph/Context7 index operations and retained-file verification |
 | `webtool_video` | Video discovery, safe caption inventory, or selected supplied-caption read |
 
 Tool schemas describe the arguments. Unknown fields are rejected. Library, job,
-archive, code, scholarly, and video tools use an `action` tag. Search results are
+archive, code, scholarly, external, and video tools use an `action` tag. Search results are
 discovery snippets, not evidence from destination pages. Health describes
 configuration, not live provider readiness. All connected users share libraries.
 
@@ -74,13 +75,28 @@ features require an explicit adapter addition rather than automatic exposure.
   (`page` or `source`). It does not infer a dependency release, replace a missing
   release with latest, or establish a repository commit. Source is decoded from
   retained docs.rs HTML, not a raw crate archive.
-- `webtool_scholarly` accepts `search`, `doi`, or `arxiv`. Search requires one
-  explicit `arxiv` or `openalex` provider. DOI selects one Crossref record.
-  arXiv inspection requires a literal exact-version `id`. `full_text` defaults
-  to false and uses the service's item-specific reuse gate when explicitly true.
+- `webtool_scholarly` accepts `search`, `doi`, `arxiv`, or `pmc`. Search requires
+  one explicit `arxiv` or `openalex` provider. DOI selects one Crossref record.
+  arXiv inspection requires a literal exact-version `id`. PMC requires
+  `pmc:PMCdigits`, optionally `.N` to assert the delivered version, and can assert
+  an exact OAI `expected_datestamp`. Neither assertion selects arbitrary history.
+  `full_text` defaults to false. Explicit true uses the item-specific reuse gate.
   Returned `content_state_counts`, observation age, partial state, and
-  `full_text_error` remain visible. HTTP success does not prove a paper body
-  was read. Metadata and abstracts are not full text. See [SCHOLARLY.md](SCHOLARLY.md).
+  `full_text_error` remain visible. Fetched body content can still have missing
+  formula images or external objects. Metadata and abstracts are not full text.
+  See [SCHOLARLY.md](SCHOLARLY.md) and [PMC.md](PMC.md).
+- `webtool_external` accepts `status`, `sourcegraph_search`, `sourcegraph_verify`,
+  `context7_libraries`, or `context7_context`. Status makes no provider probe.
+  Both providers default unconfigured. The connector accepts no endpoint, key,
+  account, or configuration write. Sourcegraph search requires an explicit mode.
+  Literal/path modes are supported, while regexp/symbol remain typed unsupported.
+  Verification requires saved search/hit/map/file IDs and compares selected
+  retained bytes without network. Context7 context requires saved discovery and
+  explicit `selection` as `{"kind":"listed","version":"v1.2.3"}` or
+  `{"kind":"tracked"}`. Both Context7 operations send `fast=true`.
+  Provider snippets, coverage, and source URLs remain index claims, not fetched
+  revision-exact publisher text. Queries leave the service. Do not send private
+  code or secrets without separate transfer permission. See [EXTERNAL-CODE.md](EXTERNAL-CODE.md).
 - `webtool_video` accepts `search`, `tracks`, or `captions`. Search text is
   discovery data. Track inventory contains no signed URLs or headers. Captions
   require one supported video URL, literal case-sensitive language, and
@@ -89,8 +105,8 @@ features require an explicit adapter addition rather than automatic exposure.
   speech recognition, translation, or playlist traversal is added. See [VIDEO.md](VIDEO.md).
 
 Refresh defaults to false wherever the current route supports it. Domain adapters
-forward only these fixed routes to the shared service. No optional external code
-provider or Europe PMC/PMC route is exposed by this connector version.
+forward only these fixed routes to the shared service. Europe PMC REST, arbitrary
+HTTP, provider configuration, and media transfer remain absent from this version.
 
 `webtool_job` with `action: "resume"` accepts `id` and optional `max_pages` as a
 new total attempt budget up to 500. It retains past charges, scope, library, and
@@ -131,9 +147,10 @@ can be a JSON fragment, not a standalone object. Concatenate all passages before
 parsing the complete serialized value. Extraction continuation must keep the
 same ID, kind, and expression. Saved operations do not fetch the source again.
 
-Saved repository discovery, repository maps, and scholarly operations return a
-first document JSON passage with an explicit evidence label. Code-file, docs,
-archive-read, and caption-read tools return a first detailed Markdown passage.
+Saved repository discovery, repository maps, scholarly operations, Sourcegraph
+search, and Context7 library discovery return a first document JSON passage with
+an explicit evidence label. Code-file, docs, archive-read, caption-read, and
+Context7 context tools return a first detailed Markdown passage.
 Continue all of these through `webtool_document` with the exact returned view
 and offset. Continuation reads the saved ID, not the provider operation again.
 Operation context such as coverage, content-state counts, or a requested full-text

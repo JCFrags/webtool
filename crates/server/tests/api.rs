@@ -110,7 +110,7 @@ async fn generated_contract_covers_operations_and_actual_tagged_blocks() {
     assert_eq!(spec["openapi"], "3.1.0");
     let paths = spec["paths"].as_object().unwrap();
     let expected = [
-        ("health", vec!["get"]), ("read", vec!["post"]), ("search", vec!["post"]), ("ingest", vec!["post"]),
+        ("health", vec!["get"]), ("read", vec!["post"]), ("read/batch", vec!["post"]), ("search", vec!["post"]), ("ingest", vec!["post"]),
         ("documents", vec!["get"]), ("documents/{id}", vec!["get"]), ("documents/{id}/original", vec!["get"]),
         ("documents/{id}/find", vec!["post"]), ("documents/{id}/extract", vec!["post"]),
         ("documents/{id}/annotations", vec!["get", "post"]), ("libraries", vec!["get", "post"]),
@@ -120,7 +120,9 @@ async fn generated_contract_covers_operations_and_actual_tagged_blocks() {
         ("archive/lookup", vec!["post"]), ("archive/read", vec!["post"]),
         ("code/discover", vec!["post"]), ("code/map", vec!["post"]),
         ("code/search", vec!["post"]), ("code/file", vec!["post"]), ("docs/read", vec!["post"]),
-        ("scholarly/search", vec!["post"]), ("scholarly/doi", vec!["post"]), ("scholarly/arxiv", vec!["post"]),
+        ("scholarly/search", vec!["post"]), ("scholarly/doi", vec!["post"]), ("scholarly/arxiv", vec!["post"]), ("scholarly/pmc", vec!["post"]),
+        ("external/providers", vec!["get"]), ("external/sourcegraph/search", vec!["post"]),
+        ("external/sourcegraph/verify", vec!["post"]), ("external/context7/libraries", vec!["post"]), ("external/context7/context", vec!["post"]),
         ("video/search", vec!["post"]), ("video/tracks", vec!["post"]), ("video/captions", vec!["post"]),
     ];
     let mut ids = std::collections::HashSet::new();
@@ -134,7 +136,7 @@ async fn generated_contract_covers_operations_and_actual_tagged_blocks() {
             assert_eq!(operation["responses"]["500"]["content"]["application/json"]["schema"]["$ref"], "#/components/schemas/Problem");
         }
     }
-    assert_eq!(ids.len(), 36);
+    assert_eq!(ids.len(), 43);
     assert_eq!(paths["/v1/ingest"]["post"]["requestBody"]["content"]["multipart/form-data"]["schema"]["$ref"], "#/components/schemas/IngestForm");
     assert!(paths["/v1/documents/{id}/original"]["get"]["responses"]["200"]["content"]["application/octet-stream"].is_object());
     let original_schema = &paths["/v1/documents/{id}/original"]["get"]["responses"]["200"]["content"]["application/octet-stream"]["schema"];

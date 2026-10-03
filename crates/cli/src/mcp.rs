@@ -160,7 +160,7 @@ enum CitationFormat { Bibtex, Ris, Csl }
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct Cite {
-    /// A DOI or saved arXiv document ID. Saved paper citations are offline.
+    /// A DOI or saved arXiv/PMC document ID. Saved paper citations are offline.
     doi: String,
     format: CitationFormat,
 }
@@ -305,6 +305,42 @@ enum Scholar {
         #[serde(default)] full_text: bool,
         #[serde(default)] refresh: bool,
     },
+    Pmc {
+        /// pmc:PMCdigits, optionally .N to assert the delivered version, not select history.
+        id: String,
+        #[serde(default)] full_text: bool,
+        #[serde(default)] refresh: bool,
+        /// Exact OAI datestamp assertion. This is not a publication date.
+        expected_datestamp: Option<String>,
+    },
+}
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+enum IndexMode { Literal, Path, Regexp, Symbol }
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum IndexSelection {
+    Listed { version: String },
+    /// Explicit tracked index, not an installed or latest-release assertion.
+    Tracked,
+}
+#[derive(Deserialize, JsonSchema)]
+#[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
+enum External {
+    /// Local readiness only. No endpoint, key, or provider probe is exposed.
+    Status,
+    SourcegraphSearch {
+        query: String, mode: IndexMode,
+        repository: Option<String>, reference: Option<String>, path: Option<String>, language: Option<String>,
+        #[serde(default = "five")] limit: usize,
+    },
+    /// Compare one saved index hit with an ordinary saved GitHub map and file. No network.
+    SourcegraphVerify { search_id: String, hit: usize, map_id: String, file_id: String },
+    Context7Libraries { library_name: String, query: String, #[serde(default = "five")] limit: usize },
+    Context7Context {
+        discovery_id: String, library_id: String, selection: IndexSelection, query: String,
+        #[serde(default = "five")] limit: usize,
+    },
 }
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -345,12 +381,13 @@ fn tools() -> Vec<Tool> {
         tool::<Crawl>("webtool_crawl", "Submit a bounded same-origin crawl to the server. Returns a persistent job ID. Disconnecting MCP does not cancel the job. Do not retry an uncertain submission automatically.", false, false, true),
         tool::<Job>("webtool_job", "List or inspect crawl jobs, explicitly cancel one, or resume supported durable work with retained charges. Cancellation keeps saved documents. Resume changes neither source scope nor completed failures.", false, true, true),
         tool::<Map>("webtool_map", "Discover bounded links or sitemap locations through the server, without article extraction.", true, false, true),
-        tool::<Cite>("webtool_cite", "Get a citation from a DOI, or cite a saved arXiv paper offline. No bibliography inference or LLM is used.", true, false, true),
+        tool::<Cite>("webtool_cite", "Get a citation from a DOI, or cite a saved arXiv or PMC paper offline. No bibliography inference or LLM is used.", true, false, true),
         tool::<Batch>("webtool_batch_read", "Read one to five ordinary sources. Return one ordered saved-ID/cache reference or safe error per input, without full documents. Continue saved successes with webtool_document. No jobs, retries, or automatic refresh are added.", false, false, true),
         tool::<Archive>("webtool_archive", "Explicit Wayback lookup or read at a selected original URL and UTC capture time. Lookup is index data, not a read. Read returns a saved historical passage. No live, nearby-capture, browser, or alternate-archive fallback.", false, false, true),
         tool::<Code>("webtool_code", "Discover public repositories, map an explicit ref, search admitted paths or selected files, or read one pinned regular UTF-8 file. Saved index pages are not fetched file evidence. Keep coverage and per-file failures visible. No authentication, code execution, or external code provider.", false, false, true),
         tool::<Docs>("webtool_docs", "Read an exact first-party docs.rs crate release page or source. Return a saved passage. Choose page/source explicitly. No latest/range substitution, repository-commit inference, or browser fallback.", false, false, true),
-        tool::<Scholar>("webtool_scholarly", "Search one explicit arXiv/OpenAlex metadata provider, inspect one Crossref DOI, or inspect one exact arXiv version with optional permitted full text. Return saved evidence with content-state counts and any full-text error. Provider metadata and abstracts are not paper bodies.", false, false, true),
+        tool::<Scholar>("webtool_scholarly", "Search explicit arXiv/OpenAlex metadata, inspect one Crossref DOI or exact arXiv version, or select PMC OAI metadata and permitted JATS. PMC version/datestamp assertions do not select history. Return saved content-state counts, partial warnings and full-text errors. Metadata and abstracts are not paper bodies.", false, false, true),
+        tool::<External>("webtool_external", "Explicit optional Sourcegraph/Context7 index operations with server-owned endpoints, credentials and budgets. Status makes no probe. Saved snippets remain third-party index claims. Verify selected saved Sourcegraph lines against a matching ordinary GitHub map/file without network. Context7 requires saved listed-version or tracked selection and uses fast=true. No source-link fetch, provider fallback, configuration write or model action.", false, false, true),
         tool::<Video>("webtool_video", "Search bounded video discovery text, list safe exact-language VTT tracks, or save one selected caption track. Captions return a saved passage. Supplied/automatic origins stay explicit. No signed URLs, media download, transcription, translation, or playlist traversal.", false, false, true),
     ]
 }
@@ -509,7 +546,7 @@ impl Bridge {
             "full_text_error": response.full_text_error,
             "content_state_counts": {"not_read": counts[0], "abstract_only": counts[1],
                 "unavailable": counts[2], "full_text_read": counts[3]},
-            "evidence_note": "Only full_text_read is a fetched paper body. Provider metadata and abstracts remain distinct. Inspect the retained records, rights, and warnings."
+            "evidence_note": "full_text_read means fetched body content, not a promise of complete linked objects. Provider metadata and abstracts remain distinct. Inspect partial state, retained records, rights, and warnings."
         })).await
     }
     async fn dispatch(&self, name: &str, value: Value) -> Outcome {
@@ -674,9 +711,50 @@ impl Bridge {
                     }
                     Scholar::Doi { doi, refresh } => decode(self.post("/v1/scholarly/doi", webtool_protocol::ScholarlyDoiRequest { doi, refresh }).await?)?,
                     Scholar::Arxiv { id, full_text, refresh } => decode(self.post("/v1/scholarly/arxiv", webtool_protocol::ScholarlyArxivRequest { id, full_text, refresh }).await?)?,
+                    Scholar::Pmc { id, full_text, refresh, expected_datestamp } => decode(self.post("/v1/scholarly/pmc", webtool_protocol::ScholarlyPmcRequest { id, full_text, refresh, expected_datestamp }).await?)?,
                 };
                 self.scholarly_page(response).await
             }
+            "webtool_external" => match args::<External>(value)? {
+                External::Status => self.get("/v1/external/providers").await,
+                External::SourcegraphSearch { query, mode, repository, reference, path, language, limit } => {
+                    bounded(limit, 20, "limit")?;
+                    let response: webtool_protocol::SourcegraphSearchResponse = decode(self.post("/v1/external/sourcegraph/search",
+                        json!({"query": query, "mode": mode, "repository": repository, "reference": reference,
+                            "path": path, "language": language, "limit": limit})).await?)?;
+                    self.saved_page(&response.document_id, View::Json, None, json!({
+                        "evidence_kind": "sourcegraph_index", "coverage": response.coverage, "stream_done": response.stream_done,
+                        "evidence_note": "Saved native index hits, not fetched files. Use explicit saved-map/file verification before accepting line evidence."
+                    })).await
+                }
+                External::SourcegraphVerify { search_id, hit, map_id, file_id } => {
+                    for id in [&search_id, &map_id, &file_id] { document_id(id)?; }
+                    let response: webtool_protocol::SourcegraphVerifyResponse = decode(self.post("/v1/external/sourcegraph/verify",
+                        webtool_protocol::SourcegraphVerifyRequest { search_id, hit, map_id, file_id }).await?)?;
+                    Ok(json!({"evidence_kind": "verified_saved_file_lines", "verification": response,
+                        "evidence_note": "Selected retained file bytes at the map's commit/blob, not whole-index validation or a rights assertion. No network request."}))
+                }
+                External::Context7Libraries { library_name, query, limit } => {
+                    bounded(limit, 20, "limit")?;
+                    let response: webtool_protocol::Context7LibrariesResponse = decode(self.post("/v1/external/context7/libraries",
+                        webtool_protocol::Context7LibrariesRequest { library_name, query, limit }).await?)?;
+                    self.saved_page(&response.document_id, View::Json, None, json!({
+                        "evidence_kind": "context7_library_index", "coverage": response.coverage,
+                        "evidence_note": "Saved provider discovery, not an installed version or fetched publisher documentation. Select an admitted listed version or the tracked index explicitly."
+                    })).await
+                }
+                External::Context7Context { discovery_id, library_id, selection, query, limit } => {
+                    document_id(&discovery_id)?;
+                    bounded(limit, 20, "limit")?;
+                    let response: webtool_protocol::Context7ContextResponse = decode(self.post("/v1/external/context7/context",
+                        json!({"discovery_id": discovery_id, "library_id": library_id, "selection": selection, "query": query, "limit": limit})).await?)?;
+                    document_page_context(response.document, View::Markdown, 0, None, json!({
+                        "evidence_kind": "context7_index_snippets", "coverage": response.coverage,
+                        "requested_library_id": response.requested_library_id, "selection": response.selection,
+                        "evidence_note": "Third-party index context, not revision-exact publisher text. Source links are unfetched. fast=true does not guarantee LLM-free upstream indexing."
+                    }))
+                }
+            },
             "webtool_video" => match args::<Video>(value)? {
                 Video::Search { query, limit } => {
                     bounded(limit, 20, "limit")?;
