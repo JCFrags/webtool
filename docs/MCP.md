@@ -268,6 +268,30 @@ new PMC retrieval or live optional-provider call occurred. All private processes
 and listeners stopped within the recorded lifetime. This does not establish
 live provider access, all tool arguments, or installed activation.
 
+The subsequent private media check negotiated `2025-06-18` and listed eighteen
+object-root tools with seventeen resolved local schema references. Formats and
+download actions exposed the nested video/native-audio selections. The actual
+HTTP contract had forty-three paths, forty-six unique operations, 751 resolved
+local references, and a string/binary job attachment schema. Disabled preview
+and download preserved HTTP 422 without a helper call. A copied saved video job
+and its one 11,166-byte derived attachment remained exact.
+
+With explicit tiny private allocations, one synthetic format preview and one
+native-audio job passed common polling, listing, ordinary CLI text, and exact
+10,064-byte export. Media resume preserved HTTP 409 without another helper call.
+A second, slow native-audio job was explicitly canceled through `webtool_job`.
+It reached Cancelled with no accepted result, stopped helper groups, empty owned
+staging, and no late Complete in two checks over 0.8 seconds. The helper ledger
+recorded three metadata calls, two transfer calls, and two writer receipts. The
+helper made no network request. Worker data and evidence stayed unchanged.
+
+The check used absolute work/close deadlines with a 180-second lifetime and a
+30-second close reserve. It completed and closed in 3.673 seconds. Both MCP and
+backend pairs exited zero, were reaped, and had closed listeners. This is narrow
+synthetic-source acceptance, not real yt-dlp transfer compatibility, provider
+permission, hard aggregate disk-quota enforcement, or installed activation.
+Follow the diagnostic lifetime procedure in `AGENTS.md` before another check.
+
 Keep the root `type: "object"` on every input schema. Schemars tagged enums emit
 object alternatives without that root type, which `rmcp 3.5.0` rejects at runtime.
 A successful build does not catch this failure. Exercise `tools/list` after schema

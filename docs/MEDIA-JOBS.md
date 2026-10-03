@@ -191,3 +191,16 @@ before transfer, startup interruption without helper retry, and unsupported resu
 were exercised. These are individual fixture results, not current public YouTube
 compatibility, provider permission, production migration, installed activation, or
 a large cancellation/crash campaign.
+
+The integrated source was then exercised through actual MCP, HTTP, and ordinary
+CLI interfaces. Default-disabled preview/download returned 422 without a helper
+call. One preview-selected native Opus job completed, listed its fetched-stream
+artifact, and exported exactly 10,064 bytes. Unsupported resume returned 409
+without a helper call. A second slow job reached Cancelled through the common
+MCP job tool, with no accepted result, stopped helper groups, and empty owned
+staging. Two follow-up polls over 0.8 seconds found no late Complete. All private
+clients and servers exited zero and were reaped. Their listeners closed within
+the recorded 180-second lifetime and 30-second close reserve. This check used a
+private copy of the same no-network helper and retained fixtures, not a live
+media source. See [MCP.md](MCP.md) for the expanded contract check and `AGENTS.md`
+for the required diagnostic lifetime preflight.

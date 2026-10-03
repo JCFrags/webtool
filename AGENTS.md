@@ -254,6 +254,24 @@ current worktree. This forced the current packages to compile and preserved shar
 dependencies. A per-worktree target also avoids this reuse, but do not duplicate
 large build trees or remove another worker's evidence only for recovery.
 
+### Private diagnostic process lifetime
+
+Before a practical check starts a server or stdio client, set a finite lifetime
+and a close reserve. Require `0 < close reserve < lifetime`. At startup, record
+an absolute work deadline at `start + lifetime - close reserve` and a close
+deadline at `start + lifetime`. A per-call timeout or a duration in a receipt
+does not enforce the complete check's lifetime.
+
+Record commands before execution and process IDs, start times, and executable
+identities before use. Check identity and remaining work time before each
+operation. Bound HTTP reads, subprocess waits, and stdio waits by the remaining
+time. Stop when the work budget is insufficient. Do not replace an expired
+process to complete the same scenario.
+
+Before shutdown signals, recheck ownership. Wait for and reap each owned process.
+Verify that its private listener is closed within the close deadline. Preserve
+the commands, deadlines, results, and closure receipts beside the proof.
+
 ## Deferred optional integration boundaries
 
 Xberg 1.1.1's existing APIs compiled with the committed lockfile; no dependency
