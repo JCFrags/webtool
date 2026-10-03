@@ -102,7 +102,11 @@ executed, or converted to an alternate document format.
 `code file` only accepts a regular file already admitted by that saved map.
 It verifies the API blob identity and decoded size against the saved entry. It
 preserves the original bytes and maps the complete code block to source lines.
-It does not resolve the branch again. File notices remain verbatim in originals.
+It does not resolve the branch again. Saved document IDs remain stable for the
+same accepted file snapshot. Such a document retains its first accepted retrieval
+metadata. Use the selected map's context and the search response for the current
+requested ref, rather than treating a saved document's first ref or observation
+headers as a fresh provider check. File notices remain verbatim in originals.
 The service does not interpret those notices as permission to reuse the file.
 
 Literal search returns one outcome for every selected path when a provider or
