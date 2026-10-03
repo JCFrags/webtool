@@ -57,6 +57,9 @@ impl From<anyhow::Error> for ApiError {
             return Self { status: StatusCode::from_u16(domain.status_code()).expect("domain status"),
                 code: domain.code(), message: domain.to_string() };
         }
+        if let Some(error) = error.downcast_ref::<webtool_engine::scholarly::ScholarlyError>() {
+            return Self::new(StatusCode::from_u16(error.http_status()).expect("valid scholarly status"), error.code(), error.message());
+        }
         // Match only known prefixes or exact engine validation messages. Broad
         // substrings such as "not found", "requires", or "timeout" can hide bugs.
         for cause in error.chain() {
@@ -89,6 +92,7 @@ fn legacy_engine_error(message: &str) -> Option<ApiError> {
         "arxiv_invalid_identifier" => (S::BAD_REQUEST, "arxiv_invalid_identifier", "Use a supported arXiv identifier with an optional version."),
         "arxiv_identity_mismatch" => (S::BAD_GATEWAY, "arxiv_identity_mismatch", "arXiv returned a different paper identity or version."),
         "arxiv_invalid_metadata" | "arxiv_metadata_failed" => (S::BAD_GATEWAY, "arxiv_metadata_failed", "The arXiv metadata could not be retrieved or validated."),
+        "arxiv_reuse_not_established" => (S::UNPROCESSABLE_ENTITY, "arxiv_reuse_not_established", "The selected version has no supported full-text reuse basis. Use scholarly arXiv inspection for metadata and links."),
         "arxiv_pdf_failed" | "arxiv_full_text_failed" => (S::BAD_GATEWAY, "arxiv_full_text_failed", "The arXiv full text could not be retrieved or read."),
         "citation_metadata_unavailable" | "citation_format_unsupported" => (S::UNPROCESSABLE_ENTITY, "citation_unavailable", "Saved citation metadata or the requested format is unavailable."),
         "github_rate_limited" => (S::TOO_MANY_REQUESTS, "github_rate_limited", "GitHub rate limit reached."),

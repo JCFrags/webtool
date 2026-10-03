@@ -14,6 +14,7 @@ use webtool_protocol::*;
 mod code;
 mod contract;
 mod error;
+mod scholarly;
 use contract::*;
 use error::{ApiError, ApiJson, ApiMultipart, ApiPath, ApiQuery};
 
@@ -46,6 +47,7 @@ pub fn api_router() -> OpenApiRouter<Engine> {
         .routes(routes!(media))
         .routes(routes!(cite))
         .merge(code::router())
+        .merge(scholarly::routes())
 }
 
 pub fn router(engine: Engine) -> Router {

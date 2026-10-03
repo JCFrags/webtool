@@ -9,6 +9,7 @@ mod settings;
 mod presentation;
 mod mcp;
 mod code;
+mod scholarly;
 
 #[derive(Parser)]
 #[command(name="webtool",version,about="Search, read, extract, and save sources through a shared server",after_help="No TUI. Results go to stdout. Warnings and progress go to stderr. Use --format json for scripts.")]
@@ -43,6 +44,8 @@ enum Command{
     Search{#[arg(required=true,num_args=1..)]query:Vec<String>,#[arg(long,default_value_t=10)]limit:usize,#[arg(long)]library:Option<String>},
     /// Explicit historical capture lookup and reading. Never a live-read fallback.
     Archive{#[command(subcommand)]action:ArchiveCommand},
+    /// Explicit scholarly discovery and selected metadata. Ordinary search is unchanged.
+    Scholar{#[command(subcommand)]action:scholarly::Command},
     /// Read a URL or a saved document ID. URLs are retained automatically.
     Read{source:String,#[arg(long)]refresh:bool,#[arg(long,value_enum,default_value="auto")]renderer:Browser,
         #[arg(long,default_value="en")]language:String,
@@ -265,6 +268,7 @@ async fn run(cli:Cli)->Result<()>{
                 document(&result.document,format,details,true)
             },
         },
+        Command::Scholar{action}=>scholarly::run(&client,action,format).await,
         Command::Read{source,refresh,renderer,language,selector,library,actor,start_block,end_block,page,details}=>{
             let mut d=if source.starts_with("https://")||source.starts_with("http://"){
                 let result:ReadResponse=client.post("/v1/read",&ReadRequest{url:source,refresh,renderer:renderer.into(),language,library,selector,actor}).await?;

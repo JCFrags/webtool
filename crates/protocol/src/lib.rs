@@ -2,6 +2,8 @@
 //! All source locations describe a retained artifact, not an inferred live page.
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+pub mod scholarly;
+pub use scholarly::*;
 
 mod archive;
 pub use archive::*;
