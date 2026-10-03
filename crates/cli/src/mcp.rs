@@ -144,6 +144,8 @@ enum Job {
     List,
     Get { id: String },
     Cancel { id: String },
+    /// Resume only supported durable work. Old charges remain. No completed failure retry.
+    Resume { id: String, max_pages: Option<usize> },
 }
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -161,6 +163,165 @@ struct Cite {
     /// A DOI or saved arXiv document ID. Saved paper citations are offline.
     doi: String,
     format: CitationFormat,
+}
+
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct Batch {
+    /// One to five ordinary read inputs. A failed input does not discard the others.
+    inputs: Vec<BatchInput>,
+}
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct BatchInput {
+    /// Missing/null or invalid URL produces an input error, not a batch-wide failure.
+    url: Option<String>,
+    #[serde(default)] refresh: bool,
+    #[serde(default = "auto")] renderer: String,
+    #[serde(default = "english")] language: String,
+    selector: Option<String>,
+    library: Option<String>,
+    actor: Option<String>,
+}
+#[derive(Deserialize, JsonSchema)]
+#[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
+enum Archive {
+    Lookup {
+        url: String,
+        /// Exact UTC YYYYMMDDhhmmss. Select only captures at or before this time.
+        at: String,
+        #[serde(default = "thirty")] within_days: u16,
+        #[serde(default = "three")] limit: usize,
+        #[serde(default)] refresh: bool,
+    },
+    Read {
+        url: String,
+        /// One explicitly selected exact UTC YYYYMMDDhhmmss capture, not latest.
+        timestamp: String,
+        #[serde(default)] refresh: bool,
+        library: Option<String>, actor: Option<String>,
+    },
+}
+fn thirty() -> u16 { 30 }
+fn three() -> usize { 3 }
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+struct MapBounds {
+    /// Root entries are depth one. Range 1 through 4.
+    depth: usize,
+    /// Maximum admitted entries, 1 through 200.
+    max_entries: usize,
+    /// Maximum provider requests, 2 through 8.
+    max_requests: usize,
+    /// Maximum decoded response bytes, 1024 through 2097152.
+    max_bytes: usize,
+}
+impl Default for MapBounds {
+    fn default() -> Self { Self { depth: 2, max_entries: 200, max_requests: 8, max_bytes: 2 * 1024 * 1024 } }
+}
+impl MapBounds {
+    fn validate(&self) -> std::result::Result<(), Failure> {
+        bounded(self.depth, 4, "depth")?;
+        bounded(self.max_entries, 200, "max_entries")?;
+        if !(2..=8).contains(&self.max_requests) || !(1024..=2*1024*1024).contains(&self.max_bytes) {
+            return Err(Failure::invalid("Map limits require 2 through 8 requests and 1024 through 2097152 bytes"));
+        }
+        Ok(())
+    }
+}
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+struct FileBounds {
+    /// Maximum selected files, 1 through 5.
+    max_files: usize,
+    /// Maximum bytes per file, 1 through 262144.
+    max_file_bytes: usize,
+    /// Maximum total retained file bytes, 1 through 1048576.
+    max_bytes: usize,
+    /// Maximum provider requests, 1 through 5.
+    max_requests: usize,
+}
+impl Default for FileBounds {
+    fn default() -> Self { Self { max_files: 2, max_file_bytes: 256 * 1024, max_bytes: 1024 * 1024, max_requests: 2 } }
+}
+impl FileBounds {
+    fn validate(&self) -> std::result::Result<(), Failure> {
+        bounded(self.max_files, 5, "max_files")?;
+        bounded(self.max_requests, 5, "max_requests")?;
+        bounded(self.max_file_bytes, 256 * 1024, "max_file_bytes")?;
+        bounded(self.max_bytes, 1024 * 1024, "max_bytes")
+    }
+}
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+enum CodeMode { Paths, Literal, GithubCode }
+#[derive(Deserialize, JsonSchema)]
+#[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
+enum Code {
+    Discover { query: String, #[serde(default = "five")] limit: usize },
+    Map {
+        /// Public owner/repository, not a URL.
+        repository: String,
+        /// Explicit branch, tag, or commit. No automatic default/latest selection.
+        reference: String,
+        #[serde(default)] path: String,
+        #[serde(default)] limits: MapBounds,
+    },
+    Search {
+        map_id: String,
+        /// Explicit paths or literal selected-file search. github_code reports unavailable.
+        mode: CodeMode,
+        query: String,
+        #[serde(default)] paths: Vec<String>,
+        #[serde(default = "five")] limit: usize,
+        #[serde(default)] limits: FileBounds,
+    },
+    File { map_id: String, path: String, #[serde(default)] limits: FileBounds },
+}
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+enum DocsKind { Page, Source }
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct Docs {
+    crate_name: String,
+    /// Exact docs.rs release. No latest, newest, ranges, or inferred dependency version.
+    version: String,
+    path: String,
+    kind: DocsKind,
+}
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+enum ScholarProvider { Arxiv, Openalex }
+#[derive(Deserialize, JsonSchema)]
+#[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
+enum Scholar {
+    Search { provider: ScholarProvider, query: String, #[serde(default = "five")] limit: usize, #[serde(default)] refresh: bool },
+    Doi { doi: String, #[serde(default)] refresh: bool },
+    Arxiv {
+        /// Literal modern or legacy identifier with explicit vN, not a DOI, title, or URL.
+        id: String,
+        /// Explicit permitted PDF read. Metadata/abstract-only outcomes remain visible.
+        #[serde(default)] full_text: bool,
+        #[serde(default)] refresh: bool,
+    },
+}
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+enum CaptionChoice { ProvidedFirst, Provided, Automatic }
+impl Default for CaptionChoice { fn default() -> Self { Self::ProvidedFirst } }
+#[derive(Deserialize, JsonSchema)]
+#[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
+enum Video {
+    Search { query: String, #[serde(default = "five")] limit: usize },
+    Tracks { url: String },
+    Captions {
+        url: String,
+        #[serde(default = "english")] language: String,
+        #[serde(default)] choice: CaptionChoice,
+        #[serde(default)] refresh: bool,
+        library: Option<String>,
+    },
 }
 
 fn tool<T: JsonSchema + 'static>(name: &'static str, description: &'static str, read_only: bool, destructive: bool, open_world: bool) -> Tool {
@@ -182,13 +343,22 @@ fn tools() -> Vec<Tool> {
         tool::<Extract>("webtool_extract", "Extract saved structures, including tables, links, code, metadata, and CSS. Return bounded serialized JSON passages with exact continuation.", true, false, false),
         tool::<Library>("webtool_library", "List, create, inspect, or populate shared libraries. All users share these libraries. Add needs a saved document ID.", false, false, false),
         tool::<Crawl>("webtool_crawl", "Submit a bounded same-origin crawl to the server. Returns a persistent job ID. Disconnecting MCP does not cancel the job. Do not retry an uncertain submission automatically.", false, false, true),
-        tool::<Job>("webtool_job", "List or inspect crawl jobs, or explicitly cancel one. Cancellation keeps documents already saved. Check this after an uncertain submission.", false, true, false),
+        tool::<Job>("webtool_job", "List or inspect crawl jobs, explicitly cancel one, or resume supported durable work with retained charges. Cancellation keeps saved documents. Resume changes neither source scope nor completed failures.", false, true, true),
         tool::<Map>("webtool_map", "Discover bounded links or sitemap locations through the server, without article extraction.", true, false, true),
         tool::<Cite>("webtool_cite", "Get a citation from a DOI, or cite a saved arXiv paper offline. No bibliography inference or LLM is used.", true, false, true),
+        tool::<Batch>("webtool_batch_read", "Read one to five ordinary sources. Return one ordered saved-ID/cache reference or safe error per input, without full documents. Continue saved successes with webtool_document. No jobs, retries, or automatic refresh are added.", false, false, true),
+        tool::<Archive>("webtool_archive", "Explicit Wayback lookup or read at a selected original URL and UTC capture time. Lookup is index data, not a read. Read returns a saved historical passage. No live, nearby-capture, browser, or alternate-archive fallback.", false, false, true),
+        tool::<Code>("webtool_code", "Discover public repositories, map an explicit ref, search admitted paths or selected files, or read one pinned regular UTF-8 file. Saved index pages are not fetched file evidence. Keep coverage and per-file failures visible. No authentication, code execution, or external code provider.", false, false, true),
+        tool::<Docs>("webtool_docs", "Read an exact first-party docs.rs crate release page or source. Return a saved passage. Choose page/source explicitly. No latest/range substitution, repository-commit inference, or browser fallback.", false, false, true),
+        tool::<Scholar>("webtool_scholarly", "Search one explicit arXiv/OpenAlex metadata provider, inspect one Crossref DOI, or inspect one exact arXiv version with optional permitted full text. Return saved evidence with content-state counts and any full-text error. Provider metadata and abstracts are not paper bodies.", false, false, true),
+        tool::<Video>("webtool_video", "Search bounded video discovery text, list safe exact-language VTT tracks, or save one selected caption track. Captions return a saved passage. Supplied/automatic origins stay explicit. No signed URLs, media download, transcription, translation, or playlist traversal.", false, false, true),
     ]
 }
 fn args<T: DeserializeOwned>(value: Value) -> std::result::Result<T, Failure> {
-    serde_json::from_value(value).map_err(|e| Failure::invalid(&e.to_string().chars().take(500).collect::<String>()))
+    serde_json::from_value(value).map_err(|_| Failure::invalid("Arguments do not match this tool's schema. Check tools/list for accepted fields and types."))
+}
+fn decode<T: DeserializeOwned>(value: Value) -> std::result::Result<T, Failure> {
+    serde_json::from_value(value).map_err(|_| Failure::new("backend_invalid_response", "The backend response does not match this operation's contract."))
 }
 fn bounded(value: usize, max: usize, name: &str) -> std::result::Result<(), Failure> {
     if (1..=max).contains(&value) { Ok(()) }
@@ -239,6 +409,9 @@ fn passage(text: &str, offset: usize, mut identity: Value) -> Outcome {
     }
 }
 fn document_page(document: Document, view: View, offset: usize, cached: Option<bool>) -> Outcome {
+    document_page_context(document, view, offset, cached, Value::Null)
+}
+fn document_page_context(document: Document, view: View, offset: usize, cached: Option<bool>, context: Value) -> Outcome {
     let text = match view {
         View::Markdown => {
             let mut text = webtool_protocol::render::markdown_read(&document, true);
@@ -252,18 +425,26 @@ fn document_page(document: Document, view: View, offset: usize, cached: Option<b
         }
         View::Json => serde_json::to_string(&document).expect("serializable document"),
     };
-    passage(&text, offset, json!({
+    let mut identity = json!({
         "document_id": document.id, "view": view, "cached": cached,
         "representation": "webtool-mcp-document/1", "warning_count": document.warnings.len(),
         "warnings_location": "Warnings are retained in the document JSON and at the end of the Markdown representation.",
         "original_path": format!("/v1/documents/{}/original", document.id),
         "original_sha256": document.source.original.sha256,
         "continuation_tool": "webtool_document"
-    }))
+    });
+    if !context.is_null() { identity["operation_context"] = context; }
+    passage(&text, offset, identity)
 }
 fn result(outcome: Outcome) -> CallToolResult {
     let result = match outcome {
-        Ok(value) => CallToolResult::structured(value),
+        Ok(mut value) => {
+            // Provider text, saved source text, and backend metadata are data,
+            // never new authority. Keep this label on non-passage results too.
+            if let Some(object) = value.as_object_mut() { object.insert("untrusted_source_content".into(), json!(true)); }
+            else { value = json!({"data": value, "untrusted_source_content": true}); }
+            CallToolResult::structured(value)
+        },
         Err(failure) => CallToolResult::structured_error(json!({"error": failure})),
     };
     if serde_json::to_vec(&result).is_ok_and(|bytes| bytes.len() <= RESULT_LIMIT) { result }
@@ -307,6 +488,29 @@ impl Bridge {
     async fn get(&self, path: &str) -> Outcome { self.response(self.http.get(format!("{}{path}", self.base))).await }
     async fn post(&self, path: &str, body: impl Serialize) -> Outcome {
         self.response(self.http.request(Method::POST, format!("{}{path}", self.base)).json(&body)).await
+    }
+    async fn saved_page(&self, id: &str, view: View, cached: Option<bool>, context: Value) -> Outcome {
+        document_id(id)?;
+        let document: Document = serde_json::from_value(self.get(&format!("/v1/documents/{id}")).await?)
+            .map_err(|_| Failure::new("backend_invalid_response", "The backend returned an invalid saved document."))?;
+        document_page_context(document, view, 0, cached, context)
+    }
+    async fn scholarly_page(&self, response: webtool_protocol::ScholarlyResponse) -> Outcome {
+        use webtool_protocol::ScholarlyContentState as State;
+        let mut counts = [0usize; 4];
+        for record in &response.snapshot.records {
+            counts[match record.content_state { State::NotRead => 0, State::AbstractOnly => 1,
+                State::Unavailable => 2, State::FullTextRead => 3 }] += 1;
+        }
+        self.saved_page(&response.document_id, View::Json, Some(response.cached), json!({
+            "evidence_kind": "scholarly_records", "provider": response.snapshot.provider,
+            "observed_at": response.snapshot.observed_at, "age_seconds": response.age_seconds,
+            "partial": response.snapshot.partial, "warning_count": response.warnings.len(),
+            "full_text_error": response.full_text_error,
+            "content_state_counts": {"not_read": counts[0], "abstract_only": counts[1],
+                "unavailable": counts[2], "full_text_read": counts[3]},
+            "evidence_note": "Only full_text_read is a fetched paper body. Provider metadata and abstracts remain distinct. Inspect the retained records, rights, and warnings."
+        })).await
     }
     async fn dispatch(&self, name: &str, value: Value) -> Outcome {
         match name {
@@ -375,6 +579,10 @@ impl Bridge {
                 Job::List => self.get("/v1/jobs").await.map(|jobs| json!({"jobs": jobs})),
                 Job::Get { id } => self.get(&format!("/v1/jobs/{}", segment(&id)?)).await,
                 Job::Cancel { id } => self.post(&format!("/v1/jobs/{}/cancel", segment(&id)?), json!({})).await,
+                Job::Resume { id, max_pages } => {
+                    if let Some(total) = max_pages { bounded(total, 500, "max_pages")?; }
+                    self.post(&format!("/v1/jobs/{}/resume", segment(&id)?), webtool_protocol::CrawlResumeRequest { max_pages }).await
+                }
             },
             "webtool_map" => {
                 let request: Map = args(value)?;
@@ -383,6 +591,117 @@ impl Bridge {
                 self.post("/v1/map", request).await
             }
             "webtool_cite" => { let request: Cite = args(value)?; self.post("/v1/cite", request).await }
+            "webtool_batch_read" => {
+                let request: Batch = args(value)?;
+                bounded(request.inputs.len(), webtool_protocol::BATCH_READ_INPUT_LIMIT, "inputs length")?;
+                let response: webtool_protocol::BatchReadResponse = decode(self.post("/v1/read/batch", request).await?)?;
+                Ok(json!({"results": response.results, "continuation_tool": "webtool_document",
+                    "view": "markdown", "offset": 0,
+                    "warnings_location": "Warnings remain in each saved document. Retrieve every successful ID and inspect them."}))
+            }
+            "webtool_archive" => match args::<Archive>(value)? {
+                Archive::Lookup { url, at, within_days, limit, refresh } => {
+                    source_url(&url)?;
+                    bounded(limit, 3, "limit")?;
+                    if within_days > 3660 { return Err(Failure::invalid("within_days must be between 0 and 3660")); }
+                    let response: webtool_protocol::ArchiveLookupResponse = decode(self.post("/v1/archive/lookup",
+                        webtool_protocol::ArchiveLookupRequest { url, at, within_days, limit, refresh }).await?)?;
+                    Ok(json!({"evidence_kind": "archive_capture_index", "lookup": response,
+                        "evidence_note": "Index captures were not read. Select one exact original URL and timestamp explicitly."}))
+                }
+                Archive::Read { url, timestamp, refresh, library, actor } => {
+                    source_url(&url)?;
+                    let response: ReadResponse = decode(self.post("/v1/archive/read",
+                        webtool_protocol::ArchiveReadRequest { url, timestamp: timestamp.clone(), refresh, library, actor }).await?)?;
+                    document_page_context(response.document, View::Markdown, 0, Some(response.cached),
+                        json!({"evidence_kind": "historical_capture", "capture_timestamp": timestamp,
+                            "evidence_note": "Historical capture, not a current live read. Replay status is not original capture status. Links were not read."}))
+                }
+            },
+            "webtool_code" => match args::<Code>(value)? {
+                Code::Discover { query, limit } => {
+                    bounded(limit, 20, "limit")?;
+                    let response: webtool_protocol::RepositoryDiscoverResponse = decode(self.post("/v1/code/discover",
+                        webtool_protocol::RepositoryDiscoverRequest { query, limit }).await?)?;
+                    self.saved_page(&response.document_id, View::Json, None, json!({
+                        "evidence_kind": "repository_discovery", "observed_at": response.observed_at,
+                        "incomplete": response.incomplete, "total_reported": response.total_count,
+                        "evidence_note": "Descriptions and provider license metadata are discovery data, not fetched code or revision-specific file rights."
+                    })).await
+                }
+                Code::Map { repository, reference, path, limits } => {
+                    limits.validate()?;
+                    let response: webtool_protocol::RepositoryMapResponse = decode(self.post("/v1/code/map",
+                        json!({"repository": repository, "reference": reference, "path": path, "limits": limits})).await?)?;
+                    self.saved_page(&response.document_id, View::Json, None, json!({
+                        "evidence_kind": "repository_map", "resolved_commit": response.map.resolved_commit,
+                        "coverage": response.map.coverage,
+                        "evidence_note": "Bounded admitted entries, not fetched file bodies or a complete repository. The original is a derived manifest with retained provider observations."
+                    })).await
+                }
+                Code::Search { map_id, mode, query, paths, limit, limits } => {
+                    document_id(&map_id)?;
+                    bounded(limit, 20, "limit")?;
+                    limits.validate()?;
+                    if paths.len() > limits.max_files { return Err(Failure::invalid("paths exceeds max_files")); }
+                    let response: webtool_protocol::CodeSearchResponse = decode(self.post("/v1/code/search",
+                        json!({"map_id": map_id, "mode": mode, "query": query, "paths": paths, "limit": limit, "limits": limits})).await?)?;
+                    Ok(json!({"search": response,
+                        "evidence_note": "paths mode reads admitted names only. Literal matches reference fetched saved files. Inspect coverage and every file outcome. This result has no refetching continuation."}))
+                }
+                Code::File { map_id, path, limits } => {
+                    document_id(&map_id)?;
+                    limits.validate()?;
+                    let response: webtool_protocol::CodeFileResponse = decode(self.post("/v1/code/file",
+                        json!({"map_id": map_id, "path": path, "limits": limits})).await?)?;
+                    document_page_context(response.document, View::Markdown, 0, None,
+                        json!({"evidence_kind": "pinned_repository_file", "map_id": map_id, "coverage": response.coverage}))
+                }
+            },
+            "webtool_docs" => {
+                let request: Docs = args(value)?;
+                let response: webtool_protocol::DocumentationResponse = decode(self.post("/v1/docs/read", request).await?)?;
+                document_page_context(response.document, View::Markdown, 0, None, json!({
+                    "evidence_kind": "exact_docs_rs_release", "coverage": response.coverage,
+                    "evidence_note": "Page/source provenance is retained. A release is not a verified repository commit, build target, or feature set."
+                }))
+            }
+            "webtool_scholarly" => {
+                let response: webtool_protocol::ScholarlyResponse = match args::<Scholar>(value)? {
+                    Scholar::Search { provider, query, limit, refresh } => {
+                        bounded(limit, 20, "limit")?;
+                        decode(self.post("/v1/scholarly/search", json!({"provider": provider, "query": query, "limit": limit, "refresh": refresh})).await?)?
+                    }
+                    Scholar::Doi { doi, refresh } => decode(self.post("/v1/scholarly/doi", webtool_protocol::ScholarlyDoiRequest { doi, refresh }).await?)?,
+                    Scholar::Arxiv { id, full_text, refresh } => decode(self.post("/v1/scholarly/arxiv", webtool_protocol::ScholarlyArxivRequest { id, full_text, refresh }).await?)?,
+                };
+                self.scholarly_page(response).await
+            }
+            "webtool_video" => match args::<Video>(value)? {
+                Video::Search { query, limit } => {
+                    bounded(limit, 20, "limit")?;
+                    let response: webtool_protocol::VideoSearchResponse = decode(self.post("/v1/video/search",
+                        webtool_protocol::VideoSearchRequest { query, limit }).await?)?;
+                    Ok(json!({"evidence_kind": "video_discovery", "search": response,
+                        "evidence_note": "Provider discovery text, not fetched transcripts. No captions or individual video were read."}))
+                }
+                Video::Tracks { url } => {
+                    source_url(&url)?;
+                    let response: webtool_protocol::CaptionTracksResponse = decode(self.post("/v1/video/tracks",
+                        webtool_protocol::CaptionTracksRequest { url }).await?)?;
+                    Ok(json!({"evidence_kind": "caption_inventory", "inventory": response,
+                        "evidence_note": "Point-in-time safe track inventory, not fetched captions. Select an exact language and origin."}))
+                }
+                Video::Captions { url, language, choice, refresh, library } => {
+                    source_url(&url)?;
+                    let response: ReadResponse = decode(self.post("/v1/video/captions",
+                        json!({"url": url, "language": language, "choice": choice, "refresh": refresh, "library": library})).await?)?;
+                    document_page_context(response.document, View::Markdown, 0, Some(response.cached), json!({
+                        "evidence_kind": "supplied_caption_track",
+                        "evidence_note": "Actual provided/automatic origin, exact language and helper identity remain in saved metadata. Provided does not prove human authorship. No transcription or translation."
+                    }))
+                }
+            },
             _ => Err(Failure::new("unknown_tool", "The requested tool does not exist.")),
         }
     }
@@ -425,7 +744,8 @@ pub async fn run(server: &str, timeout: u64) -> Result<()> {
     let bridge = Bridge {
         base,
         http: reqwest::Client::builder().connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(timeout)).redirect(reqwest::redirect::Policy::none()).build()?,
+            .timeout(Duration::from_secs(timeout)).redirect(reqwest::redirect::Policy::none())
+            .retry(reqwest::retry::never()).build()?,
         slots: Arc::new(Semaphore::new(4)),
         deadline: Duration::from_secs(timeout),
     };

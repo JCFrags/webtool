@@ -11,6 +11,7 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 use webtool_engine::Engine;
 use webtool_protocol::*;
 
+mod batch;
 mod code;
 mod contract;
 mod error;
@@ -50,6 +51,7 @@ pub fn api_router() -> OpenApiRouter<Engine> {
         .routes(routes!(caption_tracks))
         .routes(routes!(captions))
         .routes(routes!(cite))
+        .merge(batch::router())
         .merge(code::router())
         .merge(external_code::router())
         .merge(scholarly::routes())

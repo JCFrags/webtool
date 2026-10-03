@@ -7,6 +7,8 @@ pub use scholarly::*;
 
 mod archive;
 pub use archive::*;
+mod batch;
+pub use batch::*;
 
 pub const API_VERSION: &str = "v1";
 pub const EXTRACTION_VERSION: &str = "webtool-0.1.0-schema1";

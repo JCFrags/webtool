@@ -34,6 +34,11 @@ impl ApiError {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, "internal_error", "The server could not complete the operation.")
     }
 
+    /// Reuse the same safe mapping for ordered batch input failures.
+    pub(crate) fn into_problem(self) -> (u16, Problem) {
+        (self.status.as_u16(), Problem { code: self.code.into(), message: self.message })
+    }
+
     fn rejection(status: StatusCode, code: &'static str, message: &'static str) -> Self {
         if status == StatusCode::PAYLOAD_TOO_LARGE {
             Self::size_limit()

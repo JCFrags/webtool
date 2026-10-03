@@ -30,6 +30,7 @@ compatibility. Clients must inspect warnings, source status, and artifact roles.
 |---|---|---|
 | GET | `/v1/health` | Version and configured or compiled capabilities |
 | POST | `/v1/read` | Retrieve and save one source |
+| POST | `/v1/read/batch` | Ordered per-input saved references or safe errors |
 | POST | `/v1/ingest` | Upload a file as multipart data |
 | POST | `/v1/search` | Search public providers or saved documents |
 | GET | `/v1/documents` | List saved documents |
@@ -111,8 +112,9 @@ Unknown parts, a missing file, and multiple files return 400.
 
 File bytes must fit the server's configured `max_bytes`. Each decoded text part
 is limited to 8192 bytes. The total request body limit is `max_bytes + 256 KiB`,
-including multipart boundaries and headers. JSON request bodies have this same
-total limit. Body and upload size rejections return 413 with a `Problem` body.
+including multipart boundaries and headers. Except for the 64 KiB batch-read
+bound below, JSON request bodies have this same total limit. Body and upload size
+rejections return 413 with a `Problem` body.
 The exact limit is deployment configuration, not a universal OpenAPI constant.
 Send one existing `library` name to attach the saved document to that library.
 
@@ -150,6 +152,55 @@ completed page attempts. Interrupted attempts consume budget but do not incremen
 `visited`. See [CRAWL.md](CRAWL.md) for transaction/crash semantics, scheduling,
 robots policy, and sitemap bounds. Successful operations return 200, including
 ingest, library creation, crawl submission, and accepted resume.
+
+## Bounded batch reads
+
+`POST /v1/read/batch` composes the ordinary reader. It accepts `inputs` with one
+to five objects. Each object has the ordinary `url`, `renderer`, `language`,
+`refresh`, `selector`, `library`, and `actor` options. Defaults are unchanged.
+There is no automatic refresh, second store, bulk read lock, or persistent batch
+job. Ordinary renderer routing and service-owned budgets still apply.
+
+```json
+{"inputs":[{"url":"https://example.com","renderer":"http"},{"url":"not a URL"},{}]}
+```
+
+The request body is limited to 64 KiB. Each URL has an 8192-byte bound. Language
+and each optional text field have a 4096-byte bound. At most two reads run at
+once, in pairs. Each read uses its ordinary deadline, including admission.
+A later pair starts after the preceding pair finishes. No new whole-batch
+deadline or global batch capacity is introduced.
+
+Every admitted input has one result at its zero-based index, in input order.
+A `status: "saved"` result contains `document_id`, `cached`, and `warning_count`.
+Retrieve that ID through `/v1/documents/{id}` and inspect the retained warnings.
+A `status: "error"` result contains `http_status` and a safe `problem` with the
+same code/message mapping as a single read. Missing/null URLs, invalid URL or
+renderer strings, option byte limits, and engine failures are input outcomes.
+Other inputs continue. No input text or full document is echoed in the response.
+The complete response has an 8 KiB bound.
+
+A well-formed admitted batch returns 200 even when every input fails. Malformed
+JSON, invalid field types, unknown fields, an invalid input count, and request
+body limits reject the request before reads. Successful reads use the same cache
+and existing-library attachment semantics as ordinary reads. Duplicate inputs
+use the ordinary same-source lock. This does not promise exactly-once network
+requests, especially with explicit refresh.
+
+Disconnecting or canceling the HTTP wait does not undo saved documents. Later
+inputs might not have started. Inspect saved documents or the selected library
+before retrying an uncertain batch. No automatic retry or hidden job is created.
+The CLI's existing `batch --format jsonl` remains a separate per-line `/v1/read`
+workflow. It does not buffer all returned documents into this batch response.
+
+An October 3, 2026 loopback proof returned five ordered outcomes: two saved IDs
+and three safe errors for invalid URL, missing URL, and invalid renderer. The
+767-byte response contained no input echoes or full documents. MCP cache reuse,
+existing-library attachments, original downloads, saved-ID reads, and CLI JSONL
+used those same IDs without another source fetch. Invalid count, field type, and
+body size returned 400, 422, and 413 before reads. The actual OpenAPI batch route
+and all local schema references resolved. No public provider or helper was used.
+This does not establish every option bound, renderer, or cancellation outcome.
 
 ## Error boundary
 

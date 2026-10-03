@@ -38,18 +38,85 @@ does not require a particular model or agent application.
 | `webtool_extract` | Extract saved tables, code, links, metadata, and other structures |
 | `webtool_library` | List, create, inspect, or populate shared libraries |
 | `webtool_crawl` | Submit a persistent bounded crawl |
-| `webtool_job` | List, inspect, or explicitly cancel crawl jobs |
+| `webtool_job` | List, inspect, cancel, or explicitly resume durable crawl jobs |
 | `webtool_map` | Discover bounded links or sitemap locations |
 | `webtool_cite` | Retrieve DOI citations or cite a saved arXiv paper offline |
+| `webtool_batch_read` | Ordered per-input saved references or errors for one to five ordinary reads |
+| `webtool_archive` | Explicit capture-index lookup or selected historical read |
+| `webtool_code` | First-party public repository discover/map/search/file operations |
+| `webtool_docs` | Exact first-party docs.rs release page or source read |
+| `webtool_scholarly` | Explicit arXiv/OpenAlex search, Crossref DOI, or exact-version arXiv inspection |
+| `webtool_video` | Video discovery, safe caption inventory, or selected supplied-caption read |
 
-Tool schemas describe the arguments. Unknown fields are rejected. Library and
-job tools use an `action` tag. Search results are discovery snippets, not evidence
-from destination pages. Health describes configuration, not live provider
-readiness. All connected users share the same libraries.
+Tool schemas describe the arguments. Unknown fields are rejected. Library, job,
+archive, code, scholarly, and video tools use an `action` tag. Search results are
+discovery snippets, not evidence from destination pages. Health describes
+configuration, not live provider readiness. All connected users share libraries.
 
 The connector does not offer arbitrary HTTP paths, local-file ingestion, local
 filesystem access, binary downloads, browser control, or model calls. New HTTP
 features require an explicit adapter addition rather than automatic exposure.
+
+## Explicit domain operations
+
+- `webtool_archive` accepts `lookup` or `read`. Lookup requires an original URL
+  and exact UTC `at` timestamp, with one to three candidates and a lookback of
+  0 to 3660 days. Read requires an explicitly selected `timestamp`. Both use
+  `YYYYMMDDhhmmss`. An index result is not a historical page read. There is no
+  live, nearby-capture, browser, or alternate-provider fallback. See [ARCHIVES.md](ARCHIVES.md).
+- `webtool_code` accepts `discover`, `map`, `search`, or `file`. Map requires a
+  public `owner/repository` and explicit `reference`. Search requires a saved
+  `map_id` and explicit `mode`: `paths`, `literal`, or the unavailable
+  `github_code`. Literal search requires exact admitted `paths`. File reads
+  use the map's pinned commit/blob. Discovery descriptions and map entries are
+  not fetched file bodies. Inspect `coverage` and each file outcome. See [CODE.md](CODE.md).
+- `webtool_docs` requires `crate_name`, exact `version`, `path`, and `kind`
+  (`page` or `source`). It does not infer a dependency release, replace a missing
+  release with latest, or establish a repository commit. Source is decoded from
+  retained docs.rs HTML, not a raw crate archive.
+- `webtool_scholarly` accepts `search`, `doi`, or `arxiv`. Search requires one
+  explicit `arxiv` or `openalex` provider. DOI selects one Crossref record.
+  arXiv inspection requires a literal exact-version `id`. `full_text` defaults
+  to false and uses the service's item-specific reuse gate when explicitly true.
+  Returned `content_state_counts`, observation age, partial state, and
+  `full_text_error` remain visible. HTTP success does not prove a paper body
+  was read. Metadata and abstracts are not full text. See [SCHOLARLY.md](SCHOLARLY.md).
+- `webtool_video` accepts `search`, `tracks`, or `captions`. Search text is
+  discovery data. Track inventory contains no signed URLs or headers. Captions
+  require one supported video URL, literal case-sensitive language, and
+  `provided_first`, `provided`, or `automatic` choice. `provided` does not prove
+  human authorship. Actual origin remains in saved metadata. No media transfer,
+  speech recognition, translation, or playlist traversal is added. See [VIDEO.md](VIDEO.md).
+
+Refresh defaults to false wherever the current route supports it. Domain adapters
+forward only these fixed routes to the shared service. No optional external code
+provider or Europe PMC/PMC route is exposed by this connector version.
+
+`webtool_job` with `action: "resume"` accepts `id` and optional `max_pages` as a
+new total attempt budget up to 500. It retains past charges, scope, library, and
+completed attachments. The server refuses unsupported states, old jobs without
+frontiers, exhausted work, and completed-failure retry. Omitting the total retains
+the existing budget, including a larger HTTP-created budget. See [CRAWL.md](CRAWL.md).
+
+## Batch outcomes
+
+`webtool_batch_read` sends one to five `inputs` to `/v1/read/batch`. Each input has
+ordinary read options. The response preserves input order and zero-based index.
+Success is a compact saved-ID/cache/warning-count reference, not a concatenation
+of full documents. Use `webtool_document` at offset zero for each successful ID.
+Missing/invalid URL or renderer strings and read failures remain per-input errors.
+Malformed field types or unknown fields reject the tool/request schema. Other
+admitted inputs continue. An all-error admitted batch is still a normal batch
+result. Inspect every result rather than relying only on MCP `isError`.
+
+The HTTP route has a 64 KiB request body, 8192-byte URL bound, 4096-byte bound on
+language, selector, library, and actor, fixed two-read concurrency, and an 8 KiB
+compact response.
+Ordinary service deadlines, source routing, cache, and library semantics remain.
+There is no persistent batch job, bulk store, automatic refresh, or retry. A
+canceled wait can leave saved successes without an observed complete response.
+Inspect saved documents or the selected library before retrying. The existing
+CLI JSONL batch stays a per-line ordinary read workflow. See [API.md](API.md).
 
 ## Saved passages and evidence
 
@@ -63,6 +130,18 @@ Document JSON and extraction results are serialized JSON passages. A passage
 can be a JSON fragment, not a standalone object. Concatenate all passages before
 parsing the complete serialized value. Extraction continuation must keep the
 same ID, kind, and expression. Saved operations do not fetch the source again.
+
+Saved repository discovery, repository maps, and scholarly operations return a
+first document JSON passage with an explicit evidence label. Code-file, docs,
+archive-read, and caption-read tools return a first detailed Markdown passage.
+Continue all of these through `webtool_document` with the exact returned view
+and offset. Continuation reads the saved ID, not the provider operation again.
+Operation context such as coverage, content-state counts, or a requested full-text
+failure is returned with the first passage. Keep it. Saved document JSON contains
+retained source metadata, but it does not recreate an ephemeral request failure.
+Code search, archive lookup, video discovery, and track inventory have no
+refetching continuation. If their complete result exceeds the result cap, reduce
+the supported request budget or use HTTP. The adapter does not silently truncate.
 
 The document representation is `webtool-mcp-document/1`. Follow-up calls must use
 a compatible connector version. Warning details remain in document JSON and at
@@ -80,7 +159,8 @@ Generated answers are not part of these operations.
 - At most four tool calls run concurrently in one connector. Excess calls return
   `mcp_busy`. Service-owned budgets still apply across clients.
 - `--timeout` bounds each operation. It must be positive. HTTP redirects from the
-  configured backend are not followed.
+  configured backend are not followed. The backend client also disables reqwest's
+  safe protocol-error retries. No uncertain write is retried automatically.
 - One input JSON-RPC line is limited to 64 KiB. An invalid or oversized transport
   frame ends the input stream. It is not an application-level tool error.
 - A backend response is limited to 16 MiB. Larger responses return
@@ -88,8 +168,15 @@ Generated answers are not part of these operations.
 - Tool results are limited to 64 KiB, including the structured value and its text
   copy for older clients. Saved passages start with an 8192-byte content budget
   and shrink when JSON escaping requires it. They preserve exact continuation.
-- Search, find, map, and library-item limits are 1 through 20. A crawl accepts
-  1 through 100 attempted pages and depth 0 through 5.
+- Search, find, ordinary map, library-item, repository-discovery/search, scholarly
+  search, and video-search limits are 1 through 20. A crawl accepts 1 through 100
+  attempted pages and depth 0 through 5. Resume accepts a new total up to 500.
+- Repository maps accept depth 1 through 4, 1 through 200 entries, 2 through 8
+  requests, and 1 KiB through 2 MiB of decoded API responses. File/search bounds
+  are 1 through 5 files/requests, 1 through 256 KiB per file, and 1 byte through
+  1 MiB total file content. Defaults match the current HTTP operation defaults.
+  These MCP caps are smaller than some HTTP caps. Coverage is still bounded,
+  not a complete repository index.
 - Other oversized results return `mcp_output_limit`. No result is silently
   truncated. Use smaller supported limits or the HTTP API.
 
@@ -105,8 +192,8 @@ inspect jobs before retrying, because the server may already have accepted it.
 
 ## Focused verification and maintenance
 
-A real stdio JSON-RPC client negotiated protocol `2025-06-18`, listed all eleven
-tools, and called them against an isolated loopback backend. Read/save, three
+An earlier real stdio JSON-RPC client negotiated protocol `2025-06-18`, listed all
+eleven tools, and called them against an isolated loopback backend. Read/save, three
 exact Markdown passages, saved-library search, find, code extraction, and an
 ordinary CLI saved-ID read used the same document. The original download matched
 all 13,853 input bytes and its hash. Invalid input and a missing-document HTTP 404
@@ -117,6 +204,22 @@ private processes and the source listener stopped afterward.
 This proves the exercised protocol workflow, not compatibility with every agent
 application, every tool argument, every source format, or a remote deployment.
 No public search, provider account, or model was contacted by this proof.
+
+On October 3, 2026, the expanded connector listed all seventeen tools through
+actual stdio, with object-root schemas and all local references resolved. An
+isolated HTTP batch preserved five input outcomes: two saved documents, an invalid
+URL, a missing URL, and an invalid renderer. MCP reused both saved IDs and their
+library attachments without another source fetch. Three exact UTF-8 Markdown
+passages totaled 18,324 bytes and matched the ordinary CLI saved-ID view. Original
+downloads matched the 16,396-byte and 791-byte local inputs and their hashes. The
+existing CLI JSONL batch returned success, failure, success in line order. Invalid
+count, field type, and body size returned 400, 422, and 413 before any source read.
+
+One invalid call per new domain and a missing-job resume preserved safe HTTP
+errors without a provider or helper call. The private processes and source
+listener stopped within their recorded lifetime. This does not verify successful
+external domain reads through MCP, all argument combinations, or every agent
+application. The underlying domain proofs remain separate.
 
 Keep the root `type: "object"` on every input schema. Schemars tagged enums emit
 object alternatives without that root type, which `rmcp 3.5.0` rejects at runtime.
