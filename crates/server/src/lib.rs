@@ -45,6 +45,9 @@ pub fn api_router() -> OpenApiRouter<Engine> {
         .routes(routes!(resume))
         .routes(routes!(map))
         .routes(routes!(media))
+        .routes(routes!(video_search))
+        .routes(routes!(caption_tracks))
+        .routes(routes!(captions))
         .routes(routes!(cite))
         .merge(code::router())
         .merge(scholarly::routes())
@@ -251,6 +254,27 @@ async fn map(State(e): State<Engine>, ApiJson(r): ApiJson<MapRequest>) -> ApiRes
     request_body = MediaRequest, responses((status = 200, description = "Successful operation.", body = Document), HttpErrors))]
 async fn media(State(e): State<Engine>, ApiJson(r): ApiJson<MediaRequest>) -> ApiResult<Document> {
     Ok(Json(e.media(r.url, r.language, r.library).await?))
+}
+
+/// Search bounded flat video metadata. Does not fetch each video, captions, or media.
+#[utoipa::path(post, path = "/v1/video/search", operation_id = "searchVideos", tag = "video",
+    request_body = VideoSearchRequest, responses((status = 200, description = "Provider-ordered metadata, not transcript evidence.", body = VideoSearchResponse), HttpErrors))]
+async fn video_search(State(e): State<Engine>, ApiJson(r): ApiJson<VideoSearchRequest>) -> ApiResult<VideoSearchResponse> {
+    Ok(Json(e.video_search(r).await?))
+}
+
+/// List selectable untranslated VTT tracks for one video, without signed track URLs.
+#[utoipa::path(post, path = "/v1/video/tracks", operation_id = "listCaptionTracks", tag = "video",
+    request_body = CaptionTracksRequest, responses((status = 200, description = "Supplied track inventory. Empty inventory includes a warning.", body = CaptionTracksResponse), HttpErrors))]
+async fn caption_tracks(State(e): State<Engine>, ApiJson(r): ApiJson<CaptionTracksRequest>) -> ApiResult<CaptionTracksResponse> {
+    Ok(Json(e.caption_tracks(r).await?))
+}
+
+/// Save one exact-language track with explicit origin choice. No substitution, translation, or ASR.
+#[utoipa::path(post, path = "/v1/video/captions", operation_id = "readSelectedCaptions", tag = "video",
+    request_body = CaptionReadRequest, responses((status = 200, description = "Saved caption document and cache state.", body = ReadResponse), HttpErrors))]
+async fn captions(State(e): State<Engine>, ApiJson(r): ApiJson<CaptionReadRequest>) -> ApiResult<ReadResponse> {
+    Ok(Json(e.captions(r).await?))
 }
 
 /// Retrieve DOI bibliography data or cite a saved arXiv paper without another network read.

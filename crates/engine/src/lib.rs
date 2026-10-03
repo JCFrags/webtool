@@ -31,6 +31,7 @@ pub struct Engine {
     archive:archive::ArchiveService,
     code:code::CodeService,
     scholarly:scholarly::ScholarlyService,
+    media_service:media::MediaService,
     operation_slots:Arc<Semaphore>,
     submission_lock:Arc<Mutex<()>>,
     network:Arc<Semaphore>,parse_slots:Arc<Semaphore>,browser_slots:Arc<Semaphore>,
@@ -47,7 +48,8 @@ impl Engine {
         let archive=archive::ArchiveService::new(&config)?;
         let code=code::CodeService::new(&config)?;
         let scholarly=scholarly::ScholarlyService::new(&config)?;
-        Ok(Self {store,client,search,archive,code,scholarly,operation_slots:Arc::new(Semaphore::new(config.network_concurrency + config.parse_concurrency)),submission_lock:Arc::new(Mutex::new(())),network:Arc::new(Semaphore::new(config.network_concurrency)),
+        let media_service=media::MediaService::new(&config);
+        Ok(Self {store,client,search,archive,code,scholarly,media_service,operation_slots:Arc::new(Semaphore::new(config.network_concurrency + config.parse_concurrency)),submission_lock:Arc::new(Mutex::new(())),network:Arc::new(Semaphore::new(config.network_concurrency)),
             parse_slots:Arc::new(Semaphore::new(config.parse_concurrency)),browser_slots:Arc::new(Semaphore::new(config.browser_concurrency)),
             job_slots:Arc::new(Semaphore::new(config.job_concurrency)),config:Arc::new(config),
             locks:Arc::new(Mutex::new(HashMap::new())),job_tokens:Arc::new(Mutex::new(HashMap::new())),
@@ -70,14 +72,17 @@ impl Engine {
         ]}
     }
     pub async fn read(&self,request:ReadRequest)->Result<ReadResponse>{
+        self.read_with_caption_choice(request,CaptionChoice::ProvidedFirst).await
+    }
+    async fn read_with_caption_choice(&self,request:ReadRequest,choice:CaptionChoice)->Result<ReadResponse>{
         // One budget includes queueing, HTTP, parsing, and at most one browser attempt.
         let seconds=self.config.request_timeout_seconds.saturating_add(self.config.helper_timeout_seconds);
         let deadline=tokio::time::Instant::now().checked_add(std::time::Duration::from_secs(seconds))
             .context("read deadline is out of range")?;
-        tokio::time::timeout_at(deadline,self.read_inner(request,deadline)).await
+        tokio::time::timeout_at(deadline,self.read_inner(request,deadline,choice)).await
             .map_err(|_|anyhow!("read_timeout: operation exceeded its {seconds}-second overall deadline"))?
     }
-    async fn read_inner(&self,request:ReadRequest,deadline:tokio::time::Instant)->Result<ReadResponse>{
+    async fn read_inner(&self,request:ReadRequest,deadline:tokio::time::Instant,choice:CaptionChoice)->Result<ReadResponse>{
         let _operation=self.operation_slots.acquire().await?;
         let url=fetch::validated_url(&request.url)?;
         if let Some(name)=&request.library{self.store.require_library(name).await?;}
@@ -89,9 +94,12 @@ impl Engine {
             bail!("unsupported captions request: use a YouTube watch/youtu.be URL without a CSS selector");
         }
         if caption_url.is_some() { media::validate_language(&request.language)?; }
-        let key=hex::encode(Sha256::digest(serde_json::to_vec(&json!({"url":caption_url.as_deref().unwrap_or(url.as_str()),"renderer":request.renderer,
-            "language":request.language,"media_parser":media::PARSER,"source_resolver":sources::VERSION,"arxiv_resolver":arxiv::VERSION,"selector":request.selector,"version":EXTRACTION_VERSION,"document_config":self.config.document_config,
-            "html_parser":readers::html::PARSER,"html_decoded_limit":self.config.max_bytes,"auto_recovery":read_recovery::VERSION,"browser_capture":fetch::BROWSER_CAPTURE_VERSION,"lightpanda_path":self.config.lightpanda_path,"browser_wait_ms":self.config.browser_wait_ms,"crw":self.config.crw_renderer}))?));
+        let mut cache_identity=json!({"url":caption_url.as_deref().unwrap_or(url.as_str()),"renderer":request.renderer,
+            // Keep non-caption cache identities unchanged when the caption parser advances.
+            "language":request.language,"media_parser":if caption_url.is_some(){media::PARSER}else{"yt-dlp+native-captions/2"},"source_resolver":sources::VERSION,"arxiv_resolver":arxiv::VERSION,"selector":request.selector,"version":EXTRACTION_VERSION,"document_config":self.config.document_config,
+            "html_parser":readers::html::PARSER,"html_decoded_limit":self.config.max_bytes,"auto_recovery":read_recovery::VERSION,"browser_capture":fetch::BROWSER_CAPTURE_VERSION,"lightpanda_path":self.config.lightpanda_path,"browser_wait_ms":self.config.browser_wait_ms,"crw":self.config.crw_renderer});
+        if caption_url.is_some() && choice!=CaptionChoice::ProvidedFirst { cache_identity["caption_choice"]=json!(choice); }
+        let key=hex::encode(Sha256::digest(serde_json::to_vec(&cache_identity)?));
         let lock={
             let mut locks=self.locks.lock().await;
             locks.retain(|_,v|v.strong_count()>0);
@@ -130,8 +138,7 @@ impl Engine {
             return Ok(ReadResponse{document,cached:false});
         }
         if let Some(canonical)=caption_url {
-            let _slot=self.parse_slots.acquire().await?;
-            let (parsed,bytes,mime)=media::read(&canonical,&request.language,&self.config).await?;
+            let (parsed,bytes,mime)=self.media_service.read(&canonical,&request.language,choice).await?;
             let original=self.store.put_bytes(&bytes,&mime,"caption_track").await?;
             let source=Source{requested:request.url,resolved:canonical,retrieved_at:Utc::now().to_rfc3339(),status:None,version:None,original};
             let document=self.finish(parsed,source,vec![]).await?;
@@ -306,6 +313,11 @@ impl Engine {
         let mut identity=json!({"source":source.requested,"hash":source.original.sha256,
             "version":source.version,"parser":parsed.parser,"extraction":EXTRACTION_VERSION,"blocks":parsed.blocks,"configuration":self.config.document_config});
         if let Some(encoding)=parsed.metadata.get("html_encoding"){identity["html_encoding"]=encoding.clone();}
+        // Identical supplied bytes can belong to different language/origin tracks.
+        // Keep those provenance snapshots distinct without changing old saved records.
+        if parsed.parser==media::PARSER {
+            identity["caption_track"]=json!({"language":parsed.metadata["language"],"origin":parsed.metadata["track_origin"],"format":parsed.metadata["track_format"]});
+        }
         let id=hex::encode(Sha256::digest(serde_json::to_vec(&identity)?));
         let document=Document{schema_version:1,id,title:parsed.title,source,parser:parsed.parser,extraction_version:EXTRACTION_VERSION.into(),
             blocks:parsed.blocks,links:parsed.links,metadata:parsed.metadata,warnings};
@@ -327,6 +339,16 @@ impl Engine {
     }
     pub async fn media(&self,url:String,language:String,library:Option<String>)->Result<Document>{
         Ok(self.read(ReadRequest{url,language,library,renderer:Renderer::Captions,refresh:false,selector:None,actor:None}).await?.document)
+    }
+    pub async fn video_search(&self,request:VideoSearchRequest)->Result<VideoSearchResponse>{
+        self.media_service.search(request).await
+    }
+    pub async fn caption_tracks(&self,request:CaptionTracksRequest)->Result<CaptionTracksResponse>{
+        self.media_service.tracks(request).await
+    }
+    pub async fn captions(&self,request:CaptionReadRequest)->Result<ReadResponse>{
+        self.read_with_caption_choice(ReadRequest{url:request.url,language:request.language,library:request.library,renderer:Renderer::Captions,
+            refresh:request.refresh,selector:None,actor:None},request.choice).await
     }
     pub async fn search(&self,request:SearchRequest)->Result<SearchResponse>{
         let start=Instant::now();

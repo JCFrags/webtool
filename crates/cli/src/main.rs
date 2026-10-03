@@ -25,6 +25,10 @@ impl From<Browser> for Renderer{fn from(v:Browser)->Self{match v{Browser::Auto=>
 #[derive(Clone,Copy,ValueEnum)]enum Kind{Tables,Links,Code,Images,Metadata,Outline,JsonPointer,Css}
 impl From<Kind> for ExtractKind{fn from(v:Kind)->Self{match v{Kind::Tables=>Self::Tables,Kind::Links=>Self::Links,Kind::Code=>Self::Code,Kind::Images=>Self::Images,Kind::Metadata=>Self::Metadata,Kind::Outline=>Self::Outline,Kind::JsonPointer=>Self::JsonPointer,Kind::Css=>Self::Css}}}
 #[derive(Clone,Copy,ValueEnum)]enum ExportKind{Markdown,Json,Original,TableCsv}
+#[derive(Clone,Copy,ValueEnum)]enum CaptionSelection{ProvidedFirst,Provided,Automatic}
+impl From<CaptionSelection> for CaptionChoice{fn from(value:CaptionSelection)->Self{match value{
+    CaptionSelection::ProvidedFirst=>Self::ProvidedFirst,CaptionSelection::Provided=>Self::Provided,CaptionSelection::Automatic=>Self::Automatic,
+}}}
 
 #[derive(Subcommand)]
 enum Command{
@@ -85,12 +89,24 @@ enum Command{
         #[arg(long,requires="resume")]max_pages:Option<usize>},
     /// Retrieve existing captions through yt-dlp. No video download or transcription.
     Media{url:String,#[arg(long,default_value="en")]language:String,#[arg(long)]library:Option<String>},
+    /// Search flat video metadata, list caption tracks, or save an explicitly selected track.
+    Video{#[command(subcommand)]action:VideoCommand},
     /// Cite a saved arXiv paper offline, or retrieve a DOI citation.
     Cite{#[arg(value_name="DOI_OR_DOCUMENT_ID")]doi:String,#[arg(long="as",default_value="bibtex",value_parser=["bibtex","ris","csl"])]style:String},
     /// Export a saved document. Existing files require --force.
     Export{document:String,#[arg(long,value_enum,default_value="markdown")]kind:ExportKind,#[arg(long,default_value_t=1)]table:usize,#[arg(short,long)]output:PathBuf,#[arg(long)]force:bool},
     /// Read URLs from a UTF-8 file or stdin. Emit one result per line with --format jsonl.
     Batch{file:PathBuf,#[arg(long)]library:Option<String>},
+}
+#[derive(Subcommand)]enum VideoCommand{
+    /// Search supplied metadata without fetching each video. Quote the literal query.
+    Search{query:String,#[arg(long,default_value_t=5)]limit:usize},
+    /// List untranslated VTT tracks without signed URLs. No caption download.
+    Tracks{url:String},
+    /// Save one exact-language track. Provided-first is the existing default.
+    Captions{url:String,#[arg(long,default_value="en")]language:String,
+        #[arg(long,value_enum,default_value="provided-first")]choice:CaptionSelection,
+        #[arg(long)]refresh:bool,#[arg(long)]library:Option<String>},
 }
 #[derive(Subcommand)]enum ConfigCommand{Show}
 #[derive(Subcommand)]enum ArchiveCommand{
@@ -355,6 +371,41 @@ async fn run(cli:Cli)->Result<()>{
                 }else{for job in &jobs{warnings(&job.warnings,true);}output(&jobs,format)}}
         },
         Command::Media{url,language,library}=>{let d:Document=client.post("/v1/media",&json!({"url":url,"language":language,"library":library})).await?;document(&d,format,false,false)},
+        Command::Video{action}=>match action{
+            VideoCommand::Search{query,limit}=>{
+                let response:VideoSearchResponse=client.post("/v1/video/search",&VideoSearchRequest{query,limit}).await?;
+                warnings(&response.warnings,true);
+                if human(format){
+                    stdout(&render::terminal_safe(&format!("Provider: {} | flat discovery metadata, not transcript evidence\n",response.provider)))?;
+                    for result in &response.results{
+                        let video=&result.video;
+                        stdout(&render::terminal_safe(&format!("{}. {}\n   {}\n   Channel: {} | Duration seconds: {} | Views: {}\n\n",
+                            result.provider_rank,video.title.as_deref().unwrap_or("(title unavailable)"),video.url,
+                            video.channel.as_deref().unwrap_or("unavailable"),video.duration_seconds.map(|n|n.to_string()).unwrap_or_else(||"unavailable".into()),
+                            video.view_count.map(|n|n.to_string()).unwrap_or_else(||"unavailable".into()))))?;
+                    }
+                    if response.results.is_empty(){stdout("No video results returned.\n")?;}
+                    Ok(())
+                }else{output(&response,format)}
+            },
+            VideoCommand::Tracks{url}=>{
+                let response:CaptionTracksResponse=client.post("/v1/video/tracks",&CaptionTracksRequest{url}).await?;
+                warnings(&response.warnings,true);
+                if human(format){
+                    stdout(&render::terminal_safe(&format!("{}\n{}\n",response.video.title.as_deref().unwrap_or("(title unavailable)"),response.video.url)))?;
+                    for track in &response.tracks{
+                        stdout(&render::terminal_safe(&format!("{} | {} | {} | {}\n",track.language,track.origin.as_str(),track.format,track.name.as_deref().unwrap_or("(name unavailable)"))))?;
+                    }
+                    if response.tracks.is_empty(){stdout("No selectable untranslated VTT tracks.\n")?;}
+                    Ok(())
+                }else{output(&response,format)}
+            },
+            VideoCommand::Captions{url,language,choice,refresh,library}=>{
+                let response:ReadResponse=client.post("/v1/video/captions",&CaptionReadRequest{url,language,choice:choice.into(),refresh,library}).await?;
+                if response.cached{eprintln!("Using saved extraction. Pass --refresh to retrieve again.");}
+                document(&response.document,format,false,false)
+            },
+        },
         Command::Cite{doi,style}=>{let v:Value=client.post("/v1/cite",&json!({"doi":doi,"format":style})).await?;
             if matches!(format,Output::Text|Output::Markdown){stdout(&format!("{}\n",render::terminal_safe(v["text"].as_str().context("citation response has no text")?)))}else{output(&v,format)}},
         Command::Export{document:source,kind,table,output:path,force}=>{
