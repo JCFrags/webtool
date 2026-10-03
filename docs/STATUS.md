@@ -3,7 +3,47 @@
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 
-## Live reading quality, September 13, 2026
+## Research core source acceptance, October 3, 2026
+
+The approved Rust-centered core is implemented and locally accepted with bounded
+evidence. Runtime source `d93882b2c78dfc9d1d10e0ec5590d76a930f5122` passed the normal
+locked CLI/server build, workspace tests, and documents/crw feature checks. The
+workspace checks covered 6 CLI, 81 engine unit, 13 workflow, 8 protocol, 2 server
+unit, and 8 API tests. `cargo fmt` was unavailable, not passed. Compile checks do
+not establish browser runtime compatibility.
+
+The core adds bounded search/HTML decoding, generated HTTP/OpenAPI and stdio MCP,
+ordered batches, pinned code/docs navigation, scholarly metadata and permitted
+PMC JATS, explicit dated archive reads, durable crawl resume/sitemaps, and bounded
+video discovery/captions plus optional single-media jobs. Originals, saved IDs,
+source rights, incomplete coverage, and unavailable states remain explicit. The
+small extraction comparison retained the existing Rust HTML and Xberg paths. It
+does not establish general fidelity or performance superiority.
+
+Actual private MCP/HTTP/CLI use exposed 18 object-root tools and 43 HTTP paths
+with 46 operation IDs. The latest no-network synthetic media check verified
+default-disabled refusal without helper calls, an unchanged saved video artifact,
+exact native-audio export, and explicit cancellation without a late result. All
+private processes were reaped and listeners closed. Earlier domain proofs remain
+source-specific evidence, not repeated campaigns. See [MCP.md](MCP.md),
+[MEDIA-JOBS.md](MEDIA-JOBS.md), and the focused domain documents.
+
+Live yt-dlp transfers, production media allocations, strict aggregate disk-quota
+enforcement, general paper/layout fidelity, OCR, and fastCRW runtime use remain
+unverified. Optional indexes were exercised with synthetic responses, not real
+account credentials. Europe PMC and arbitrary historical paper selection are
+not implemented. No LLM worker or model call has started.
+
+The user approved updating and merging [PR #24](https://github.com/JCFrags/webtool/pull/24)
+through its normal checks, then activating the accepted core locally. This source
+acceptance section does not claim remote integration or installed activation.
+Verify remote `main`, installed receipts, the running build, and ordinary use
+separately. Preserve a consistent schema-1 database, original objects, binaries,
+and receipts before schema-2 activation. Rollback restores the prior database,
+never lowers `user_version`. Media downloads stay disabled without separate
+permission and allocations. The published alpha assets remain unchanged.
+
+## Historical live reading quality, September 13, 2026
 
 The user requested continued live testing and correction. This is ongoing product
 work, not a declaration that website coverage or reading quality is complete.
@@ -740,7 +780,7 @@ PR #18 squash-merged at its authorized unchanged head with green CI and
   Supplemental-table labels remain. Code is never wrapped or line-prefixed.
 - `cargo build --locked -p webtool-cli` passed. Existing unused-anyhow warning remains.
   The only local release build/install was scripts/install-local.sh --client-only,
-  which passed in 13.42s. Installed /home/mainpc/.local/bin/webtool matches the release
+  which passed in 13.42s. Installed ~/.local/bin/webtool matches the release
   output and its valid updated installation receipt.
 - Inspected library items for install-shared: title shared.txt, full saved ID, upload
   URL, original retrieval timestamp and warning count. README has a short actual
@@ -785,7 +825,7 @@ The installed CLI contains source checkpoint fa2a68c09a01b03eb7108a64ca28c2f3c61
 later documentation-only commits do not require another installation.
 
 ```sh
-CLI=/home/mainpc/.local/bin/webtool
+CLI="$HOME/.local/bin/webtool"
 ID=04f9b1ba3433f1c3203cacc1bbb7d51ff0213686dfb1112cfe6e416c85eadded
 "$CLI" library items install-shared
 "$CLI" jobs 71debce3-5c1f-4dcc-85d6-2d6b69e0ed8f
@@ -818,7 +858,7 @@ Main merge: 1d5924b. Issue #15 closed. No release or tag was published.
   connection-refused error, selected endpoint and explicit no-server-start message.
 - Normal locked debug build passed. One locked optimized build through
   `./scripts/install-local.sh` passed in 1m54s and installed both binaries into
-  /home/mainpc/.local/bin. Existing unused-import warnings remain. No suite,
+  ~/.local/bin. Existing unused-import warnings remain. No suite,
   benchmark, source re-fetch, optional build or installation matrix was run.
 - Installer client-only branch selects only webtool-cli; source-inspected, not
   separately built as a second installation matrix. CLI has no engine dependency
@@ -856,7 +896,7 @@ behavior were not changed or re-fetched. Prior milestone evidence follows below.
 
 ### Installed commands and artifacts
 
-Binaries: /home/mainpc/.local/bin/webtool and /home/mainpc/.local/bin/webtoold.
+Binaries: ~/.local/bin/webtool and ~/.local/bin/webtoold.
 Checksum receipts: sibling .webtool.install-sha256 and .webtoold.install-sha256.
 Proof inputs/JSON/exports/configs/log are under ignored runtime/install-proof/.
 The working server remains on loopback. Its PID is in runtime/webtoold.pid.
@@ -865,9 +905,9 @@ Start only after confirming no existing copy is running:
 
 ```sh
 cd /tmp
-/home/mainpc/.local/bin/webtoold \
-  --config /home/mainpc/Projects/webtool/runtime/media-config.toml \
-  --data-dir /home/mainpc/Projects/webtool/data
+"$HOME/.local/bin/webtoold" \
+  --config /path/to/webtool/runtime/media-config.toml \
+  --data-dir /path/to/webtool/data
 ```
 
 The following commands describe the completed proof; do not repeat successful
@@ -875,8 +915,8 @@ library creation or uploads merely to reproduce this report:
 
 ```sh
 cd /tmp
-CLI=/home/mainpc/.local/bin/webtool
-PROOF=/home/mainpc/Projects/webtool/runtime/install-proof
+CLI="$HOME/.local/bin/webtool"
+PROOF=/path/to/webtool/runtime/install-proof
 unset WEBTOOL_SERVER
 export XDG_CONFIG_HOME="$PROOF/client-a"
 "$CLI" connect http://127.0.0.1:8420
@@ -975,14 +1015,14 @@ version markup and fails if that contract changes. No fallback is attempted.
 Server remains http://127.0.0.1:8420. Startup, only when no other copy is listening:
 
 ```sh
-cd /home/mainpc/Projects/webtool
+cd /path/to/webtool
 ./target/debug/webtoold --config runtime/media-config.toml
 ```
 
 The papers library and outputs already exist. Successful steps were not repeated:
 
 ```sh
-cd /home/mainpc/Projects/webtool
+cd /path/to/webtool
 export PATH="$PWD/target/debug:$PATH"
 webtool --format json read https://arxiv.org/abs/cond-mat/0207270v1 --library papers --refresh >runtime/arxiv-paper.json
 DOC_ID=$(python3 -c 'import json;print(json.load(open("runtime/arxiv-paper.json"))["id"])')
@@ -1062,7 +1102,7 @@ are separate: a crash between them can leave a library item absent from job IDs.
 Server remains http://127.0.0.1:8420. Do not start a second copy:
 
 ```sh
-cd /home/mainpc/Projects/webtool
+cd /path/to/webtool
 ./target/debug/webtoold --config runtime/media-config.toml
 ```
 
@@ -1128,7 +1168,7 @@ python3 runtime/crawl-site.py
 In another terminal (the verified library crawl-proof already exists):
 
 ```sh
-cd /home/mainpc/Projects/webtool
+cd /path/to/webtool
 export PATH="$PWD/target/debug:$PATH"
 export WEBTOOL_SERVER=http://127.0.0.1:8420
 # Create this only for a fresh reproduction:
@@ -1157,7 +1197,7 @@ unchanged head, green build, and --match-head-commit. Main fast-forwarded to
 
 ### Helper and interface
 
-Reused /home/mainpc/.local/bin/lightpanda. `version` returned 0.3.6. Release:
+Reused ~/.local/bin/lightpanda. `version` returned 0.3.6. Release:
 https://github.com/lightpanda-io/browser/releases/tag/0.3.6 (release ID 359777982).
 Installed SHA-256 matched the official Linux x86_64 release asset:
 `e438c0ad44e0f6916c14cf13beb003512c60438d8fd200738d2e596e73f652d6`.
@@ -1232,7 +1272,7 @@ lightpanda_path line. Do not replace the config or delete stored documents.
 Server startup (leave existing listener alone until a guarded restart is needed):
 
 ```sh
-cd /home/mainpc/Projects/webtool
+cd /path/to/webtool
 cargo build --locked -p webtool-cli -p webtool-server
 ./target/debug/webtoold --config runtime/media-config.toml
 ```
@@ -1270,7 +1310,7 @@ python3 -m http.server 8768 --bind 127.0.0.1 --directory runtime/lightpanda-site
 In another terminal, using the existing library javascript:
 
 ```sh
-cd /home/mainpc/Projects/webtool
+cd /path/to/webtool
 export PATH="$PWD/target/debug:$PATH"
 export WEBTOOL_SERVER=http://127.0.0.1:8420
 webtool --format json read http://127.0.0.1:8768/index.html --renderer http --refresh >runtime/lightpanda-http.json
@@ -1337,7 +1377,7 @@ and directory-target links without changing retained source text.
 Server remains at http://127.0.0.1:8420. Startup (do not start another copy):
 
 ```sh
-cd /home/mainpc/Projects/webtool
+cd /path/to/webtool
 cargo build --locked -p webtool-cli -p webtool-server
 ./target/debug/webtoold --config runtime/media-config.toml
 ```
@@ -1345,7 +1385,7 @@ cargo build --locked -p webtool-cli -p webtool-server
 Reproduction uses existing library github and replaces only temporary exports:
 
 ```sh
-cd /home/mainpc/Projects/webtool
+cd /path/to/webtool
 export PATH="$PWD/target/debug:$PATH"
 export WEBTOOL_SERVER=http://127.0.0.1:8420
 webtool --format json read https://github.com/JCFrags/webtool/tree/main/crates/engine/src --refresh >runtime/github-directory.json
@@ -1418,20 +1458,20 @@ from the installed official package, including subtitle header propagation.
 uv tool install 'yt-dlp[default]' --index-url https://pypi.org/simple
 yt-dlp --version
 node --version
-cd /home/mainpc/Projects/webtool
+cd /path/to/webtool
 cargo build --locked -p webtool-cli -p webtool-server
 # Already running; do not start a second server:
 ./target/debug/webtoold --config runtime/media-config.toml
 ```
 
 Ignored runtime/media-config.toml copies config.example.toml and sets
-`ytdlp_path = "/home/mainpc/.local/bin/yt-dlp"` and
+`ytdlp_path` to the installed ~/.local/bin/yt-dlp and
 `ytdlp_js_runtime = "node:/usr/bin/node"`. PID/log remain runtime/webtoold.pid
 and runtime/webtoold.log; address http://127.0.0.1:8420. Only this project's old
 server was stopped, after checking its executable path.
 
 ```sh
-cd /home/mainpc/Projects/webtool
+cd /path/to/webtool
 export PATH="$PWD/target/debug:$PATH"
 export WEBTOOL_SERVER=http://127.0.0.1:8420
 webtool doctor
@@ -1452,7 +1492,7 @@ current server configuration is recorded above.
 
 ## Milestone 3: usable PDF reading
 
-Verified September 10, 2026 UTC. Checkout `/home/mainpc/Projects/webtool`, branch
+Verified September 10, 2026 UTC. Local webtool checkout, branch
 `feat/pdf-reading`; issue #5, PR #6 (not merged). PR #4 was squash-merged with
 `--match-head-commit 7558b25529e9130697a72d144624784d9579f715` after checking its
 head and successful build. Local main fast-forwarded to `de4ad69`, and issue #3
@@ -1530,7 +1570,7 @@ PID/log: runtime/webtoold.pid and runtime/webtoold.log. No data was deleted.
 Startup (do not start a second copy while it is running):
 
 ```sh
-cd /home/mainpc/Projects/webtool
+cd /path/to/webtool
 ./target/debug/webtoold --config config.example.toml
 ```
 
@@ -1538,7 +1578,7 @@ The commands below reuse ignored runtime/ and explicitly replace named temporary
 exports. The URL read uses refresh; local ingest always parses.
 
 ```sh
-cd /home/mainpc/Projects/webtool
+cd /path/to/webtool
 export PATH="$PWD/target/debug:$PATH"
 export WEBTOOL_SERVER=http://127.0.0.1:8420
 mkdir -p runtime
@@ -1566,7 +1606,7 @@ is superseded by this section.
 
 ## Milestone 2: selected HTML source fidelity
 
-Verified September 10, 2026 UTC. Checkout `/home/mainpc/Projects/webtool`, branch
+Verified September 10, 2026 UTC. Local webtool checkout, branch
 `fix/html-source-fidelity`; issue #3 and PR #4. Bootstrap PR #2 was squash-merged
 with `--match-head-commit a2db698e9761e9c1b0e1bb8869d858bf8d9a6cca` after checking
 its unchanged head and successful build. Main advanced to
@@ -1627,7 +1667,7 @@ The updated server remains running at http://127.0.0.1:8420 using the existing
 Startup after stopping the existing server, if needed:
 
 ```sh
-cd /home/mainpc/Projects/webtool
+cd /path/to/webtool
 cargo build --locked -p webtool-cli -p webtool-server
 ./target/debug/webtoold --config config.example.toml
 ```
@@ -1635,7 +1675,7 @@ cargo build --locked -p webtool-cli -p webtool-server
 In another terminal, create the single temporary example (not a fixture corpus):
 
 ```sh
-cd /home/mainpc/Projects/webtool
+cd /path/to/webtool
 mkdir -p runtime
 cat >runtime/html-fidelity.html <<'HTML'
 <!doctype html>
@@ -1717,13 +1757,13 @@ Axum's handler-future lifetime requirements; concurrency remains bounded at four
 
 ### Local operation
 
-Checkout: `/home/mainpc/Projects/webtool`, branch `feat/bootstrap-running-cli`.
+Checkout branch: `feat/bootstrap-running-cli`.
 The server is left running on loopback only. Data lives in ignored `data/`;
 logs, PID, and smoke outputs live in ignored `runtime/`.
 One server process per data directory. Do not start a second while it is running.
 
 ```sh
-cd /home/mainpc/Projects/webtool
+cd /path/to/webtool
 cargo build --locked -p webtool-cli -p webtool-server
 mkdir -p runtime
 nohup ./target/debug/webtoold --config config.example.toml >runtime/webtoold.log 2>&1 </dev/null &

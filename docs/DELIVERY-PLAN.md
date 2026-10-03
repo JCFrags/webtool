@@ -109,9 +109,15 @@ Keep task work in focused branches/worktrees. Screen exact outgoing source,
 commit metadata, and reports before publication. Follow the normal pull-request
 checks. Verify remote integration and installed activation separately.
 
-The existing read-quality PR #24 remains unmerged until its preserved restriction
-is explicitly lifted. Do not bypass that boundary through another pull request.
+On October 3, 2026, the user explicitly lifted the PR #24 merge restriction and
+approved updating that PR through its normal checks, then activating the accepted
+core locally. Use the existing PR. Do not bypass checks or branch protections.
 Preserve published alpha assets, current data/configuration, historical snapshots,
-and rollback binaries. Paid commitments, account/credential use, remote exposure,
-large model preparation, and media-source permissions retain their approval gates.
-Continue independent safe work when one of these gates blocks a dependent step.
+and rollback binaries. Before schema-2 activation, retain a consistent prior
+database and its original objects. Schema-1 rollback restores that database,
+never lowers `user_version`. Keep media downloads disabled without separately
+approved source/access permission and operator allocations. Paid commitments,
+account/credential use, remote exposure, large model preparation, and media-source
+permissions retain their approval gates. Optional LLM work remains last, after
+accepted remote/local core delivery. Continue independent safe work when one of
+these gates blocks a dependent step.

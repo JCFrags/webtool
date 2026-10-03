@@ -16,9 +16,12 @@ source-access and availability conditions. This is not general legal clearance.
 The approved [delivery plan](docs/DELIVERY-PLAN.md) expands the Rust-centered core:
 web search/reading, app connectors, code and scholarly research, durable crawls,
 historical sources, and bounded media work. Optional configurable cloud/local LLM
-answers are the final milestone, after the core works. These are delivery goals,
-not claims that every feature is implemented. See the [roadmap](docs/ROADMAP.md)
-and [verified status](docs/STATUS.md). PR #24 remains unmerged.
+answers are the final milestone, after accepted remote/local core delivery.
+The core source is implemented and locally accepted with the limits below.
+The user approved normal checked delivery through [PR #24](https://github.com/JCFrags/webtool/pull/24)
+and activation of the accepted core. This README is not proof of current service
+health or installation. See the [roadmap](docs/ROADMAP.md) and
+[verified status](docs/STATUS.md).
 
 [Search ad exclusion](docs/SEARCH.md) remains unchanged. Recognized paid and
 sponsored results are excluded before ranking and output. This does not guarantee
@@ -30,7 +33,8 @@ Historical installation evidence includes read improvements and the search-ad
 filter from clean build `c9ad49b6ecbbd9afde300cf24f335f8ccf2b9800`. That installed
 reader passed the disclosure/overlay diagnostic and FDA article check through HTTP.
 The earlier DuckDuckGo/Brave and paid/organic checks remain historical evidence.
-The PR is not merged. These changes are separate from the published alpha.
+That historical installation is separate from the published alpha and the new
+research core.
 See STATUS for exact proof and remaining limits.
 
 The normal server now includes native PDF text reading through pinned Xberg.
@@ -40,9 +44,11 @@ tables also passed the preceding bounded milestone. This is not a full V1 releas
 
 One short YouTube video also passed English caption read/find/export through yt-dlp.
 Lightpanda 0.3.6 passed local JavaScript and public quote-page capture.
-OCR, Office formats, Chromium, fastCRW, and Docker remain unverified. No model
-downloads or full Rust tests were run. See [STATUS.md](docs/STATUS.md) for exact
-commands, evidence, and limits. Historical archive logs are not current results.
+OCR, Office formats, Chromium, fastCRW runtime use, and Docker remain unverified.
+The integrated core passed the existing workspace tests and documents/crw compile
+checks. `cargo fmt` was unavailable. No model download or LLM call occurred.
+See [STATUS.md](docs/STATUS.md) for evidence and limits. Historical archive logs
+are not current results.
 
 ## What is implemented in source
 
@@ -56,15 +62,26 @@ commands, evidence, and limits. Historical archive logs are not current results.
 | Local search | SQLite FTS5 keyword search, literal matching, optional regex matching |
 | Extraction | Tables, code, links, images, metadata, outlines, CSS selections, JSON pointers |
 | Imports | Files and stdin uploaded from the client, including native text, structured data, feed, caption, and notebook readers |
-| Crawling | Incremental library attachment and progress, bounded same-origin HTTP jobs, robots, cancellation and restart status |
+| Crawling | Incremental library attachment, bounded same-origin HTTP jobs, durable frontier, explicit resume, bounded sitemap trees, robots and cancellation |
 | Browser helpers | Bounded Auto Lightpanda recovery and explicit DOM capture; Chromium and fastCRW remain unverified |
 | Documents | Default Xberg native PDF text with reported pages and labeled supplemental tables; Office formats unverified |
-| Media | Configured yt-dlp: provided/automatic YouTube captions, exact language selection, timestamped storage and original export; no media download |
+| Code/docs | Revision-pinned repository discovery/maps, selected-file search/read, explicit docs.rs releases, and optional external indexes with coverage limits |
+| Scholarly | arXiv/OpenAlex discovery, Crossref metadata, rights-aware arXiv inspection, and explicit permitted PMC OAI/JATS selection |
+| Archives | Explicit bounded Wayback lookup/read with selected capture identity and replay limits |
+| Media | Bounded yt-dlp discovery and caption selection. Single-video/native-audio jobs require separate permission and finite operator/caller allocations, and default disabled |
 | Bibliography | DOI metadata retrieval as BibTeX, RIS, or CSL JSON |
 | Exports | Markdown, JSON, retained originals, and selected tables as CSV |
 
-The default packages compile; optional integrations remain unverified.
+The default packages compile and the integrated workspace checks passed.
+Actual narrow CLI/HTTP/MCP checks used the same backend. These checks do not prove
+all provider access, source fidelity, or installed activation. Optional indexes
+have synthetic-response evidence only. Live media transfers remain unverified.
 Some integration boundaries are intentionally marked experimental.
+
+Focused workflows and limits: [code/docs](docs/CODE.md),
+[optional indexes](docs/EXTERNAL-CODE.md), [scholarly](docs/SCHOLARLY.md),
+[PMC](docs/PMC.md), [archives](docs/ARCHIVES.md), [crawl](docs/CRAWL.md),
+[video/captions](docs/VIDEO.md), and [media jobs](docs/MEDIA-JOBS.md).
 
 ## Install and connect
 
@@ -156,6 +173,12 @@ cd /tmp
   --config /absolute/path/webtool/runtime/media-config.toml \
   --data-dir /absolute/path/webtool/data
 ```
+
+Before schema-2 activation, retain a consistent prior database, original objects,
+previous binaries, and matching install receipts. Schema-1 binaries refuse schema
+2. Rollback restores the prior database, never lowers `user_version`. Keep media
+downloads disabled without separate permission and operator allocations. See
+[CRAWL.md](docs/CRAWL.md) and [MEDIA-JOBS.md](docs/MEDIA-JOBS.md).
 
 Start only one process for this data directory. The command does not install a
 system service. No systemd, Docker, firewall, TLS, account or automatic-update
@@ -356,7 +379,11 @@ Saved-ID citations are offline preprint references, not substituted journal arti
 BibTeX uses literal-name braces and syntax escaping; CSL uses literal names. Existing
 DOI negotiation remains compatible, including RIS. Saved-paper RIS is unsupported.
 
-Resolver identity is `arxiv-abstract-html/2`. HTTP reads to arXiv hosts share a
+The earlier proof above used `arxiv-abstract-html/2`. Current
+`arxiv-abstract-html/3` additionally requires selected-version full-text license
+evidence before PDF retrieval. Open metadata does not grant source-file reuse.
+See [SCHOLARLY.md](docs/SCHOLARLY.md) for current selection and rights rules.
+HTTP reads to arXiv hosts share a
 process-wide connection gate and three seconds after completion before the next
 request. Coordinate external processes separately. Normal Auto paper reads cache
 for one day; `--refresh` bypasses that document cache. No automatic retry/fallback.
@@ -413,7 +440,9 @@ case. See docs/STATUS.md for exact evidence and export comparison commands.
 | HTML | Selected content, code, tables, image references, and original-element matching when unambiguous |
 | Xberg (default server) | Native PDF text verified on one two-page input. Office, spreadsheet, image, ebook, and email formats are not verified |
 
-Non-UTF-8 HTML and text are rejected rather than silently corrupted.
+HTML uses bounded source-aware decoding and reports assumptions or replacement
+characters. Originals remain exact. XHTML and other text formats retain their
+restricted UTF-8 rules. See [ENCODING.md](docs/ENCODING.md).
 Image-only scans cannot be read without OCR, which is unavailable in the normal build.
 Figure extraction and downloadable figure assets are not complete.
 No formula recalculation, notebook execution, video transcription, or document editing is performed.
@@ -483,9 +512,16 @@ interrupted jobs. Progress stays on stderr; JSON stdout remains machine-readable
 Basic robots directives and per-origin delays are implemented, not full RFC conformance.
 `jobs JOB_ID --cancel` stops pending work without removing saved documents. Ctrl-C
 while waiting only stops the client wait. A running job becomes `interrupted`
-after an unclean server restart; queued jobs are rescheduled. The frontier is not
-persisted for exact continuation. This is not a complete-site archive.
-Map reads one page or sitemap and does not recursively expand sitemap indexes.
+after an unclean server restart. Queued jobs also become interrupted. Startup
+makes no hidden fetch or rescheduling request. The bounded frontier is persisted
+in additive schema 2. Use `jobs JOB_ID --resume` explicitly when pending work and
+attempt budget remain. Completed failures and exclusions are not retried. Old
+jobs have no resumable frontier. This is not a complete-site archive.
+
+Crawl can expand opt-in explicit or robots-advertised sitemap trees under separate
+candidate, attempt, depth, body, and scope limits. Compressed sitemap metadata is
+refused. `map` still reads one page or sitemap without recursive index expansion.
+See [CRAWL.md](docs/CRAWL.md) for charging, interruptions, and schema rollback.
 
 ## PDF reading (normal server)
 
@@ -581,7 +617,9 @@ Explicit `--renderer http` or `--selector` keeps HTML selection; no hidden HTML
 fallback occurs when caption retrieval fails. The existing `media` command also
 uses the caption path. `--language` defaults to `en` and must match a track exactly.
 Provided subtitles are preferred; automatic captions are labeled. No translation,
-transcription, browser cookies, login sessions, proxies, or audio/video downloads.
+transcription, browser cookies, login sessions, or proxies. Separate explicit
+single-media preview/jobs are described in [MEDIA-JOBS.md](docs/MEDIA-JOBS.md).
+They default disabled and do not establish provider access permission.
 
 Install the official PyPI distribution (using an existing uv installation):
 

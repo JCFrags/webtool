@@ -11,10 +11,12 @@ the CLI. Default operations remain LLM-free.
 
 The earlier milestones below retain their evidence and source-fidelity lessons.
 Their narrow implementation freezes are historical, not current limits on the
-newly approved roadmap. PR #24's explicit unmerged restriction, published alpha
-assets, existing data/configuration, snapshots, and rollback assets remain
-preserved. New source changes are not installed or accepted merely because they
-appear in this plan. Verify actual service health separately from old status notes.
+newly approved roadmap. On October 3, 2026, the user approved normal checked
+delivery through PR #24 and activation of the accepted core. Preserve published
+alpha assets, existing data/configuration, snapshots, and rollback assets. Keep
+media permission/allocation and optional LLM gates separate. New source changes
+are not installed or accepted merely because they appear in this plan. Verify
+actual service health separately from old status notes.
 
 ## Preserved baseline: live reading quality
 

@@ -22,10 +22,13 @@ for cloud or local use. Do not implement or invoke this worker before the core.
 
 The earlier read-quality freezes below describe historical milestones, not a ban
 on the newly approved roadmap. Their source-fidelity and preservation rules still
-apply. Keep PR #24 unmerged until the user explicitly changes that restriction.
-Do not bypass it through another PR. Preserve published alpha assets, the current
-installation, data, configuration, historical snapshots, and rollback files until
-an approved verified replacement is ready. Use task-owned worktrees and isolated
+apply. On October 3, 2026, the user explicitly approved updating and merging
+PR #24 through its normal checks, then activating the accepted core locally.
+Use the existing PR, not a bypass PR. Verify remote `main` and actual installed
+use separately. Earlier unmerged/no-publication instructions below are historical.
+Preserve published alpha assets, the current installation, data, configuration,
+historical snapshots, and rollback files until an approved verified replacement
+is ready. Use task-owned worktrees and isolated
 diagnostic services/data. Paid commitments, credentials, non-loopback exposure,
 large model preparation, and permitted media sources remain separate gates.
 
