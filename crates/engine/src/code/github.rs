@@ -16,7 +16,14 @@ pub(super) fn next_page(response: &Response, current: &GitHubPage) -> Result<Opt
         let target = fields[0].strip_prefix('<').and_then(|v| v.strip_suffix('>')).ok_or(CodeError::Identity)?;
         let target = Url::parse(target).map_err(|_| CodeError::Identity)?;
         let original = Url::parse(&response.observation.url).map_err(|_| CodeError::Identity)?;
-        if target.scheme() != "https" || target.host_str() != Some("api.github.com") || target.path() != original.path() ||
+        let original_parts: Vec<_> = original.path_segments().into_iter().flatten().collect();
+        let target_parts: Vec<_> = target.path_segments().into_iter().flatten().collect();
+        // GitHub's documented Link header can use /repositories/ID instead of
+        // /repos/OWNER/REPO. Consume only the page number, never the supplied URL.
+        let canonical = original_parts.len() >= 4 && original_parts[0] == "repos" && target_parts.len() >= 3 &&
+            target_parts[0] == "repositories" && target_parts[1].parse::<u64>().is_ok_and(|id| id > 0) &&
+            target_parts[2..] == original_parts[3..];
+        if target.scheme() != "https" || target.host_str() != Some("api.github.com") || !(target.path() == original.path() || canonical) ||
             !target.username().is_empty() || target.password().is_some() || target.port().is_some() || target.fragment().is_some() {
             return Err(CodeError::Identity.into());
         }
@@ -116,7 +123,7 @@ impl Engine {
                 parsed.push(Content::Paragraph { text: string(item, key)?.into() }, Locator::JsonPointer { pointer: format!("/{index}/{key}") });
                 parsed.links.push(Link { url: expected, text: string(item, key)?.into() });
             }
-            parsed.metadata = json!({"github_list":{"request":request,"next_page":next,"coverage":budget.coverage},"rights":rights()});
+            parsed.metadata = json!({"github_list":{"request":request,"next_page":next,"pagination_link_header":response.pagination,"coverage":budget.coverage},"rights":rights()});
             parsed.warnings = budget.coverage.warnings.clone();
             let document = save(self, parsed, &response, response.observation.url.clone()).await?;
             Ok(GitHubListResponse { document_id: document.id, repository: request.repository, kind: request.kind, observed_at: document.source.retrieved_at,
@@ -177,7 +184,7 @@ impl Engine {
                             body(&mut parsed, &value, &format!("/{index}/body"))?;
                         }
                         parsed.metadata = json!({"github_comments":{"parent_document_id":document.id,"repository":request.repository,"number":request.number,
-                            "pagination":page,"next_page":next},"rights":rights()});
+                            "pagination":page,"next_page":next,"pagination_link_header":response.pagination},"rights":rights()});
                         parsed.warnings.push(Warning::new("github_comment_scope", "Conversation comments are a separate mutable snapshot. They are not PR review comments, reviews, timeline events, or a transaction-consistent parent/comment view."));
                         comments = Some(save(self, parsed, &response, response.observation.url.clone()).await?);
                     },
@@ -211,5 +218,12 @@ mod tests {
         assert_eq!(parsed.warnings[0].code, "github_body_null");
         assert_eq!(parsed.warnings[1].code, "github_body_missing");
         assert!(validate_page(&GitHubPage { page: 0, limit: 5 }).is_err());
+        let mut response = Response { bytes: vec![], location: None,
+            pagination: Some("<https://api.github.com/repositories/123/issues?per_page=5&page=2>; rel=\"next\"".into()),
+            observation: CodeObservation { url: "https://api.github.com/repos/example/repo/issues?per_page=5&page=1".into(), status: 200,
+                artifact: Artifact { sha256: "a".repeat(64), media_type: "application/json".into(), size: 0, role: "github_api_response".into() }, rate_remaining: None, rate_reset_unix: None } };
+        assert_eq!(next_page(&response, &GitHubPage::default()).unwrap(), Some(2));
+        response.pagination = Some("<https://unrelated.example/repositories/123/issues?page=2>; rel=\"next\"".into());
+        assert!(next_page(&response, &GitHubPage::default()).is_err());
     }
 }
