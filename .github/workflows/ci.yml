@@ -4,9 +4,38 @@ permissions:
   contents: read
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    env:
+      CARGO_BUILD_JOBS: 2
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends pkg-config clang cmake libssl-dev
       - run: cargo build --locked -p webtool-cli -p webtool-server
+      - name: Check Linux delivery scripts
+        run: |
+          bash -n scripts/install-local.sh scripts/package-local.sh
+          python3 -m py_compile scripts/package.py scripts/smoke_cli.py
+      - name: Exercise isolated Linux onboarding
+        run: python3 scripts/smoke_cli.py --lifetime 120 --close-reserve 20
+  oci:
+    # The release source build is deliberate, not a second build on every small PR.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Linux amd64 source image
+        run: docker build --build-arg SOURCE_REVISION="$GITHUB_SHA" -t webtool:ci .
+      - name: Copy the actual container client for loopback use
+        run: |
+          mkdir -p "$RUNNER_TEMP/webtool-bin"
+          docker create --name webtool-ci-copy webtool:ci
+          docker cp webtool-ci-copy:/usr/local/bin/webtool "$RUNNER_TEMP/webtool-bin/webtool"
+          docker rm webtool-ci-copy
+      - name: Exercise nonroot OCI storage and restart
+        run: |
+          python3 scripts/smoke_cli.py --bin-dir "$RUNNER_TEMP/webtool-bin" \
+            --container-engine docker --container-image webtool:ci \
+            --lifetime 150 --close-reserve 25

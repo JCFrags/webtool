@@ -1,6 +1,7 @@
 # Third-party materials and publication blockers
 
-These are local alpha candidates, not cleared distribution artifacts. The original
+These are private Linux candidates, not cleared distribution artifacts. The
+published historical alpha is separate and remains unchanged. The original
 project LICENSE notice is unchanged. COPYING supplies complete AGPL v3 terms.
 This inventory is not legal clearance.
 
@@ -19,7 +20,8 @@ text, not approval of a package's complete provenance.
 
 ## Bounded remediation status
 
-Candidate-2's actual inventory observes 492 packages. simd_helpers,
+The historical alpha Candidate-2 inventory observed 492 packages. This is not a
+fixed count for later candidates. Use their actual compiler-artifact inventory. simd_helpers,
 profiling-procmacros and zune-inflate were not observed in that build. The role
 classifications below and in concern records describe dependency relationships,
 not proof of linkage. Their recovered notices remain in the project-source archive;
@@ -79,4 +81,8 @@ the deployed version as described there.
 
 PUBLICATION-BLOCKERS.txt is generated from unresolved concern records and actual
 missing term files. Other release proof or publication blockers can still apply.
-No Lightpanda, yt-dlp, Node, models or downloaded papers are shipped.
+No Lightpanda, yt-dlp, Node, models or downloaded papers are shipped. OCI source
+builds use this same observed-build collection. Debian/base-image and OS-package
+source and notice obligations are additional to the Rust inventory. A local
+zero-gap inventory does not establish public source availability for an unpushed
+revision or authorize image distribution. See docs/RELEASING.md.
