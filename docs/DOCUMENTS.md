@@ -118,6 +118,11 @@ and native PDF inputs and a hash manifest. The bounded checks cover:
 - `fidelity.html`: selected styles, source math, image reference, caption, code,
   zero/empty cells, article qualification, and excluded page chrome.
 
+The CommonMark fixture intentionally has two trailing spaces for a hard break
+and retained code whitespace. Do not remove those source bytes to satisfy a
+whitespace check. Check other files normally and allow end-of-line whitespace
+only for that fixture.
+
 These inputs are not a broad Office/PDF corpus or a universal layout test.
 Image-only scans need separately prepared OCR backends and models. No OCR/model
 readiness, scanned tables, general multicolumn accuracy, arbitrary Office files,

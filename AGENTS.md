@@ -373,11 +373,13 @@ need explicit list boundaries or labels because Markdown engines can renumber th
 HTML uses one bounded decoded view for gates, extraction, links, and saved CSS
 replay. See [ENCODING.md](docs/ENCODING.md) for BOM/HTTP/meta precedence, decoded
 limits, replacement warnings, and exact original retention. XHTML and captured
-DOM remain explicitly UTF-8-only. Current HTML identity is main-content/10 plus
-html-encoding/1, CSS is source-blocks/7, and recovery is /2. Earlier identities
-above describe preserved snapshots. Markdown parsing implements a limited block
-reader, not full CommonMark. General image, table-nesting, mathematical, and
-inline-style fidelity remain incomplete. This is not general quality validation.
+DOM remain explicitly UTF-8-only. Current source uses HTML main-content/11 plus
+html-encoding/1, CSS source-blocks/8, and recovery /2. Earlier identities above
+describe preserved snapshots. Markdown uses pinned CommonMark parsing and exact
+source slices for complete, unchanged groups. Selected styles and image references
+remain source-bound. General image layout, table nesting, mathematical, and
+ambiguous style mappings remain incomplete. See [DOCUMENTS.md](docs/DOCUMENTS.md).
+The bounded fixtures do not establish general quality or installed activation.
 
 Text and Markdown share saved table cell values. Text grids support multiline
 ASCII cells and horizontal spans within 88 columns; uncertain widths or row spans
@@ -397,16 +399,19 @@ values or whole unselected subtrees. Inspect a saved original without a network
 refresh. A block-range JSON read still includes the document link list; project
 only the blocks when bounded output is needed.
 
-The Xberg adapter preserves upstream page text as paragraphs and keeps table
-matrices accessible via extract. Parser revision is source-blocks/2. Default
-output is plain, quality rewriting is disabled, and OCR is disabled when absent.
+The Xberg adapter uses source-blocks/3. Default output is plain, quality rewriting
+is disabled, and OCR is disabled when absent. Supplied DOCX structures, PPTX notes,
+and XLSX grids have a small authored-fixture proof. Internal OOXML relationships
+and numbering corroborate source facts without another extractor or external
+fetch. Missing or ambiguous structures retain text with warnings. PDF keeps native
+page order and uses supplied bounding boxes only for unique complete text matches.
+Native tables remain heuristic supplements and can misidentify aligned prose.
 Metadata retains the first upstream document and the full output envelope.
-It does not expose downloadable figures or fine-grained document elements.
-Table supplements may repeat page text and are explicitly labeled in rendering.
-Do not remove the supplemental_table_blocks metadata used for these labels.
-One two-page native-text PDF is verified; Office, scans, and real PDF tables are
-not. Empty extraction fails; empty pages in partial documents produce warnings.
-OCR, layout, and equation recognition require actual model fixtures and accuracy tests.
+Downloadable figures, fine-grained universal mapping, scans, real PDF table
+accuracy, and general Office layouts remain unverified or unsupported. Do not
+remove supplemental_table_blocks used to label repeated table text. Empty
+extraction fails. Empty pages in partial documents produce warnings. See
+[DOCUMENTS.md](docs/DOCUMENTS.md) for exact format scope and model prerequisites.
 
 Lightpanda 0.3.6 is verified with the official release digest. Its path is in
 runtime/media-config.toml, alongside unchanged yt-dlp settings. Telemetry is disabled.
@@ -469,7 +474,10 @@ slash boundary when ambiguous. Traverse at most 16 path components through pinne
 Git trees; do not follow symlinks/submodules or replace native errors with HTML.
 Directories retain API JSON, derived locations, and explicit scope/truncation
 warnings. README link supplements are limited, not a full CommonMark parser.
-Issues, PRs, releases, and complete-repository ingestion remain unimplemented.
+Ordinary URL routing of issues, PRs, and releases remains unsupported. Explicit
+public object list/body/comment operations, admitted-map comparison, and lexical
+declaration/context navigation use the separate [code interface](docs/CODE.md).
+Complete-repository ingestion remains unimplemented.
 The earlier arxiv-abstract-html/2 native resolver used official abstract-page
 HTML only. The same cond-mat/0207270v1 paper passed four-page PDF reading,
 body find, original-byte comparison and offline saved-ID BibTeX/CSL. A local probe
@@ -549,9 +557,10 @@ local diagnostic verification do not establish installed activation.
 ## Remaining source fidelity
 
 Continue from reproduced live failures, not an assumed completed product. Image
-layout tables, source-currency metadata, inline emphasis/code styles, and ambiguous
-mappings still need work. Do not turn these into a Markdown parser rewrite or an
-optional-integration validation campaign without a concrete need.
+layout tables, source-currency metadata, and ambiguous inline-style mappings still
+need work. The source-bound style and CommonMark changes do not establish universal
+fidelity. Do not expand parsing or optional-integration validation without a
+concrete need and the required approval.
 
 ## Boundaries not to expand
 
