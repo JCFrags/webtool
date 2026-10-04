@@ -1,12 +1,25 @@
 services:
   webtool:
-    build: .
-    # Local-only by default. Publish to a trusted LAN deliberately, not the public internet.
+    image: webtool:local
+    build:
+      context: .
+      args:
+        SOURCE_REVISION: "${WEBTOOL_SOURCE_REVISION:-unknown}"
+    # No authentication. Keep host loopback and the default NAT bridge.
     ports:
       - "127.0.0.1:8420:8420"
     volumes:
       - webtool-data:/data
+      - ./config.example.toml:/etc/webtool/server.toml:ro,Z
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     init: true
-    restart: unless-stopped
+    stop_grace_period: 30s
+    restart: "no"
 volumes:
   webtool-data:

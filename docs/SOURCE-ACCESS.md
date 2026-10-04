@@ -1,8 +1,11 @@
-# Source access for this alpha candidate
+# Source access for this Linux candidate
 
 This notice accompanies both binaries and the project source archive. It is an
 access description, not a promise to produce source later or legal clearance.
 Check PUBLICATION-BLOCKERS.txt for unresolved items before distribution.
+A private unpushed source revision does not have working public GitHub downloads.
+The accompanying source archive supplies private validation inputs, not a public
+source offer. Verify access at the actual distribution point before publication.
 
 ## Exact project and dependency sources
 
@@ -56,8 +59,10 @@ as needed. To use a prepopulated Cargo cache, add --offline. Default features
 are required; do not add all-features. No helper or model download is needed.
 Run the binaries directly, or copy the desired executable into a user-owned bin
 directory without overwriting an unrelated file. Configure hosts as ALPHA notes
-explain. The local packaging script requires a clean Git checkout, but compilation
-and manual installation from this source archive do not. Without Git the server
+explain. The candidate assembly script requires a clean Git checkout. Compilation and the
+user-owned source installer work without Git. `migrations/` is a required build
+input and stays in the source archive. Binary archives also include a checksum-
+verified `install.sh` that needs no Cargo and preserves ownership receipts. Without Git the server
 reports its build commit as unknown; BUILD-INFO.json still identifies the supplied
 source. Do not edit generated files to make a newly built binary claim this SHA.
 
@@ -82,3 +87,15 @@ for later modifications. A private local check does not establish a public offer
 MPL section 3.2 likewise requires reasonable, timely Covered Source access at no
 more than distribution cost and preservation of source notices. No distribution
 or public server deployment has been performed by this packaging operation.
+
+## OCI source builds
+
+A source-built OCI image retains this notice, the observed-build inventory,
+project terms and an allowlisted project source archive under
+`/usr/share/doc/webtool`. Its context excludes `.git`, so no-Git compiler provenance
+remains unknown. The supplied revision label and source-file checksum receipt
+identify the actual inputs and must match the source offered to recipients.
+Do not distribute an unknown or unverified revision as an exact-source candidate.
+The Rust inventory does not replace Debian/base-image and OS-package source or
+notice obligations. Those packages remain separate and retain their OS notices.
+See DOCKER.md and RELEASING.md for the private build and publication boundary.

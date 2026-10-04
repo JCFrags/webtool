@@ -13,15 +13,19 @@ Its tags and assets remain unchanged. See [alpha notes](docs/ALPHA.md),
 and [artifact evidence](docs/STATUS.md). Distribution requires the documented
 source-access and availability conditions. This is not general legal clearance.
 
-The approved [delivery plan](docs/DELIVERY-PLAN.md) expands the Rust-centered core:
-web search/reading, app connectors, code and scholarly research, durable crawls,
-historical sources, and bounded media work. Optional configurable cloud/local LLM
-answers are the final milestone, after accepted remote/local core delivery.
-The core source is implemented and locally accepted with the limits below.
-The user approved normal checked delivery through [PR #24](https://github.com/JCFrags/webtool/pull/24)
-and activation of the accepted core. This README is not proof of current service
-health or installation. See the [roadmap](docs/ROADMAP.md) and
-[verified status](docs/STATUS.md).
+The Rust-centered research core was delivered through
+[PR #24](https://github.com/JCFrags/webtool/pull/24), now merged into `main`.
+Its accepted source is `d961aeb0407607fa3e414b5ebafc08b6c6191fe0`. It includes
+web research, connectors, code and scholarly research, durable crawls, selected
+archives, and bounded media operations, with the limits below.
+
+Sprint 1 now targets software other people can install and use on Linux or in an
+OCI container. [The sprint plan](docs/SPRINTS.md) separates this readiness work
+from the delivered core. Private candidates and worker checks are not acceptance.
+GitHub delivery and Sprint 2 wait for the practical Ketch parity gate. No optional
+LLM worker or model call has started. This README is not proof of current service
+health. See the [delivery plan](docs/DELIVERY-PLAN.md), [roadmap](docs/ROADMAP.md)
+and [dated verification](docs/STATUS.md).
 
 [Search ad exclusion](docs/SEARCH.md) remains unchanged. Recognized paid and
 sponsored results are excluded before ranking and output. This does not guarantee
@@ -44,7 +48,9 @@ tables also passed the preceding bounded milestone. This is not a full V1 releas
 
 One short YouTube video also passed English caption read/find/export through yt-dlp.
 Lightpanda 0.3.6 passed local JavaScript and public quote-page capture.
-OCR, Office formats, Chromium, fastCRW runtime use, and Docker remain unverified.
+OCR, Office formats, Chromium and fastCRW runtime use remain unverified.
+Linux/OCI acceptance is recorded separately. Rootless Podman is not proof that
+Docker Engine ran. Other architectures are not claimed.
 The integrated core passed the existing workspace tests and documents/crw compile
 checks. `cargo fmt` was unavailable. No model download or LLM call occurred.
 See [STATUS.md](docs/STATUS.md) for evidence and limits. Historical archive logs
@@ -85,12 +91,21 @@ Focused workflows and limits: [code/docs](docs/CODE.md),
 
 ## Install and connect
 
-Use a current stable Rust toolchain and the system build tools needed by Cargo.
-Clone this repository, then use the small local installer. It builds optimized
-binaries with the committed lockfile and normal features. It does not use sudo,
-edit shell profiles, manage services or download browsers, media helpers or models.
-Cargo may download locked Rust dependencies. The published alpha is also available
-for its documented Linux/glibc/OpenSSL targets; later source changes are not in those assets.
+Sprint 1 targets Linux x86_64 only. Start with [Linux onboarding](docs/LINUX.md)
+for source or verified archive installation, or [Docker/OCI operation](docs/DOCKER.md)
+for the Bookworm amd64 container. Fedora-built binaries can require glibc 2.43.
+They are not generic Linux downloads. Inspect each candidate's `BUILD-INFO.json`
+for its actual loader, glibc/OpenSSL/GCC requirements. No ARM, musl, macOS or
+Windows release target is claimed.
+
+A source build needs a current stable Rust toolchain, C/C++ build tools,
+pkg-config, CMake and OpenSSL 3 development headers. The installer uses the
+committed lockfile and normal features. It does not use sudo, edit profiles,
+manage services or install helpers/models. Cargo may download locked dependencies.
+Verified archives include the same ownership-receipt installer without Cargo.
+The published historical alpha retains its separate target requirements and does
+not contain later source changes. [Candidate assembly](docs/RELEASING.md) remains
+private until the sprint and publication gates pass.
 
 ### Client machine
 
@@ -100,7 +115,7 @@ cd /path/to/webtool
 # Optional destination: --bin-dir /absolute/user-owned/bin
 export PATH="$HOME/.local/bin:$PATH" # current shell only
 cd /tmp
-webtool connect http://research-server:8420
+webtool connect http://127.0.0.1:8420
 webtool config show
 webtool doctor
 webtool library list
@@ -148,13 +163,14 @@ cd /path/to/webtool
 # Select an absolute config path and the intended absolute data directory.
 # Stop your existing server gracefully before starting its replacement.
 cd /tmp
-/home/USER/.local/bin/webtoold \
+"$HOME/.local/bin/webtoold" \
   --config /absolute/path/server.toml \
   --data-dir /absolute/path/existing-data
 ```
 
-For a new host, copy `config.example.toml` to the selected config path and edit it
-before startup. Keep loopback binding unless trusted-LAN access is intentional.
+For a new host, follow the complete [first-start workflow](docs/LINUX.md#start-a-new-host).
+Copy `config.example.toml` to a new selected config path and edit it before startup.
+Keep loopback binding. A trusted-network deployment is a separate operator decision.
 Configure optional helpers only on the host. Select the existing data directory
 for an existing deployment; do not copy examples into a different empty database.
 The server prints its effective listening address, resolved absolute data directory,
@@ -180,9 +196,11 @@ previous binaries, and matching install receipts. Schema-1 binaries refuse schem
 downloads disabled without separate permission and operator allocations. See
 [CRAWL.md](docs/CRAWL.md) and [MEDIA-JOBS.md](docs/MEDIA-JOBS.md).
 
-Start only one process for this data directory. The command does not install a
-system service. No systemd, Docker, firewall, TLS, account or automatic-update
-management is provided.
+Start only one process for this data directory. The installer does not manage
+system services, firewalls, TLS, accounts or automatic updates. The separate
+[Docker/OCI path](docs/DOCKER.md) retains data in a named volume and publishes
+only host loopback by default. [Backup and rollback](docs/LINUX.md#upgrade-backup-and-rollback)
+keep the compatible database, originals, config, binaries and receipts together.
 
 For explicit trusted-LAN binding, add `--bind 0.0.0.0:8420` to the host command,
 then connect clients to `http://HOST_LAN_ADDRESS:8420`, not `0.0.0.0`. This does not
@@ -671,8 +689,8 @@ Bibliography libraries, citation formatting, and Zotero synchronization remain f
 
 - `scripts/check.sh` compiles and runs the Rust tests when Cargo is available.
 - `scripts/validate_local.py` runs the real SQL migration and package checks using Python's standard library.
-- `.github/workflows/ci.yml` defines one cached, locked default build on pull requests and manual dispatch. Tests and optional checks are manual.
-- `Dockerfile` and `compose.yaml` provide an unbuilt development deployment.
+- `.github/workflows/ci.yml` keeps the cached, locked default build and a bounded Linux onboarding check. Manual dispatch also runs the source-image OCI build and persistence check.
+- `Dockerfile` and `compose.yaml` provide a locked, nonroot Linux source-image path. Host publication defaults to loopback. Actual Engine/architecture checks and source-access limits remain explicit in [Docker operation](docs/DOCKER.md).
 - `AGENTS.md` lists the next implementation and validation tasks.
 
 ```sh

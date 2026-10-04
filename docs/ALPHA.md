@@ -1,8 +1,12 @@
-# webtool 0.1.0-alpha.1 candidate
+# Webtool Linux candidate
 
-An early, usable text CLI and shared research server. This is not a production
-service or a complete V1 release. Candidate archives are for local validation;
-no release has been approved or published.
+An early text CLI and shared research server, not a production service or a
+complete V1 release. `v0.1.0-alpha.1` was published from its historical revision.
+Its assets and tags stay unchanged. Later private candidates can retain the alpha
+version string but have a different exact source SHA in `BUILD-INFO.json`.
+A private candidate is not a new published release or Sprint 1 parity acceptance.
+See [Linux installation](LINUX.md), [Docker operation](DOCKER.md) and the generated
+source-access notice.
 
 ## Unpack and run
 
@@ -16,14 +20,17 @@ Client archive:
 ```sh
 cd webtool-0.1.0-alpha.1-TARGET-client
 ./webtool --version
-./webtool connect http://SERVER:8420
+# Optional user-owned installation, with no Cargo or automatic server start:
+./install.sh --bin-dir "$HOME/.local/bin"
+./webtool connect http://127.0.0.1:8420
 ./webtool config show
 ./webtool doctor
 ./webtool library list
 ```
 
-Replace TARGET with the target triple in the archive name and SERVER with the
-trusted host address. The client requires no browser, document or media helpers.
+Replace TARGET with the target triple in the archive name. Start a host on the
+same loopback endpoint, or deliberately select an operator-restricted trusted
+endpoint. The client requires no browser, document or media helpers.
 `connect` only saves local settings. It does not require an online server.
 Endpoint precedence is --server, WEBTOOL_SERVER, saved settings, then localhost.
 Settings use XDG_CONFIG_HOME/webtool/client.toml or HOME/.config/webtool/client.toml.
@@ -48,10 +55,11 @@ is no authentication or TLS setup; do not expose this service to the public inte
 Only the current native Linux architecture is packaged. Consult BUILD-INFO.json
 for the exact Rust toolchain, target, build commit, build platform, ELF interpreter,
 needed shared-library names and required symbol versions for each binary.
-These binaries are dynamically linked. Both candidate binaries need the reported
-OpenSSL 3, glibc, loader and GCC runtime libraries. The native host requires
-GLIBC_2.43 symbols; the CLI requires GLIBC_2.34 symbols. These are not portable
-binaries for older glibc systems.
+These binaries are dynamically linked. Each candidate binary needs its reported
+OpenSSL, glibc, loader and GCC runtime libraries. The historical Fedora host
+required GLIBC_2.43 and its CLI required GLIBC_2.34. A Bookworm-built candidate
+has a separately measured baseline. Consult this candidate's actual information,
+not those historical values. Do not relabel Fedora binaries as portable Linux.
 Runtime shared-library packages and certificate trust must be supplied by the OS.
 No static-linking, broad Linux portability or reproducible-binary claim is made.
 No other distribution, architecture or physical-machine LAN connection was tested.
@@ -84,8 +92,8 @@ distribution. SOURCE-ACCESS.md gives the exact project revision/download, locked
 dependency URLs/checksums, explicit MPL Covered Source locations and source-build
 instructions. Retain source notices. Cargo.lock alone is not complete source.
 
-The source archive contains an allowlisted exact project Git snapshot, Cargo.lock,
-build/install/package scripts and license materials. Dependency source URLs and
+The source archive contains allowlisted exact project files, Cargo.lock,
+required migrations, build/install/package scripts and license materials. Dependency source URLs and
 checksums are recorded in THIRD-PARTY.json, including build-only dependencies.
 Dependency sources are available separately at the exact public registry URLs.
 Their archived bytes and extracted build inputs are checked against Cargo.lock
@@ -93,14 +101,15 @@ before the build. Raw dependency archives are not bundled because they can inclu
 excluded test-only models. See SOURCE-ACCESS.md for the source-access set, required
 equivalent copying access and the distributor's continuing availability duty.
 The archive omits private working state and development history documents.
-BUILD-INFO.json identifies the actual build checkpoint; later documentation-only
-commits need not change the binaries.
+BUILD-INFO.json identifies the actual build checkpoint. Candidate assembly refuses
+source-revision or input changes when reusing recorded binaries.
 
 Build the unpacked project outside any Git checkout with the recorded Rust
 and native development tools, using `cargo build --locked --release
 -p webtool-cli -p webtool-server`. No .git directory is required. Without Git,
 the rebuilt server reports an unknown commit; do not manufacture provenance.
-No second source build or offline restoration proof is claimed.
+A practical source-archive check is not a claim of reproducible binary identity or
+full offline restoration. See the actual candidate receipts for what was exercised.
 
 For AGPL section 6(d) distribution, provide clear directions beside the binaries
 to equivalent no-additional-charge copying access for the exact project and
