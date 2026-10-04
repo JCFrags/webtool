@@ -184,6 +184,13 @@ and offset. Continuation reads the saved ID, not the provider operation again.
 Operation context such as coverage, content-state counts, or a requested full-text
 failure is returned with the first passage. Keep it. Saved document JSON contains
 retained source metadata, but it does not recreate an ephemeral request failure.
+Saved code operations return their evidence label, coverage, and related saved
+IDs under `structuredContent.operation_context`, not at the structured result
+root. The direct `webtool_code` context action returns these fields at the root.
+Its passage offsets are relative to the selected context. Continue through the
+same context action with unchanged `map_id`, `file_id`, `line`, `before`, and
+`after`. Set `offset` to the exact `next_offset`. Do not use `webtool_document`.
+
 Code search, archive lookup, video discovery, and track inventory have no
 refetching continuation. If their complete result exceeds the result cap, reduce
 the supported request budget or use HTTP. The adapter does not silently truncate.
