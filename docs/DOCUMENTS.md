@@ -19,6 +19,8 @@ webtool export SAVED_ID --kind original --output original.bin
 `ingest --name` accepts a filename, not a URL or path. An upload has no public URL
 base for relative links. Original export takes a file path. `--output -` does not
 mean stdout. Select `--force` only when replacement of an existing file is intended.
+For CLI reads and ingestion, `--format json` emits a document object. HTTP
+`POST /v1/read` returns a response with a `document` member.
 
 ## Markdown
 
