@@ -8,6 +8,8 @@ use crate::{contract::HttpErrors, error::ApiJson, ApiResult};
 pub(crate) fn router() -> OpenApiRouter<Engine> {
     OpenApiRouter::new().routes(routes!(discover)).routes(routes!(map))
         .routes(routes!(search)).routes(routes!(file)).routes(routes!(documentation))
+        .routes(routes!(github_list)).routes(routes!(github_read))
+        .routes(routes!(compare)).routes(routes!(context))
 }
 
 /// One unauthenticated GitHub repository-search page. Descriptions are not code evidence.
@@ -43,4 +45,25 @@ async fn file(State(e): State<Engine>, ApiJson(r): ApiJson<CodeFileRequest>) -> 
     request_body = DocumentationRequest, responses((status = 200, description = "Release-identified document with retained HTML and provenance.", body = DocumentationResponse), HttpErrors))]
 async fn documentation(State(e): State<Engine>, ApiJson(r): ApiJson<DocumentationRequest>) -> ApiResult<DocumentationResponse> {
     Ok(Json(e.documentation(r).await?))
+}
+
+#[utoipa::path(post, path = "/v1/code/github/list", operation_id = "listGitHubObjects", tag = "code",
+    request_body = GitHubListRequest, responses((status = 200, description = "One public issue/PR/release discovery page with explicit next-page metadata.", body = GitHubListResponse), HttpErrors))]
+async fn github_list(State(e): State<Engine>, ApiJson(r): ApiJson<GitHubListRequest>) -> ApiResult<GitHubListResponse> {
+    Ok(Json(e.github_list(r).await?))
+}
+#[utoipa::path(post, path = "/v1/code/github/read", operation_id = "readGitHubObject", tag = "code",
+    request_body = GitHubReadRequest, responses((status = 200, description = "Retained public object body and optional separately retained conversation comment page.", body = GitHubReadResponse), HttpErrors))]
+async fn github_read(State(e): State<Engine>, ApiJson(r): ApiJson<GitHubReadRequest>) -> ApiResult<GitHubReadResponse> {
+    Ok(Json(e.github_read(r).await?))
+}
+#[utoipa::path(post, path = "/v1/code/compare", operation_id = "compareRepositoryMaps", tag = "code",
+    request_body = CodeCompareRequest, responses((status = 200, description = "Offline admitted-map changes and optional bounded SHA-pinned provider patch snapshot.", body = CodeCompareResponse), HttpErrors))]
+async fn compare(State(e): State<Engine>, ApiJson(r): ApiJson<CodeCompareRequest>) -> ApiResult<CodeCompareResponse> {
+    Ok(Json(e.code_compare(r).await?))
+}
+#[utoipa::path(post, path = "/v1/code/context", operation_id = "readRepositoryContext", tag = "code",
+    request_body = CodeContextRequest, responses((status = 200, description = "Exact saved-file lines and byte range verified against the selected map. No network.", body = CodeContextResponse), HttpErrors))]
+async fn context(State(e): State<Engine>, ApiJson(r): ApiJson<CodeContextRequest>) -> ApiResult<CodeContextResponse> {
+    Ok(Json(e.code_context(r).await?))
 }
