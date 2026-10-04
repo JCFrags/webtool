@@ -376,8 +376,8 @@ need explicit list boundaries or labels because Markdown engines can renumber th
 HTML uses one bounded decoded view for gates, extraction, links, and saved CSS
 replay. See [ENCODING.md](docs/ENCODING.md) for BOM/HTTP/meta precedence, decoded
 limits, replacement warnings, and exact original retention. XHTML and captured
-DOM remain explicitly UTF-8-only. Current source uses HTML main-content/11 plus
-html-encoding/1, CSS source-blocks/8, and recovery /2. Earlier identities above
+DOM remain explicitly UTF-8-only. Current source uses HTML main-content/12 plus
+html-encoding/1, CSS source-blocks/9, and recovery /2. Earlier identities above
 describe preserved snapshots. Markdown uses pinned CommonMark parsing and exact
 source slices for complete, unchanged groups. Selected styles and image references
 remain source-bound. General image layout, table nesting, mathematical, and
