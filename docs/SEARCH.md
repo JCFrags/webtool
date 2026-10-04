@@ -38,7 +38,11 @@ Each `[search.providers.NAME]` table can set:
 Only names in `search_engines` are called. Missing provider tables and fields use
 the defaults above. Zero `interval_ms` explicitly disables pacing. A provider does
 not hold global request capacity while it waits for its interval. A canceled waiter
-does not reserve a future start. No retries or backoff requests occur.
+does not reserve a future start. The application has no retry or backoff loop.
+The JSON client explicitly disables transport retries. The pinned HTML-client
+builder still permits reqwest's default retries for protocol negative
+acknowledgments, so an exact single-wire-request guarantee does not apply to
+HTML search.
 
 Global deadlines accept 100–60000 ms. Provider budgets accept 100–20000 ms, within
 the pinned client's 20-second socket ceiling. Global concurrency accepts 1–16 and
@@ -215,9 +219,10 @@ Warnings distinguish these outcomes without changing the response schema:
 
 Warnings name the provider and remain in configured order. Errors omit request
 URLs, queries, credentials, raw provider bodies, and JSON field values. No outcome
-causes an unfiltered fallback, browser retry, provider rotation, or extra provider
-request. These checks cannot guarantee absolute ad-free
-results or stable access to zero-key HTML interfaces.
+causes an unfiltered fallback, browser retry, provider rotation, or extra
+application-level provider request. The HTML transport-retry limit above still
+applies. These checks cannot guarantee absolute ad-free results or stable access
+to zero-key HTML interfaces.
 
 Use the normal locked build and focused `search::` and `config::tests::search_`
 library checks when changing this boundary. The local-response checks cover a fast
