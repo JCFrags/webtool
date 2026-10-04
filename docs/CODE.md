@@ -167,7 +167,8 @@ These operations use unauthenticated public REST requests only. They do not inhe
 later explicit selection, not automatic pagination. List originals retain native
 JSON, including absent/null values. Displayed titles and metadata are discovery,
 not accepted object bodies. GitHub's issue list includes PR records. Their actual
-kind remains explicit. No filtering/refill request is hidden.
+kind remains explicit. A missing or explicit null `pull_request` field does not
+identify a PR. Native null values remain retained. No filtering/refill request is hidden.
 
 Read selects one issue/PR number or one exact release tag. Its heading and verbatim
 Markdown body have JSON-pointer locators in the exact retained API original.

@@ -44,7 +44,7 @@ fn identity(value: &Value, repository: &str, kind: GitHubKind, number: Option<u6
     if !string(value, "html_url")?.eq_ignore_ascii_case(&expected) { return Err(CodeError::Identity.into()); }
     match kind {
         GitHubKind::Issue => {
-            if value["number"].as_u64() != number || value.get("pull_request").is_some() { return Err(CodeError::Identity.into()); }
+            if value["number"].as_u64() != number || value.get("pull_request").is_some_and(|v| !v.is_null()) { return Err(CodeError::Identity.into()); }
         },
         GitHubKind::PullRequest => {
             if value["number"].as_u64() != number || !value["base"]["repo"]["full_name"].as_str().is_some_and(|v| v.eq_ignore_ascii_case(repository)) ||
@@ -101,7 +101,7 @@ impl Engine {
             parsed.push(Content::Paragraph { text: "Discovery metadata only. Select an object explicitly to read its body.".into() }, Locator::Derived { index: 1 });
             let mut items = Vec::new();
             for (index, item) in native.iter().enumerate() {
-                let kind = if request.kind == GitHubKind::Issue && item.get("pull_request").is_some() { GitHubKind::PullRequest } else { request.kind };
+                let kind = if request.kind == GitHubKind::Issue && item.get("pull_request").is_some_and(|v| !v.is_null()) { GitHubKind::PullRequest } else { request.kind };
                 // Issue-list PR records have no base/head object. Check the exact public identity without treating them as fetched PR details.
                 let expected = display_url(&request.repository, kind, item["number"].as_u64(), item["tag_name"].as_str())?;
                 if !string(item, "html_url")?.eq_ignore_ascii_case(&expected) { return Err(CodeError::Identity.into()); }
@@ -202,7 +202,7 @@ mod tests {
     use super::*;
     #[test]
     fn object_identity_and_missing_body_are_explicit() {
-        let issue = json!({"id":1,"number":23,"html_url":"https://github.com/example/repo/issues/23","title":"Issue","body":null});
+        let issue = json!({"id":1,"number":23,"html_url":"https://github.com/example/repo/issues/23","title":"Issue","body":null,"pull_request":null});
         assert!(identity(&issue, "example/repo", GitHubKind::Issue, Some(23), None).is_ok());
         assert!(identity(&issue, "example/repo", GitHubKind::Issue, Some(24), None).is_err());
         let mut parsed = Parsed::new("test", "test");
