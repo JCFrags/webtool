@@ -184,17 +184,12 @@ impl Engine {
         if fetched.role=="rendered_dom" {
             if let Some(decoded)=&decoded{filename=readers::html::rendered_base(&decoded.text,&fetched.resolved);}
         }
-        // Explicit HTTP and CSS reads do not use gate or shell evidence. Avoid
-        // an unused DOM parse and visible-text walk for those requests.
-        let inspect_content=(auto_web||fetched.role=="rendered_dom")&&request.selector.is_none();
-        let mut evidence=if inspect_content{decoded.as_ref().map(|d|read_recovery::inspect(&d.text)).unwrap_or_default()}
-            else{read_recovery::Evidence::default()};
+        let mut evidence=read_content_evidence(decoded.as_ref().map(|d|d.text.as_str()),auto_web,
+            fetched.role=="rendered_dom",request.selector.as_deref());
         let decoding_errors=decoded.as_ref().is_some_and(|d|d.had_errors);
         let http_encoding=decoded.as_ref().map(|d|d.metadata.clone());
         let encoding_warnings=decoded.as_ref().map(|d|d.warnings.clone()).unwrap_or_default();
-        if inspect_content{
-            if let Some(reason)=evidence.blocked{bail!(ErrorKind::ReadContentBlocked.context(format!("read_content_blocked: source is a {reason}; not accepted as article content")));}
-        }
+        if let Some(reason)=evidence.blocked{bail!(ErrorKind::ReadContentBlocked.context(format!("read_content_blocked: source is a {reason}; not accepted as article content")));}
         let readme_links=github.as_ref().filter(|g|g.readme).map(|g|sources::readme_links(&fetched.bytes,g));
         let mut parsed=if let Some(details)=github.as_ref().filter(|g|g.directory) {
             sources::directory(&fetched.bytes,details)
@@ -436,6 +431,35 @@ impl Engine {
             data.extend_from_slice(&part);
         }
         Ok(json!({"doi":doi,"format":format,"source":url.as_str(),"text":std::str::from_utf8(&data).context(ErrorKind::ParseInvalid.error())?}))
+    }
+}
+
+fn read_content_evidence(source:Option<&str>,auto_web:bool,rendered_dom:bool,selector:Option<&str>)->read_recovery::Evidence{
+    // Explicit HTTP, native-source, and CSS reads do not use gate or shell
+    // evidence. Keep all enforced Auto and rendered-content checks unchanged.
+    if (auto_web||rendered_dom)&&selector.is_none(){source.map(read_recovery::inspect).unwrap_or_default()}
+    else{read_recovery::Evidence::default()}
+}
+
+#[cfg(test)]
+#[test]
+fn read_content_inspection_covers_auto_rendered_and_css_modes(){
+    let blocked="<html><head><title>Access denied</title></head><body><p>Denied.</p></body></html>";
+    let shell="<html><body><div id='root'></div><script>app();</script></body></html>";
+    // Neither flag: explicit HTTP or native-source reads. Auto HTTP and captured
+    // DOM each retain inspection. Every explicit selector bypasses inspection.
+    for (auto_web,rendered_dom,eligible) in [(false,false,false),(true,false,true),(false,true,true),(true,true,true)]{
+        for selector in [None,Some("main"),Some("")]{
+            let inspect=eligible&&selector.is_none();
+            let gate=read_content_evidence(Some(blocked),auto_web,rendered_dom,selector);
+            assert_eq!(gate.blocked,inspect.then_some("access-denied page"),"gate: auto={auto_web}, dom={rendered_dom}, selector={selector:?}");
+            assert!(gate.shell.is_none());
+            let app=read_content_evidence(Some(shell),auto_web,rendered_dom,selector);
+            assert_eq!(app.shell,inspect.then_some("empty application container with script/loading signals"),"shell: auto={auto_web}, dom={rendered_dom}, selector={selector:?}");
+            assert!(app.blocked.is_none());
+            let missing=read_content_evidence(None,auto_web,rendered_dom,selector);
+            assert!(missing.blocked.is_none()&&missing.shell.is_none());
+        }
     }
 }
 
