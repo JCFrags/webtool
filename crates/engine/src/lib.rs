@@ -184,11 +184,15 @@ impl Engine {
         if fetched.role=="rendered_dom" {
             if let Some(decoded)=&decoded{filename=readers::html::rendered_base(&decoded.text,&fetched.resolved);}
         }
-        let mut evidence=decoded.as_ref().map(|d|read_recovery::inspect(&d.text)).unwrap_or_default();
+        // Explicit HTTP and CSS reads do not use gate or shell evidence. Avoid
+        // an unused DOM parse and visible-text walk for those requests.
+        let inspect_content=(auto_web||fetched.role=="rendered_dom")&&request.selector.is_none();
+        let mut evidence=if inspect_content{decoded.as_ref().map(|d|read_recovery::inspect(&d.text)).unwrap_or_default()}
+            else{read_recovery::Evidence::default()};
         let decoding_errors=decoded.as_ref().is_some_and(|d|d.had_errors);
         let http_encoding=decoded.as_ref().map(|d|d.metadata.clone());
         let encoding_warnings=decoded.as_ref().map(|d|d.warnings.clone()).unwrap_or_default();
-        if (auto_web||fetched.role=="rendered_dom")&&request.selector.is_none(){
+        if inspect_content{
             if let Some(reason)=evidence.blocked{bail!(ErrorKind::ReadContentBlocked.context(format!("read_content_blocked: source is a {reason}; not accepted as article content")));}
         }
         let readme_links=github.as_ref().filter(|g|g.readme).map(|g|sources::readme_links(&fetched.bytes,g));
