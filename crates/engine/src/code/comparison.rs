@@ -100,7 +100,7 @@ impl Engine {
                         budget.coverage.warnings.push(Warning::new("github_comparison_scope", "One exact-SHA comparison page. GitHub supplies changed files only on page one, up to 300. Patches are provider-supplied excerpts, not independently verified complete file bodies. The diff uses GitHub's merge-base semantics, not necessarily a direct base-to-head tree diff."));
                         parsed.metadata = json!({"github_comparison":{"base_map_id":request.base_map_id,"head_map_id":request.head_map_id,
                             "repository":base.repository,"base_commit":base.resolved_commit,"head_commit":head.resolved_commit,
-                            "pagination":request.pagination,"next_page":next,"native":value,"coverage":budget.coverage},"api_observation":response.observation,"rights":{"status":"unknown"}});
+                            "pagination":request.pagination,"next_page":next,"pagination_link_header":response.pagination,"native":value,"coverage":budget.coverage},"api_observation":response.observation,"rights":{"status":"unknown"}});
                         parsed.warnings = budget.coverage.warnings.clone();
                         provider_document = Some(self.finish(parsed, Source { requested: response.observation.url.clone(), resolved: display.to_string(),
                             retrieved_at: Utc::now().to_rfc3339(), status: Some(response.observation.status), version: Some(comparison), original: response.observation.artifact }, vec![]).await?);

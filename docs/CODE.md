@@ -164,7 +164,10 @@ webtool code github release JCFrags/webtool v0.1.0-alpha.1
 These operations use unauthenticated public REST requests only. They do not inherit
 `gh` access, tokens, or accounts. Lists fetch exactly one explicit page of 1 through
 20 native items, with page numbers 1 through 1,000. `next_page` is metadata for a
-later explicit selection, not automatic pagination. List originals retain native
+later explicit selection, not automatic pagination. GitHub can supply numeric
+`/repositories/ID` pagination links. The service retains that header as metadata
+and uses only the next page number, never the supplied URL. A later call rebuilds
+the named-repository endpoint. List originals retain native
 JSON, including absent/null values. Displayed titles and metadata are discovery,
 not accepted object bodies. GitHub's issue list includes PR records. Their actual
 kind remains explicit. A missing or explicit null `pull_request` field does not
