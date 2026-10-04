@@ -131,7 +131,12 @@ impl Reader<'_> {
                     let raw=&self.source[node.range.clone()];
                     let first=raw.lines().next().unwrap_or("").trim_start();
                     let marker=first.chars().next().unwrap_or('`');let count=first.chars().take_while(|c|*c==marker).count();
-                    let closed=raw.lines().skip(1).any(|line|{let line=line.trim();let n=line.chars().take_while(|c|*c==marker).count();n>=count&&line[n..].trim().is_empty()});
+                    // Container prefixes belong to the source, not the parsed code text.
+                    // Inspect only the tail beyond the opening line and all code spans.
+                    let opening_end=node.range.start+raw.find('\n').map_or(raw.len(),|i|i+1);
+                    let content_end=node.children.iter().map(|child|child.range.end).max().unwrap_or(opening_end).max(opening_end);
+                    let tail=self.source.get(content_end..node.range.end).unwrap_or("").trim_end();
+                    let closed=count>=3&&tail.chars().rev().take_while(|c|*c==marker).count()>=count;
                     if !closed {self.parsed.warnings.push(Warning::new("unclosed_fence","The source contains an unclosed code fence."));}
                 }
             },
@@ -247,6 +252,11 @@ mod tests {
         let p=parse("# T\r\n\r\n```rust\r\n  let x = 1;\r\n```\r\n","t.md");
         assert_eq!(p.blocks[1].content.text(),"  let x = 1;\n");
         assert_eq!(p.blocks[1].locator,Locator::Lines{start:3,end:5});
-        assert!(parse("~~~\nbody\n","t").warnings.iter().any(|w|w.code=="unclosed_fence"));
+        for source in ["> 3. item\n>\n>    ```rust\n>      let x = 1;\n>    ```\n", "```\n```", "> > ~~~\n> > code\n> > ~~~~  \n"] {
+            assert!(!parse(source,"t").warnings.iter().any(|w|w.code=="unclosed_fence"),"{source}");
+        }
+        for source in ["~~~\nbody\n", "> ```\n> code\n", "```\n    ```", "```"] {
+            assert!(parse(source,"t").warnings.iter().any(|w|w.code=="unclosed_fence"),"{source}");
+        }
     }
 }
