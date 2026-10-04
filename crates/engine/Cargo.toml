@@ -8,7 +8,7 @@ license.workspace = true
 default = ["web-extraction", "web-search"]
 web-extraction = ["dep:rs-trafilatura"]
 web-search = ["dep:metadata-search-engine-rs"]
-documents = ["dep:xberg"]
+documents = ["dep:xberg", "dep:zip"]
 ocr = ["documents", "xberg/sceptre-ocr-ort", "xberg/layout-detection"]
 crw-browser = ["dep:crw-core", "dep:crw-renderer"]
 
@@ -29,6 +29,10 @@ mime = "0.3"
 regex.workspace = true
 reqwest.workspace = true
 roxmltree.workspace = true
+# Already pinned by Xberg. Use its CommonMark parser without a second converter.
+pulldown-cmark = { version = "=0.13.4", default-features = false }
+# Existing Xberg dependency. Read retained OOXML members, never extract files.
+zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2"], optional = true }
 rusqlite.workspace = true
 scraper.workspace = true
 serde.workspace = true

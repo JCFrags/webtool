@@ -4,6 +4,12 @@ use serde_json::{json, Value};
 use webtool_protocol::{Cell, Content, Locator, Warning};
 use super::Parsed;
 use crate::config::Config;
+#[cfg(feature="documents")]
+#[path="office.rs"]
+mod office;
+#[cfg(feature="documents")]
+#[path="document_structure.rs"]
+mod structure;
 
 pub async fn parse(bytes: &[u8], name: &str, config: &Config) -> Result<Parsed> {
     #[cfg(feature = "documents")]
@@ -19,6 +25,7 @@ pub async fn parse(bytes: &[u8], name: &str, config: &Config) -> Result<Parsed> 
                 }),
                 output_format: xberg::OutputFormat::Plain,
                 enable_quality_processing: false,
+                include_document_structure: true,
                 ..Default::default()
             }
         };
@@ -36,8 +43,18 @@ pub async fn parse(bytes: &[u8], name: &str, config: &Config) -> Result<Parsed> 
         let output = xberg::extract(input, &cfg).await?;
         let errors = serde_json::to_value(&output.errors)?;
         let result = output.results.first().with_context(|| format!("document engine returned no results: {errors}"))?;
-        let mut parsed = normalize(serde_json::to_value(result)?, name)
+        let payload=serde_json::to_value(result)?;
+        let mut parsed = normalize(payload.clone(), name)
             .with_context(|| format!("normalize Xberg output; engine errors: {errors}"))?;
+        let format=super::extension(name);
+        let source=if matches!(format.as_str(),"docx"|"pptx"|"xlsx"){
+            match office::Source::read(bytes,&format,config.max_bytes,&cfg.security_limits.clone().unwrap_or_default()){
+                Ok(source)=>{parsed.warnings.extend(source.warnings.clone());Some(source)},
+                Err(_)=>{parsed.warnings.push(Warning::new("office_source_unavailable","Retained OOXML structure could not be corroborated within the source/XML limits. Numbering, notes, and formula metadata are not inferred."));None}
+            }
+        }else{None};
+        structure::apply(&payload,&format,source.as_ref(),&mut parsed);
+        if let Some(source)=source{parsed.metadata["office_formula_sources"]=json!(source.formulas);}
         // Keep every result and envelope diagnostic, not only the first normalized result.
         parsed.metadata["upstream_output"] = serde_json::to_value(&output)?;
         if errors.as_array().is_some_and(|items| !items.is_empty()) {
@@ -59,7 +76,7 @@ pub async fn parse(bytes: &[u8], name: &str, config: &Config) -> Result<Parsed> 
 fn normalize(payload: Value, name: &str) -> Result<Parsed> {
     let mime = payload.get("mime_type").and_then(Value::as_str).unwrap_or("");
     let title = payload.pointer("/metadata/title").and_then(Value::as_str).unwrap_or(name);
-    let mut parsed = Parsed::new(title, "xberg/1.1.1+source-blocks/2");
+    let mut parsed = Parsed::new(title, "xberg/1.1.1+source-blocks/3");
     let mut had_pages = false;
     if let Some(pages) = payload.get("pages").and_then(Value::as_array) {
         for page in pages {

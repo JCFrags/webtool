@@ -71,7 +71,11 @@ fn md_inline_text(out:&mut String,text:&str,label:bool){
 }
 
 fn markdown_inline<'a>(d:&Document,id:&str,text:&'a str)->Cow<'a,str>{
-    let Some(links)=inline_links(d,id,text) else{return Cow::Borrowed(text);};
+    if let Some(styled)=styled_inline(d,id,text){return Cow::Owned(styled);}
+    let Some(links)=inline_links(d,id,text) else{
+        if d.parser.starts_with("pulldown-cmark/"){let mut out=String::new();md_inline_text(&mut out,text,false);return Cow::Owned(out);}
+        return Cow::Borrowed(text);
+    };
     let mut out=String::new();
     let mut end=0;
     for link in links{
@@ -85,6 +89,95 @@ fn markdown_inline<'a>(d:&Document,id:&str,text:&'a str)->Cow<'a,str>{
     Cow::Owned(out)
 }
 
+// Style ranges must be UTF-8, disjoint or nested. Invalid metadata never changes text.
+fn styled_inline(d:&Document,id:&str,text:&str)->Option<String>{
+    let values=d.metadata.get("inline_styles")?.get(id)?.as_array()?;
+    if values.is_empty(){return None;}
+    let mut spans=Vec::new();
+    for value in values{
+        let start=usize::try_from(value.get("start")?.as_u64()?).ok()?;
+        let end=usize::try_from(value.get("end")?.as_u64()?).ok()?;
+        let kind=value.get("kind")?.as_str()?;
+        if start>=end||text.get(start..end)?.is_empty()||!matches!(kind,"bold"|"italic"|"code"|"strikethrough"|"underline"|"subscript"|"superscript"|"math"){return None;}
+        spans.push((start,end,kind,None));
+    }
+    if let Some(links)=inline_links(d,id,text){for link in links{spans.push((link.start,link.end,"link",Some(link.url)));}}
+    // Equal-range links enclose styles, including atomic code/math payloads.
+    spans.sort_by_key(|(start,end,kind,_)|(*start,std::cmp::Reverse(*end),match *kind{"link"=>0,"code"|"math"=>2,_=>1},*kind));
+    let mut stack=Vec::new();
+    for (start,end,_,_) in &spans{
+        while stack.last().is_some_and(|previous:&usize|*previous<=*start){stack.pop();}
+        if stack.last().is_some_and(|previous|*end>*previous){return None;}
+        stack.push(*end);if stack.len()>64{return None;}
+    }
+    fn render(out:&mut String,text:&str,spans:&[(usize,usize,&str,Option<&str>)],index:&mut usize,start:usize,end:usize){
+        let mut cursor=start;
+        while *index<spans.len()&&spans[*index].0<end{
+            let (a,b,kind,url)=spans[*index];
+            md_inline_text(out,&text[cursor..a],false);*index+=1;
+            if kind=="code"||kind=="math"{
+                if kind=="code"{
+                    let payload=&text[a..b];let fence="`".repeat((payload.split(|c|c!='`').map(str::len).max().unwrap_or(0)+1).max(1));
+                    let pad=(payload.starts_with(['`',' '])||payload.ends_with(['`',' ']))&&!payload.chars().all(|c|c==' ');
+                    out.push_str(&fence);if pad{out.push(' ');}out.push_str(payload);if pad{out.push(' ');}out.push_str(&fence);
+                }else{out.push_str(&text[a..b]);}
+                while *index<spans.len()&&spans[*index].0<b{*index+=1;}
+            }else{
+                let (open,close)=match kind{"bold"=>("**","**"),"italic"=>("*","*"),"strikethrough"=>("~~","~~"),"underline"=>("<u>","</u>"),"subscript"=>("<sub>","</sub>"),"superscript"=>("<sup>","</sup>"),_=>("[","]")};
+                out.push_str(open);render(out,text,spans,index,a,b);out.push_str(close);
+                if let Some(url)=url{out.push_str("(<");out.push_str(&html(url));out.push_str(">)");}
+            }
+            cursor=b;
+        }
+        md_inline_text(out,&text[cursor..end],false);
+    }
+    let mut out=String::new();render(&mut out,text,&spans,&mut 0,0,text.len());Some(out)
+}
+
+struct SourceMarkdown<'a>{end:usize,text:&'a str}
+fn source_markdown(d:&Document)->BTreeMap<usize,SourceMarkdown<'_>>{
+    let mut result=BTreeMap::new();
+    if !d.parser.starts_with("pulldown-cmark/"){return result;}
+    let Some(groups)=d.metadata.get("source_markdown").and_then(|v|v.as_array()) else{return result;};
+    let mut indices=HashMap::new();
+    for (index,block) in d.blocks.iter().enumerate(){indices.entry(block.id.as_str()).and_modify(|value|*value=None).or_insert(Some(index));}
+    let mut previous_end=0;
+    for group in groups{
+        let Some(ids)=group.get("blocks").and_then(|v|v.as_array()) else{continue;};
+        let Some(texts)=group.get("texts").and_then(|v|v.as_array()) else{continue;};
+        let Some(text)=group.get("markdown").and_then(|v|v.as_str()) else{continue;};
+        if ids.is_empty()||ids.len()!=texts.len(){continue;}
+        let Some(start)=ids[0].as_str().and_then(|id|indices.get(id)).copied().flatten() else{continue;};
+        let Some(end)=start.checked_add(ids.len()) else{continue;};
+        let Some(blocks)=d.blocks.get(start..end) else{continue;};
+        if start<previous_end||!blocks.iter().zip(ids.iter().zip(texts)).all(|(block,(id,text))|id.as_str()==Some(&block.id)&&text.as_str()==Some(block.content.text().as_str())){continue;}
+        result.insert(start,SourceMarkdown{end,text});previous_end=end;
+    }
+    result
+}
+fn source_references(d:&Document,out:&mut String){
+    if !d.parser.starts_with("pulldown-cmark/"){return;}
+    if let Some(values)=d.metadata.get("markdown_references").and_then(|v|v.as_array()){
+        for reference in values.iter().filter_map(|v|v.as_str()){
+            if !out.contains(reference){if !out.ends_with("\n\n"){out.push('\n');}out.push_str(reference);out.push_str("\n\n");}
+        }
+    }
+}
+fn quote_depth(d:&Document,id:&str)->usize{
+    d.metadata.get("quote_depth").and_then(|v|v.get(id)).and_then(|v|v.as_u64()).filter(|n|*n<=64).unwrap_or(0) as usize
+}
+fn append_quoted(lists:&mut ListLayout,out:&mut String,body:&str,list:Option<ListPosition>,depth:usize,markdown:bool){
+    let start=out.len();lists.append(out,body,list,markdown);
+    if depth>0{let body=out.split_off(start);let prefix="> ".repeat(depth);for line in body.split_inclusive('\n'){out.push_str(&prefix);out.push_str(line);}}
+}
+
+fn block_role(d:&Document,id:&str)->Option<String>{
+    match d.metadata.get("block_roles")?.get(id)?.as_str()?{
+        "speaker_notes"=>Some("Speaker notes".into()),
+        "footnote"=>Some(d.metadata.get("footnote_labels").and_then(|v|v.get(id)).and_then(|v|v.as_str()).map_or_else(||"Footnote".into(),|label|format!("Footnote [^{label}]"))),
+        "comment"=>Some("Reviewer comment".into()),_=>None,
+    }
+}
 fn plain_actions(d:&Document,block:&crate::Block)->Option<String>{
     let Content::Paragraph{text}=&block.content else{return None;};
     let links=inline_links(d,&block.id,text)?;
@@ -235,16 +328,22 @@ pub fn supplemental_table(d:&Document, id:&str)->bool {
 pub fn markdown(d:&Document)->String{
     let mut out=format!("# {}\n\nSource: {}\nRetrieved: {}\nDocument: {}\n\n",d.title,d.source.resolved,d.source.retrieved_at,d.id);
     let mut lists=ListLayout::new();
+    let source=source_markdown(d);
     let flows=inline_flows(d);
     let mut flow_end=0;
     for (index,block) in d.blocks.iter().enumerate(){
         if index<flow_end{continue;}
         let list=list_position(d,&block.id);
+        if let Some(group)=source.get(&index){
+            lists.append(&mut out,"",None,true);out.push_str(group.text);
+            if !out.ends_with('\n'){out.push('\n');}out.push('\n');flow_end=group.end;continue;
+        }
         if let Some(flow)=flows.get(&index){
             let body=render_inline_flow(d,flow,InlineView::Export);
             lists.append(&mut out,&body,list,true);flow_end=flow.end;continue;
         }
         let start=out.len();
+        if let Some(label)=block_role(d,&block.id){out.push_str(&format!("{label}:\n\n"));}
         if matches!(block.content,Content::Table{..}) && supplemental_table(d,&block.id) {
             out.push_str("Supplemental structured table (may repeat page text):\n\n");
         }
@@ -268,9 +367,10 @@ pub fn markdown(d:&Document)->String{
             Content::Math{text}=>out.push_str(&format!("{text}\n\n")),
             Content::Caption{text}=>out.push_str(&format!("[{}] {}\n\n",location(&block.locator),markdown_inline(d,&block.id,text))),
         }
-        let body=out.split_off(start);lists.append(&mut out,&body,list,true);
+        let body=out.split_off(start);append_quoted(&mut lists,&mut out,&body,list,quote_depth(d,&block.id),true);
     }
     lists.append(&mut out,"",None,true);
+    source_references(d,&mut out);
     if !d.links.is_empty(){out.push_str("## Links\n\n");for l in &d.links{out.push_str(&format!("- {}: {}\n",l.text,l.url));}out.push('\n');}
     if !d.warnings.is_empty(){out.push_str("## Extraction warnings\n\n");for w in &d.warnings{out.push_str(&format!("- {}: {}\n",w.code,w.message));}}
     out
@@ -287,11 +387,17 @@ pub fn markdown_read(d:&Document,details:bool)->String{
     let mut previous_group:Option<String>=None;
     let mut list_open=false;
     let mut lists=ListLayout::new();
+    let source=source_markdown(d);
     let flows=if details{BTreeMap::new()}else{inline_flows(d)};
     let mut flow_end=0;
     for (index,block) in d.blocks.iter().enumerate(){
         if index<flow_end{continue;}
         let list=list_position(d,&block.id);
+        if let Some(group)=source.get(&index){
+            lists.append(&mut out,"",None,true);
+            if details{for b in &d.blocks[index..group.end]{out.push_str(&format!("*{} | {}*\n\n",b.id,location(&b.locator)));}}
+            out.push_str(group.text);if !out.ends_with('\n'){out.push('\n');}out.push('\n');flow_end=group.end;continue;
+        }
         if !details && index==0 && list.is_none() && matches!(&block.content,Content::Heading{text,..} if text.trim()==d.title.trim()&&inline_links(d,&block.id,text).is_none()){continue;}
         let group=source_group(&block.locator);
         if !details && group!=previous_group{
@@ -307,6 +413,7 @@ pub fn markdown_read(d:&Document,details:bool)->String{
         }
         let start=out.len();
         if details{out.push_str(&format!("*{} | {}*\n\n",block.id,location(&block.locator)));}
+        if let Some(label)=block_role(d,&block.id){out.push_str(&format!("{label}:\n\n"));}
         match &block.content{
             Content::Heading{level,text}=>out.push_str(&format!("{} {}\n\n","#".repeat((*level).clamp(1,6) as usize),markdown_inline(d,&block.id,text))),
             Content::Paragraph{text}=>out.push_str(&format!("{}\n\n",markdown_inline(d,&block.id,text))),
@@ -332,9 +439,10 @@ pub fn markdown_read(d:&Document,details:bool)->String{
             Content::Math{text}=>out.push_str(&format!("{}\n\n",display_math(text))),
             Content::Caption{text}=>out.push_str(&format!("[{}] {}\n\n",caption_location(&block.locator),markdown_inline(d,&block.id,text))),
         }
-        let body=out.split_off(start);lists.append(&mut out,&body,list,true);
+        let body=out.split_off(start);append_quoted(&mut lists,&mut out,&body,list,quote_depth(d,&block.id),true);
     }
     if list_open{out.push('\n');}
+    source_references(d,&mut out);
     if details&&!d.links.is_empty(){out.push_str("## Links\n\n");for link in &d.links{out.push_str(&format!("- {}: {}\n",link.text,link.url));}out.push('\n');}
     out
 }
@@ -542,12 +650,13 @@ fn plain_document_block(d:&Document,block:&crate::Block,details:bool,in_list:boo
         Content::ListItem{text,..} if in_list=>Some(format!("{text}\n")),
         _=>plain_actions(d,block).map(|actions|format!("{actions}\n\n")),
     };
-    match body{
+    let body=match body{
         Some(body) if details=>format!("[{} | {}]\n{body}",block.id,location(&block.locator)),
         Some(body)=>body,
         None if details=>plain_block(block,supplemental_table(d,&block.id)),
         None=>clean_plain_block(block,supplemental_table(d,&block.id)),
-    }
+    };
+    block_role(d,&block.id).map_or_else(||body.clone(),|label|format!("{label}:\n{body}"))
 }
 
 pub fn plain(d:&Document)->String{
@@ -570,7 +679,7 @@ pub fn plain(d:&Document)->String{
         let body=if let Some(flow)=flows.get(&index){
             flow_end=flow.end;render_inline_flow(d,flow,InlineView::Plain)
         }else{plain_document_block(d,block,false,list.is_some())};
-        lists.append(&mut out,&body,list,false);
+        append_quoted(&mut lists,&mut out,&body,list,quote_depth(d,&block.id),false);
     }
     if list_open{out.push('\n');}
     terminal_safe(&out)
@@ -584,7 +693,7 @@ pub fn plain_details(d:&Document)->String{
     for block in &d.blocks{
         let list=list_position(d,&block.id);
         let body=plain_document_block(d,block,true,list.is_some());
-        lists.append(&mut out,&body,list,false);
+        append_quoted(&mut lists,&mut out,&body,list,quote_depth(d,&block.id),false);
     }
     lists.append(&mut out,"",None,false);
     if !d.links.is_empty(){out.push_str("Links (individual source positions are not retained):\n");for link in &d.links{out.push_str(&format!("{}: {}\n",link.text,link.url));}}
@@ -782,6 +891,35 @@ pub fn plain_details(d:&Document)->String{
         assert_eq!(inline_views(&sliced),without_flow(&sliced));
         let mut code=d.clone();code.blocks[1].content=Content::Code{language:None,text:math.into()};
         assert_eq!(inline_views(&code),without_flow(&code));
+    }
+
+    #[test]fn styles_preserve_nested_links_and_code_payloads(){
+        let mut d=inline_document(vec![Content::Paragraph{text:"é code` and emphasis".into()}]);
+        d.metadata=serde_json::json!({"inline_styles":{"b0":[
+            {"start":0,"end":8,"kind":"bold"},{"start":3,"end":8,"kind":"code"},
+            {"start":13,"end":21,"kind":"italic"}
+        ]},"inline_links":{"b0":[{"start":3,"end":8,"url":"https://example.test/code"}]}});
+        let styled=markdown_inline(&d,"b0",&d.blocks[0].content.text()).into_owned();
+        assert_eq!(styled,"**é [`` code` ``](<https://example.test/code>)** and *emphasis*");
+        let original=d.text();
+        for invalid in [serde_json::json!([{ "start":1,"end":8,"kind":"bold" }]),
+            serde_json::json!([{ "start":0,"end":8,"kind":"bold" },{ "start":3,"end":12,"kind":"italic" }])]{
+            d.metadata["inline_styles"]["b0"]=invalid;
+            assert!(styled_inline(&d,"b0",&d.blocks[0].content.text()).is_none());
+            assert_eq!(d.text(),original);
+        }
+    }
+    #[test]fn source_markdown_requires_whole_unchanged_groups(){
+        let mut d=inline_document(vec![Content::Paragraph{text:"outer".into()},Content::ListItem{ordered:true,text:"inner".into()}]);
+        d.parser="pulldown-cmark/0.13.4+source-blocks/1".into();
+        let source="> outer\n>\n> 3. inner\n";
+        d.metadata=serde_json::json!({"source_markdown":[{"blocks":["b0","b1"],"texts":["outer","inner"],"markdown":source}]});
+        assert_eq!(source_markdown(&d).get(&0).unwrap().text,source);
+        assert!(markdown(&d).contains(source));assert!(markdown_read(&d,true).contains(source));
+        let mut sliced=d.clone();sliced.blocks.remove(1);assert!(source_markdown(&sliced).is_empty());
+        assert!(!markdown(&sliced).contains("inner"));
+        let mut changed=d.clone();changed.blocks[1].content=Content::Paragraph{text:"changed".into()};
+        assert!(source_markdown(&changed).is_empty());
     }
 
     #[test]fn invalid_inline_metadata_and_payload_spans_leave_output_unchanged(){
