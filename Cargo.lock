@@ -7940,6 +7940,7 @@ dependencies = [
  "metadata-search-engine-rs",
  "mime",
  "nix",
+ "pulldown-cmark",
  "regex",
  "reqwest 0.12.28",
  "roxmltree 0.20.0",
@@ -7959,6 +7960,7 @@ dependencies = [
  "uuid",
  "webtool-protocol",
  "xberg",
+ "zip",
 ]
 
 [[package]]

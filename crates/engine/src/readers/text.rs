@@ -15,46 +15,7 @@ pub fn plain(text:&str,name:&str)->Parsed {
 }
 
 pub fn markdown(text:&str,name:&str)->Parsed {
-    let mut p=Parsed::new(name,"native-markdown-blocks/1");
-    let lines:Vec<&str>=text.split_inclusive('\n').collect();
-    let mut i=0;
-    while i<lines.len() {
-        let line=lines[i].trim_end_matches(['\r','\n']);
-        if line.trim().is_empty(){i+=1;continue;}
-        let start=i;
-        let trim=line.trim_start();
-        if trim.starts_with("```")||trim.starts_with("~~~") {
-            let marker=trim.as_bytes()[0] as char;
-            let count=trim.chars().take_while(|c|*c==marker).count();
-            let language=trim[count..].trim();
-            let language=if language.is_empty(){None}else{Some(language.into())};
-            i+=1; let mut body=String::new(); let mut closed=false;
-            while i<lines.len() {
-                let candidate=lines[i].trim();
-                let n=candidate.chars().take_while(|c|*c==marker).count();
-                if n>=count && candidate[n..].trim().is_empty(){closed=true;i+=1;break;}
-                body.push_str(lines[i]); i+=1;
-            }
-            p.push(Content::Code{language,text:body},Locator::Lines{start:start+1,end:i});
-            if !closed { p.warnings.push(Warning::new("unclosed_fence","The source contains an unclosed code fence.")); }
-            continue;
-        }
-        let level=trim.chars().take_while(|c|*c=='#').count();
-        if (1..=6).contains(&level)&&trim.as_bytes().get(level)==Some(&b' ') {
-            let heading=trim[level+1..].trim_end().to_string();
-            if p.title==name&&level==1 {p.title=heading.clone();}
-            p.push(Content::Heading{level:level as u8,text:heading},Locator::Lines{start:i+1,end:i+1});i+=1;continue;
-        }
-        let mut body=String::new();
-        while i<lines.len() {
-            let current=lines[i].trim_start();
-            if current.trim().is_empty(){break;}
-            if i>start&&(current.starts_with('#')||current.starts_with("```")||current.starts_with("~~~")){break;}
-            body.push_str(lines[i]);i+=1;
-        }
-        p.push(Content::Paragraph{text:body.trim_end_matches('\n').into()},Locator::Lines{start:start+1,end:i});
-    }
-    p
+    super::markdown::parse(text,name)
 }
 
 pub fn csv(text:&str,name:&str,delimiter:u8)->Result<Parsed> {

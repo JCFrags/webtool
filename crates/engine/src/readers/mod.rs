@@ -1,6 +1,7 @@
 pub mod html;
 pub mod encoding;
 pub mod text;
+pub mod markdown;
 pub mod captions;
 pub mod document;
 use crate::error::ErrorKind;

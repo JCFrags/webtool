@@ -8,7 +8,7 @@ use url::Url;
 use webtool_protocol::*;
 use super::Parsed;
 
-pub const PARSER:&str="rs-trafilatura/0.2.2+main-content/10+html-encoding/1";
+pub const PARSER:&str="rs-trafilatura/0.2.2+main-content/11+html-encoding/1";
 
 /// A stable signal that ordinary Auto reads may use for one rendered retry.
 /// Parse, encoding, network, and explicit-selector failures are not this error.
@@ -72,6 +72,12 @@ fn supplied_math(e:ElementRef<'_>)->String{
 }
 struct MathSource{text:String,locator:Locator,inline:bool,before:String,after:String}
 type MathSources=HashMap<String,MathSource>;
+struct ImageSource{reference:String,alt:String,locator:Locator}
+type ImageSources=HashMap<String,ImageSource>;
+fn carried_image<'a>(e:ElementRef<'_>,sources:&'a ImageSources)->Option<&'a ImageSource>{
+    if e.value().name()!="code"{return None;}
+    e.value().attr("class")?.split_whitespace().find_map(|class|sources.get(class))
+}
 // Find the actual source boundary around a math representation, including
 // transparent accessibility/image wrappers. Do not infer it from punctuation.
 fn math_separator(mut e:ElementRef<'_>,before:bool)->String{
@@ -218,7 +224,7 @@ fn disclosure_body(e: ElementRef<'_>) -> bool {
             .any(|ancestor|matches!(ancestor.value().name(),"summary"|"button"|"script"|"style"|"template"|"noscript"|"form")))
 }
 #[cfg(feature="web-extraction")]
-fn selection_source(original:&Html)->Result<(String,Vec<String>,MathSources)>{
+fn selection_source(original:&Html)->Result<(String,Vec<String>,MathSources,ImageSources)>{
     let mut selection=original.clone();
     let excluded=selection.select(&selector("nav,footer,dialog,aside,[role],[aria-modal],[style],[id],[class],[inert],template,noscript")?)
         // Remove inactive payloads before the extractor can unwrap them into
@@ -381,8 +387,26 @@ fn selection_source(original:&Html)->Result<(String,Vec<String>,MathSources)>{
         }
         node.append(scraper::node::Node::Text(scraper::node::Text{text:value.into()}));
     }
+    // The serializer also drops image references. Preserve only a reference at
+    // its selected position, never download it or append a rejected source image.
+    let images=selection.select(&selector("img[src]")?).filter(|e|main_scope(*e).is_some()
+        && !e.ancestors().filter_map(ElementRef::wrap).any(|a|matches!(a.value().name(),"pre"|"code"|"table"|"math"|"script"|"style"|"template"|"noscript")))
+        .map(|e|e.id()).collect::<Vec<_>>();
+    let mut image_sources=ImageSources::new();
+    for id in images{
+        let original_image=original.tree.get(id).and_then(ElementRef::wrap).expect("clone preserves node identity");
+        let reference=original_image.value().attr("src").unwrap_or("").to_owned();
+        if reference.trim().is_empty(){continue;}
+        let alt=original_image.value().attr("alt").unwrap_or("").to_owned();
+        let key=loop{index+=1;let key=format!("webtool-image-{index}");if !existing.contains(&key){break key;}};
+        image_sources.insert(key.clone(),ImageSource{reference,alt:alt.clone(),locator:Locator::Html{selector:path(original_image)}});
+        let template=Html::parse_fragment(&format!("<code class=\"{key}\"></code>"));let code=template.select(&selector("code")?).next().unwrap();
+        let mut node=selection.tree.get_mut(id).unwrap();
+        if let scraper::node::Node::Element(element)=node.value(){element.name=code.value().name.clone();element.attrs=code.value().attrs.clone();}
+        node.append(scraper::node::Node::Text(scraper::node::Text{text:if alt.is_empty(){"[Image reference]".into()}else{alt.into()}}));
+    }
     // Originals, exact selectors and independent all-page links stay intact.
-    Ok((selection.html(),unavailable,sources))
+    Ok((selection.html(),unavailable,sources,image_sources))
 }
 fn chrome_hint(e: ElementRef<'_>) -> bool {
     std::iter::once(e).chain(e.ancestors().filter_map(ElementRef::wrap)).any(|a| {
@@ -417,17 +441,18 @@ type InlineLinks = HashMap<String, Vec<(usize, usize, String)>>;
 struct ReadStructure<'a>{
     links:InlineLinks,
     math:MathSources,
+    images:ImageSources,
     math_spacing:HashMap<String,(String,String)>,
     original_lists:HashMap<String,Vec<ElementRef<'a>>>,
     seen_items:HashSet<String>,
 }
 impl<'a> ReadStructure<'a>{
-    fn new(original:&'a Html,math:MathSources)->Self{
+    fn new(original:&'a Html,math:MathSources,images:ImageSources)->Self{
         let mut original_lists:HashMap<String,Vec<ElementRef<'a>>>=HashMap::new();
         for item in original.select(&Selector::parse("li").expect("constant selector")).filter(|e|!ignored(*e)){
             original_lists.entry(compact(&script_prose(item))).or_default().push(item);
         }
-        Self{links:InlineLinks::new(),math,math_spacing:HashMap::new(),original_lists,seen_items:HashSet::new()}
+        Self{links:InlineLinks::new(),math,images,math_spacing:HashMap::new(),original_lists,seen_items:HashSet::new()}
     }
     fn list_item(&mut self,e:ElementRef<'_>,origin:Option<ElementRef<'_>>,p:&mut Parsed){
         let Some(item)=std::iter::once(e).chain(e.ancestors().filter_map(ElementRef::wrap)).find(|a|a.value().name()=="li") else{return;};
@@ -505,18 +530,52 @@ fn finish_inline_links(p:&mut Parsed,links:InlineLinks){
     if !records.is_empty(){p.metadata["inline_links"]=json!(records);}
 }
 
+// Apply styles only to a unique, complete selected run with identical source
+// characters. This copies ranges, never an original subtree or missing words.
+fn finish_inline_styles(original:&Html,p:&mut Parsed){
+    let mut sources:HashMap<String,Vec<ElementRef<'_>>>=HashMap::new();
+    for element in original.select(&Selector::parse("p,li,figcaption,blockquote,h1,h2,h3,h4,h5,h6").unwrap()).filter(|e|!ignored(*e)){
+        sources.entry(compact(&script_prose(element))).or_default().push(element);
+    }
+    fn walk(e:ElementRef<'_>,run:&mut String,characters:&mut usize,styles:&mut Vec<(usize,usize,&'static str)>){
+        let start=*characters;
+        for child in e.children(){
+            if let Some(value)=child.value().as_text(){run.push_str(value);*characters+=value.chars().filter(|c|!c.is_whitespace()).count();}
+            else if let Some(child)=ElementRef::wrap(child){
+                if let Some(value)=script_text(child){run.push_str(&value);*characters+=value.chars().filter(|c|!c.is_whitespace()).count();}
+                else{walk(child,run,characters,styles);}
+            }
+        }
+        let kind=match e.value().name(){"em"|"i"=>Some("italic"),"strong"|"b"=>Some("bold"),"code"|"kbd"|"samp"=>Some("code"),"del"|"s"|"strike"=>Some("strikethrough"),"u"=>Some("underline"),_=>None};
+        if let Some(kind)=kind.filter(|_|start<*characters){styles.push((start,*characters,kind));}
+    }
+    for block in &p.blocks{
+        if !matches!(block.content,Content::Paragraph{..}|Content::Heading{..}|Content::Quote{..}|Content::ListItem{..}|Content::Caption{..}){continue;}
+        let value=block.content.text();
+        let Some(elements)=sources.get(&compact(&value)).filter(|elements|elements.len()==1)else{continue;};
+        let source=elements[0];let mut run=String::new();let mut styles=Vec::new();walk(source,&mut run,&mut 0,&mut styles);
+        if compact(&run)!=compact(&value){continue;}
+        let characters=value.char_indices().filter(|(_,c)|!c.is_whitespace()).map(|(index,c)|(index,index+c.len_utf8())).collect::<Vec<_>>();
+        let ranges=styles.into_iter().filter_map(|(start,end,kind)|{
+            if start>=end||end>characters.len(){return None;}
+            Some(json!({"start":characters[start].0,"end":characters[end-1].1,"kind":kind}))
+        }).collect::<Vec<_>>();
+        if !ranges.is_empty(){p.metadata["inline_styles"][&block.id]=json!(ranges);p.metadata["inline_style_sources"][&block.id]=json!({"selector":path(source),"corroboration":"unique_complete_selected_run"});}
+    }
+}
+
 // Walk only the selected tree. Never substitute an original container subtree:
 // doing so could restore navigation or other descendants removed by selection.
 enum Part<'a> { Text(String,Option<ElementRef<'a>>), Block(ElementRef<'a>) }
-fn parts<'a>(e: ElementRef<'a>, out: &mut Vec<Part<'a>>, math:&MathSources) {
+fn parts<'a>(e: ElementRef<'a>, out: &mut Vec<Part<'a>>, math:&MathSources,images:&ImageSources) {
     for child in e.children() {
         if let Some(t) = child.value().as_text() {
             out.push(Part::Text(t.to_string(),containing_link(e)));
         } else if let Some(child) = ElementRef::wrap(child) {
             if matches!(child.value().name(), "script"|"style"|"noscript"|"template") { continue; }
-            if is_block(child) || carried_math(child,math).is_some() { out.push(Part::Block(child)); }
+            if is_block(child) || carried_math(child,math).is_some() || carried_image(child,images).is_some() { out.push(Part::Block(child)); }
             else if child.value().name() == "br" { out.push(Part::Text("\n".into(),containing_link(child))); }
-            else { parts(child, out,math); }
+            else { parts(child, out,math,images); }
         }
     }
 }
@@ -542,6 +601,14 @@ fn flush_run(e: ElementRef<'_>, run: &mut ProseRun<'_>, p: &mut Parsed, unmapped
 }
 fn emit(e: ElementRef<'_>, origins: &Origins<'_>, base: Option<&Url>, filter_chrome: bool, p: &mut Parsed, unmapped: &mut usize, structure:&mut ReadStructure<'_>) -> Result<()> {
     if ignored(e) || matches!(e.value().name(), "script"|"style"|"noscript"|"template") { return Ok(()); }
+    if let Some(source)=carried_image(e,&structure.images){
+        if let Some(url)=image_reference(base,&source.reference){
+            p.push(Content::Image{url,alt:source.alt.clone()},source.locator.clone());
+            if base.is_none(){p.warnings.push(Warning::new("image_base_unavailable","An image reference has no public URL base. The supplied reference is retained, not fetched."));}
+            structure.list_item(e,None,p);
+        }else{p.warnings.push(Warning::new("image_reference_unavailable","A selected image has no supported HTTP(S) or relative source reference. See retained original."));}
+        return Ok(());
+    }
     if let Some(source)=carried_math(e,&structure.math){
         p.push(Content::Math{text:source.text.clone()},source.locator.clone());
         if source.inline{structure.math_spacing.insert(p.blocks.last().unwrap().id.clone(),(source.before.clone(),source.after.clone()));}
@@ -558,7 +625,7 @@ fn emit(e: ElementRef<'_>, origins: &Origins<'_>, base: Option<&Url>, filter_chr
                 if matches!(child.value().name(), "script"|"style"|"noscript"|"template") { continue; }
                 if is_inline(child) {
                     let mut inline_parts=Vec::new();
-                    parts(child,&mut inline_parts,&structure.math);
+                    parts(child,&mut inline_parts,&structure.math,&structure.images);
                     for part in inline_parts {
                         match part {
                             Part::Text(value,link)=>run.append(&value,link),
@@ -580,7 +647,7 @@ fn emit(e: ElementRef<'_>, origins: &Origins<'_>, base: Option<&Url>, filter_chr
     let tag = e.value().name();
     if !matches!(tag, "pre"|"table"|"img"|"math") {
         let mut children = Vec::new();
-        parts(e, &mut children,&structure.math);
+        parts(e, &mut children,&structure.math,&structure.images);
         if children.iter().any(|part| matches!(part, Part::Block(_))) {
             let inline_flow=tag=="p" && children.iter().all(|part|match part{
                 Part::Text(..)=>true,Part::Block(e)=>carried_math(*e,&structure.math).is_some_and(|source|source.inline),
@@ -635,7 +702,7 @@ fn emit(e: ElementRef<'_>, origins: &Origins<'_>, base: Option<&Url>, filter_chr
             Content::Table { rows }
         },
         "img" => {
-            let Some(url) = absolute(base, e.value().attr("src").unwrap_or("")) else { return Ok(()); };
+            let Some(url) = image_reference(base, e.value().attr("src").unwrap_or("")) else { return Ok(()); };
             Content::Image { url, alt:e.value().attr("alt").unwrap_or("").into() }
         },
         "math" => {
@@ -648,6 +715,10 @@ fn emit(e: ElementRef<'_>, origins: &Origins<'_>, base: Option<&Url>, filter_chr
     if !matches!(tag,"pre"|"table"|"img"|"math"){linked_text(e).record(p,base,&mut structure.links);}
     structure.list_item(e,origin,p);
     Ok(())
+}
+fn image_reference(base:Option<&Url>,value:&str)->Option<String>{
+    absolute(base,value).or_else(||if base.is_none()&&!value.trim().is_empty()&&Url::parse(value).is_err()
+        && !value.chars().any(|c|c.is_control()||c=='\\'){Some(value.into())}else{None})
 }
 fn absolute(base:Option<&Url>,value:&str)->Option<String>{
     let u=Url::parse(value).ok().or_else(||base.and_then(|b|b.join(value).ok()))?;
@@ -700,8 +771,9 @@ fn parse_source(source:&str,url:&str,explicit:Option<&str>)->Result<Parsed>{
     let mut readable_text:Option<String>=None;
     let mut unavailable_disclosures=Vec::new();
     let mut math_sources=MathSources::new();
+    let mut image_sources=ImageSources::new();
     let selected=if let Some(css)=explicit{
-        p.parser="explicit-css+source-blocks/7+html-encoding/1".into();
+        p.parser="explicit-css+source-blocks/8+html-encoding/1".into();
         let found=original.select(&selector(css)?).map(|n|n.html()).collect::<Vec<_>>();
         if found.is_empty(){bail!(ErrorKind::EmptyCss.context(format!("CSS selector matched no elements")));}found.join("\n")
     }else{
@@ -718,9 +790,9 @@ fn parse_source(source:&str,url:&str,explicit:Option<&str>)->Result<Parsed>{
                 deduplicate:false,use_fallback_extraction:false,url:Some(url.into()),
                 ..Default::default()
             };
-            let (selection,unavailable,math)=selection_source(&original)?;
+            let (selection,unavailable,math,images)=selection_source(&original)?;
             unavailable_disclosures=unavailable;
-            math_sources=math;
+            math_sources=math;image_sources=images;
             let r=rs_trafilatura::extract_with_options(&selection,&options).map_err(|e|anyhow!(ErrorKind::ParseFailed.context(format!("HTML extraction failed: {e}"))))?;
             readable_text=Some(r.content_text);
             if title.is_none(){if let Some(t)=&r.metadata.title{p.title=t.clone();}}
@@ -744,7 +816,7 @@ fn parse_source(source:&str,url:&str,explicit:Option<&str>)->Result<Parsed>{
     let cleaned=Html::parse_fragment(&selected);
     let base=Url::parse(url).ok();
     let mut unmapped=0;
-    let mut structure=ReadStructure::new(&original,math_sources);
+    let mut structure=ReadStructure::new(&original,math_sources,image_sources);
     emit(cleaned.root_element(), &origins, base.as_ref(), explicit.is_none(), &mut p, &mut unmapped, &mut structure)?;
     if let Some(readable)=readable_text {
         // The extractor's HTML serializer can join adjacent inline nodes even
@@ -806,6 +878,7 @@ fn parse_source(source:&str,url:&str,explicit:Option<&str>)->Result<Parsed>{
         }
     }
     finish_inline_links(&mut p,structure.links);
+    finish_inline_styles(&original,&mut p);
     if p.blocks.is_empty(){
         if explicit.is_some(){bail!(ErrorKind::EmptyCss.context(format!("no readable blocks found for the explicit CSS selector")));}
         return Err(MissingContent::new(
@@ -835,6 +908,25 @@ pub fn select_original(source:&str,css:&str)->Result<Vec<serde_json::Value>>{
     const SAMPLE:&str="<html><head><title>A</title></head><body><main><h1>Title</h1><p>Exact evidence.</p><pre><code class=\"language-rust\">  let n = 0;\n</code></pre><table><tr><th>Name</th><th>N</th></tr><tr><td>x</td><td>0</td></tr></table></main></body></html>";
     #[cfg(feature="web-extraction")]
     #[test]
+    fn selected_styles_and_image_references_keep_their_source(){
+        let source=include_str!("../../tests/fixtures/documents/fidelity.html");
+        let parsed=parse(source.as_bytes(),"https://example.test/notes",None).unwrap();
+        assert!(parsed.blocks.iter().any(|b|matches!(&b.content,Content::Image{url,alt} if url=="https://example.test/plot.svg"&&alt=="Instrument plot")));
+        let styles=parsed.metadata["inline_styles"].as_object().unwrap().values().flat_map(|v|v.as_array().unwrap());
+        let kinds=styles.filter_map(|v|v["kind"].as_str()).collect::<HashSet<_>>();
+        for kind in ["italic","bold","code","strikethrough"]{assert!(kinds.contains(kind));}
+        assert!(parsed.blocks.iter().any(|b|b.content.text().contains("H₂O and the limit is 10³")));
+        assert!(parsed.blocks.iter().any(|b|matches!(&b.content,Content::Code{text,..} if text=="  let x = \"<literal>\";\n")));
+        assert!(!parsed.blocks.iter().any(|b|b.content.text().contains("Account and site footer")));
+        let mut ambiguous=Parsed::new("A",PARSER);ambiguous.push(Content::Paragraph{text:"same".into()},Locator::Derived{index:1});
+        finish_inline_styles(&Html::parse_document("<p><em>same</em></p><p><strong>same</strong></p>"),&mut ambiguous);
+        assert!(ambiguous.metadata["inline_styles"].is_null());
+        let rejected="<main><article><p>A retained substantive statement applies only to the supplied instrument. Record the limitation and do not infer other instruments.</p></article></main><nav><img src='/excluded.png' alt='Excluded image'></nav>";
+        let parsed=parse(rejected.as_bytes(),"https://example.test/notes",None).unwrap();
+        assert!(!parsed.blocks.iter().any(|b|matches!(b.content,Content::Image{..})));
+    }
+    #[cfg(feature="web-extraction")]
+    #[test]
     fn disclosures_keep_labels_bodies_and_source_values() {
         let source=r#"<html><head><title>Field guide</title></head><body><main><article>
             <h1>Field guide</h1><p>Keep original field observations unchanged and record the instrument used for each measurement.</p>
@@ -856,7 +948,7 @@ pub fn select_original(source:&str,css:&str)->Result<Vec<serde_json::Value>>{
         assert!(parsed.warnings.iter().any(|warning|warning.code=="disclosure_content_unavailable"));
         assert_eq!(parsed.links,links(source,"https://example.com/guide"));
         let explicit=parse(source.as_bytes(),"https://example.com/guide",Some("#values")).unwrap();
-        assert_eq!(explicit.parser,"explicit-css+source-blocks/7+html-encoding/1");
+        assert_eq!(explicit.parser,"explicit-css+source-blocks/8+html-encoding/1");
         assert!(!explicit.warnings.iter().any(|warning|warning.code=="disclosure_content_unavailable"));
     }
     #[cfg(feature="web-extraction")]
@@ -885,7 +977,7 @@ pub fn select_original(source:&str,css:&str)->Result<Vec<serde_json::Value>>{
             <aside aria-label="Recently viewed items"><span>Personalized widget</span></aside>
             <aside aria-label="Research recommendations"><p>Keep research recommendations.</p></aside>"#;
         let original=Html::parse_document(source);
-        let (selection,_,_)=selection_source(&original).unwrap();
+        let (selection,_,_,_)=selection_source(&original).unwrap();
         for unwanted in ["Modal promotion","Email promotion","Account menu","Inactive template","Inactive fallback","Inactive filter controls","Personalized widget","Print dialog instructions"] { assert!(!selection.contains(unwanted),"{unwanted}"); }
         for retained in ["Newsletters are a topic","Keep article controls.","Keep delivered inert prose.","literal &lt;noscript&gt; example","Keep research recommendations.","Keep this article qualification."] { assert!(selection.contains(retained),"{retained}"); }
         let selected=Html::parse_document(&selection);
