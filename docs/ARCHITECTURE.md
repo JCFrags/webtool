@@ -71,9 +71,13 @@ A bounded local worker pool marks them running and records saved documents.
 Clients can poll, stop waiting, reconnect, or request cancellation.
 
 Cancellation does not remove already saved documents.
-Restarted servers mark previously running jobs interrupted.
-Queued jobs are rescheduled.
-The frontier is not yet persisted, so this is not exact resumable crawling.
+SQLite schema 2 retains a bounded crawl frontier and attempt charges.
+On startup, both queued and running jobs become interrupted.
+Startup makes no hidden fetch or rescheduling request.
+Resume is explicit and requires pending work and remaining attempt budget.
+Completed failures and exclusions are not retried.
+This is bounded resumable crawling, not exactly-once retrieval or a complete-site archive.
+See [CRAWL.md](CRAWL.md) for checkpoint, interruption, sitemap, and rollback rules.
 
 ## External integrations
 

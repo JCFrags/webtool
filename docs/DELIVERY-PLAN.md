@@ -11,7 +11,24 @@ This is staged implementation work, not a backend rewrite. Deliver usable core
 workflows before adding optional language-model features. A language percentage,
 successful build, or nonempty document is not product acceptance.
 
-## Core milestones
+## Current sequencing
+
+The research core through PR #24 is delivered. Continue with
+[the two-sprint plan](SPRINTS.md), not a repeat of the delivery below.
+
+Sprint 1 owns Documents, GitHub/code, Backend, and Linux/Docker product readiness.
+Sprint 2 owns the remaining optional-answer, scholarly/bibliography, search, and
+media extensions. GitHub merges and Sprint 2 stay blocked until Sprint 1 passes
+a same-input Ketch comparison for overlapping workflows. Measure input-to-output
+wall clock, complete system resources, and result quality. A fresh product-blinded
+subagent must judge subjective output quality. Slightly higher resources alone
+cannot excuse worse time or quality.
+
+The milestone list below preserves the delivered core's scope and evidence limits.
+It is not a request to rerun completed builds, installers, or proof campaigns.
+Separate model, account, paid-call, media, and exposure decisions still apply.
+
+## Core milestone record
 
 1. Compare the existing HTML/PDF paths with selected challengers on eight retained
    HTML inputs and four small PDFs. Start with Python Trafilatura and Docling.
@@ -41,9 +58,10 @@ successful build, or nonempty document is not product acceptance.
 
 ## Final milestone: optional LLM workers
 
-Only start this feature after the core milestones are practically accepted.
-Ordinary search, reads, saved-library operations, crawling, and media operations
-must continue to work without an LLM or configured provider.
+This feature belongs to Sprint 2. Do not start it until the Sprint 1 Ketch gate
+passes. Core delivery alone no longer opens this milestone. Ordinary search,
+reads, saved-library operations, crawling, and media operations must continue
+to work without an LLM or configured provider.
 
 The first optional feature is a quick answer to a search question. Interpret its
 initial source limit as the first five fetched search-result pages, not five pages

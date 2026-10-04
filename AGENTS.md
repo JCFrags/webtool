@@ -7,30 +7,37 @@ The users are a small trusted group, not separate enterprise tenants.
 Every library is visible to every connected user.
 Do not introduce a TUI, permission hierarchy, quality profiles, or distributed job infrastructure.
 
-## Current work: full research service delivery
+## Current work: Sprint 1 and the Ketch gate
 
-The user approved implementation toward the complete researched roadmap, with
-parallel subagents. See [the delivery plan](docs/DELIVERY-PLAN.md) for core
-milestones, practical acceptance, and the final optional-LLM milestone. Rust is
-the center, not a language-percentage requirement. Use specialist helpers only
-when quality and measured resource costs justify them.
+PR #24 is merged. The accepted research core is delivered from
+`d961aeb0407607fa3e414b5ebafc08b6c6191fe0`. Its published alpha assets remain
+unchanged. Do not repeat that delivery to start the next sprint.
 
-Ordinary research operations remain LLM-free. After the core is accepted, add an
-explicit optional answer worker over up to five fetched search-result pages.
-The CLI will configure a changeable model/API endpoint and protected credentials
-for cloud or local use. Do not implement or invoke this worker before the core.
+The user approved parallel Sprint 1 development in four areas: Documents,
+GitHub/code, Backend, and Linux/Docker product readiness. Make installation and
+operation usable by other people without workstation-specific paths or personal
+configuration. Keep the shared Rust service and thin CLI. See
+[the two-sprint plan](docs/SPRINTS.md) for scope and acceptance.
 
-The earlier read-quality freezes below describe historical milestones, not a ban
-on the newly approved roadmap. Their source-fidelity and preservation rules still
-apply. On October 3, 2026, the user explicitly approved updating and merging
-PR #24 through its normal checks, then activating the accepted core locally.
-Use the existing PR, not a bypass PR. Verify remote `main` and actual installed
-use separately. Earlier unmerged/no-publication instructions below are historical.
-Preserve published alpha assets, the current installation, data, configuration,
-historical snapshots, and rollback files until an approved verified replacement
-is ready. Use task-owned worktrees and isolated
-diagnostic services/data. Paid commitments, credentials, non-loopback exposure,
-large model preparation, and permitted media sources remain separate gates.
+Sprint 2 covers optional answers, scholarly/bibliography extensions, search
+extensions, and media follow-ons. Do not start Sprint 2 or merge Sprint 1 on
+GitHub until the Ketch comparison gate passes. Compare pinned builds on the same
+inputs. Measure complete input-to-output wall clock, system resources, and result
+quality. A brand-new subagent must perform subjective quality checks with product
+identities hidden. Webtool must meet or exceed Ketch in overlapping workflows.
+Slightly higher resources are allowed only with time and quality parity or better.
+State the resource tolerance before accepting that exception.
+
+Ordinary research stays LLM-free. Optional answers remain in Sprint 2, not an
+implicit search step. Credentials, paid calls, cloud model transfer, model
+preparation/use, live media, and exposure changes retain separate decisions.
+
+The earlier freezes below are historical. Their source-fidelity and preservation
+rules still apply. Preserve the installed service, data, configuration, helpers,
+historical worktrees, snapshots, rollback files, and published alpha assets until
+a verified replacement is ready. Use focused branches/worktrees and isolated
+finite-lived diagnostic services. Verify remote integration and installed
+activation separately after the gate. Do not bypass normal checks.
 
 Historical activation claims below are dated evidence, not current service health.
 Check the actual process and configuration before any deployment action.

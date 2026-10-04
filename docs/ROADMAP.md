@@ -1,22 +1,28 @@
 # Roadmap
 
-## Active work: full research service delivery
+## Active work: two sprints with a Ketch gate
 
-The user approved the complete Rust-centered research roadmap, with parallel work
-on independent parts. The [delivery plan](DELIVERY-PLAN.md) defines the stages:
-quality/performance comparison, web foundations and connectors, code and scholarly
-research, durable crawling and archives, and bounded media work. After the core
-is accepted, add purely optional cloud/local LLM answer workers configured through
-the CLI. Default operations remain LLM-free.
+PR #24 is merged and the research core is delivered. The next work is split into
+[two sprints](SPRINTS.md). Keep the Rust service, thin text CLI, shared store,
+source originals, and LLM-free ordinary operations.
 
-The earlier milestones below retain their evidence and source-fidelity lessons.
-Their narrow implementation freezes are historical, not current limits on the
-newly approved roadmap. On October 3, 2026, the user approved normal checked
-delivery through PR #24 and activation of the accepted core. Preserve published
-alpha assets, existing data/configuration, snapshots, and rollback assets. Keep
-media permission/allocation and optional LLM gates separate. New source changes
-are not installed or accepted merely because they appear in this plan. Verify
-actual service health separately from old status notes.
+Sprint 1 covers Documents, GitHub/code, Backend, and Linux/Docker product
+readiness. Installation and operation must work for other people without this
+workstation's configuration. Use scoped parallel work.
+
+Sprint 2 covers optional answers, scholarly/bibliography extensions, search
+extensions, and media follow-ons. Sprint 2 and GitHub merges wait for a strict
+same-input comparison against pinned Ketch. Webtool must meet or exceed Ketch
+quality and input-to-output wall clock in overlapping workflows. Slightly higher
+system resources are allowed only with time and quality parity or better. Use a
+brand-new product-blinded subagent for subjective evaluation.
+
+The earlier milestones below retain historical evidence and source-fidelity
+lessons. Their merge holds are not current Sprint 1 instructions. Preserve
+published alpha assets, the running installation, data/configuration, helpers,
+snapshots, historical worktrees, and rollback assets. Credentials, paid calls,
+models, live media, and exposure changes remain separate decisions. Plans and
+source changes are not proof of installed activation.
 
 ## Preserved baseline: live reading quality
 
