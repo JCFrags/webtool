@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
 use super::frontier::{Kind, PAGE_CANDIDATES, SITEMAP_LIMIT};
+use crate::error::ErrorKind;
 
 pub(super) const MAX_BYTES: usize = 1024 * 1024;
 pub(super) struct Sitemap {
@@ -9,16 +10,16 @@ pub(super) struct Sitemap {
     pub truncated: bool,
 }
 pub(super) fn parse(bytes: &[u8]) -> Result<Sitemap> {
-    let text=std::str::from_utf8(bytes).context("sitemap must be UTF-8")?;
+    let text=std::str::from_utf8(bytes).context(ErrorKind::ParseInvalid.context("sitemap must be UTF-8"))?;
     // roxmltree rejects DTDs by default. No external entities are fetched.
-    let tree=roxmltree::Document::parse(text).context("invalid sitemap XML")?;
+    let tree=roxmltree::Document::parse(text).context(ErrorKind::ParseInvalid.context("invalid sitemap XML"))?;
     let root=tree.root_element();
     let namespace=root.tag_name().namespace();
-    if namespace.is_some_and(|ns|ns!="http://www.sitemaps.org/schemas/sitemap/0.9") { bail!("unsupported sitemap namespace"); }
+    if namespace.is_some_and(|ns|ns!="http://www.sitemaps.org/schemas/sitemap/0.9") { bail!(ErrorKind::ParseInvalid.context("unsupported sitemap namespace")); }
     let (kind,item,limit)=match root.tag_name().name() {
         "urlset"=>(Kind::Page,"url",PAGE_CANDIDATES),
         "sitemapindex"=>(Kind::Sitemap,"sitemap",SITEMAP_LIMIT),
-        _=>bail!("expected a urlset or sitemapindex, not an HTML page, feed, or text list"),
+        _=>bail!(ErrorKind::ParseInvalid.context("expected a urlset or sitemapindex, not an HTML page, feed, or text list")),
     };
     let mut urls=Vec::new(); let mut invalid=0; let mut truncated=false;
     for (i,node) in root.children().filter(|n|n.is_element() && n.tag_name().name()==item && n.tag_name().namespace()==namespace).enumerate() {

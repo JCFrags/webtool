@@ -6,6 +6,7 @@ use chrono::Utc;
 use rusqlite::{params, OptionalExtension};
 use webtool_protocol::{CrawlProgress, Job, Warning};
 use crate::store::{Store, write_job};
+use crate::error::ErrorKind;
 
 pub(super) const PAGE_CANDIDATES: usize = 10_000;
 pub(super) const SITEMAP_LIMIT: usize = 32;
@@ -15,13 +16,13 @@ pub(super) const SITEMAP_DEPTH: usize = 3;
 pub(super) enum Kind { Page, Sitemap }
 impl Kind {
     fn text(self) -> &'static str { match self { Self::Page => "page", Self::Sitemap => "sitemap" } }
-    fn parse(s: &str) -> Result<Self> { match s { "page" => Ok(Self::Page), "sitemap" => Ok(Self::Sitemap), _ => bail!("unknown crawl entry kind") } }
+    fn parse(s: &str) -> Result<Self> { match s { "page" => Ok(Self::Page), "sitemap" => Ok(Self::Sitemap), _ => bail!(ErrorKind::StorageFault.context("unknown crawl entry kind")) } }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum State { Pending, Active, Saved, Failed, Excluded, Interrupted }
 impl State {
     fn text(self) -> &'static str { match self { Self::Pending => "pending", Self::Active => "active", Self::Saved => "saved", Self::Failed => "failed", Self::Excluded => "excluded", Self::Interrupted => "interrupted" } }
-    fn parse(s: &str) -> Result<Self> { match s { "pending" => Ok(Self::Pending), "active" => Ok(Self::Active), "saved" => Ok(Self::Saved), "failed" => Ok(Self::Failed), "excluded" => Ok(Self::Excluded), "interrupted" => Ok(Self::Interrupted), _ => bail!("unknown crawl entry state") } }
+    fn parse(s: &str) -> Result<Self> { match s { "pending" => Ok(Self::Pending), "active" => Ok(Self::Active), "saved" => Ok(Self::Saved), "failed" => Ok(Self::Failed), "excluded" => Ok(Self::Excluded), "interrupted" => Ok(Self::Interrupted), _ => bail!(ErrorKind::StorageFault.context("unknown crawl entry state")) } }
 }
 #[derive(Clone, Debug)]
 pub(super) struct Entry {
@@ -52,12 +53,12 @@ impl Frontier {
             let mut frontier = Self { sitemaps_seeded, ..Self::default() };
             for row in rows {
                 let (ordinal,kind,url,depth,state,attempts,interruptions,document_id,reason) = row?;
-                if ordinal != frontier.entries.len() { bail!("invalid crawl frontier order"); }
+                if ordinal != frontier.entries.len() { bail!(ErrorKind::StorageFault.context("invalid crawl frontier order")); }
                 let kind = Kind::parse(&kind)?;
                 frontier.seen.insert((kind,url.clone()),ordinal);
                 frontier.entries.push(Entry { kind,url,depth,state:State::parse(&state)?,attempts,interruptions,document_id,reason });
             }
-            if frontier.entries.iter().filter(|e|e.kind==Kind::Page).count()>PAGE_CANDIDATES || frontier.entries.iter().filter(|e|e.kind==Kind::Sitemap).count()>SITEMAP_LIMIT { bail!("crawl frontier exceeds supported bounds"); }
+            if frontier.entries.iter().filter(|e|e.kind==Kind::Page).count()>PAGE_CANDIDATES || frontier.entries.iter().filter(|e|e.kind==Kind::Sitemap).count()>SITEMAP_LIMIT { bail!(ErrorKind::StorageFault.context("crawl frontier exceeds supported bounds")); }
             Ok(Some(frontier))
         }).await
     }
@@ -123,11 +124,11 @@ impl Frontier {
                 tx.execute("INSERT INTO crawl_frontier(job_id,ordinal,kind,url,depth,state,attempts,interruptions,document_id,reason) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(job_id,kind,url) DO UPDATE SET state=excluded.state,attempts=excluded.attempts,interruptions=excluded.interruptions,document_id=excluded.document_id,reason=excluded.reason",
                     params![value.id,i,e.kind.text(),e.url,e.depth,e.state.text(),e.attempts,e.interruptions,e.document_id,e.reason])?;
             }
-            let crawl=value.request.crawl().context("crawl checkpoint has no crawl request")?;
+            let crawl=value.request.crawl().context(ErrorKind::StorageFault.context("crawl checkpoint has no crawl request"))?;
             if let (Some(library),Some(id))=(&crawl.library,attachment) {
                 tx.execute("INSERT OR IGNORE INTO library_items(library,document_id,added_by,added_at) VALUES(?,?,?,?)",params![library,id,crawl.actor,value.updated_at])?;
             }
-            tx.commit().context("commit crawl checkpoint")?;
+            tx.commit().context(ErrorKind::StorageFault.context("commit crawl checkpoint"))?;
             Ok(())
         }).await?;
         self.dirty.clear();

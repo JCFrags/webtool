@@ -255,7 +255,7 @@ HTTP application and extractor failures return `application/json` with the share
 | 409 | `crawl_not_resumable`, `media_resume_unsupported` | No supported saved work within the current state/budget, or media resume is unavailable |
 | 413 | `size_limit` | Request, file, metadata, or source byte limit |
 | 415 | `unsupported_media_type` | A JSON endpoint needs a JSON content type |
-| 422 | `invalid_request`, `capability_unavailable` | JSON field types do not match, or a known capability is unavailable |
+| 422 | `invalid_request`, `capability_unavailable`, `parse_invalid`, `parse_failed` | JSON field types do not match, a known capability is unavailable, or a reader rejected the source |
 | 429 | Provider-specific code | Recognized upstream rate limit |
 | 500 | `internal_error` | Internal or unclassified engine failure |
 | 502 | Provider/helper-specific code or `upstream_error` | Recognized upstream failure |
@@ -269,14 +269,26 @@ JSON envelope, not an RFC 9457 `application/problem+json` implementation. Transp
 failures before Axum can form a response are outside this envelope. `HEAD` responses
 have no body.
 
-The engine still returns `anyhow` errors. `crates/server/src/error.rs` contains an
-explicit compatibility adapter for known provider/helper prefixes and exact
-validation messages. Existing arXiv, GitHub, browser, caption, and citation codes
-remain where recognized. Broad substring guesses no longer turn unknown faults
-into 400, 404, or 422. Unknown failures return 500, even when an engine failure
-might later prove to be invalid input. A typed engine error migration is still
-required. The HTTP boundary does not redact historical documents, engine warnings,
-job errors, or arbitrary metadata returned by successful operations.
+The engine selects `ErrorKind` variants at validation, fetch, storage, reader,
+and service failure sites. Each variant supplies an `ErrorCategory`, a stable
+code, a `StatusIntent`, and a fixed public message. Existing code, scholarly,
+PMC, and external-index enums retain their codes and statuses. `anyhow` carries
+internal context and causes, not a public error classifier.
+
+`crates/server/src/error.rs` uses only typed downcasts and the engine's public
+intent. Batch inputs use this same boundary. Prefixes, message text, request
+values, and formatted cause chains never select HTTP responses. A plain string
+such as `document not found` or `browser_timeout` is an unknown fault, not 404 or
+504. Unknown failures and storage corruption return 500 `internal_error`.
+The actual upstream status stays in a typed source failure and is not the
+service's response status. Ordinary source 403, 404, and 429 failures return
+502 `upstream_error` with fixed messages that name the supplied source status.
+
+See [ERRORS.md](ERRORS.md) for stable code groups, producer responsibilities,
+cause handling, and remaining untyped internal paths. New crawl failure records
+use safe fixed error text. Warning codes, partial results, attempt charges, and
+cancellation states are unchanged. This boundary does not redact historical
+records, existing source diagnostics, or arbitrary successful metadata.
 
 ## Small client examples
 

@@ -1,5 +1,6 @@
 //! Bounded streaming runner. No diagnostics or signed metadata enter saved jobs.
 use std::{path::Path, process::Stdio, time::Duration};
+use crate::error::ErrorKind;
 use anyhow::{bail, Context, Result};
 use tokio::{io::{AsyncRead, AsyncReadExt}, process::Command, sync::mpsc};
 use tokio_util::sync::CancellationToken;
@@ -15,13 +16,13 @@ async fn pump(mut input: impl AsyncRead + Unpin, tx: mpsc::Sender<Result<Vec<u8>
         let n=input.read(&mut buffer).await?;
         if n==0 { if emit && !line.is_empty() { let _=tx.send(Ok(line)).await; } return Ok(()); }
         total=total.saturating_add(n);
-        if total>max { bail!("media_output_limit: helper output exceeds its bound"); }
+        if total>max { bail!(ErrorKind::MediaOutputLimit.context(format!("media_output_limit: helper output exceeds its bound"))); }
         for byte in &buffer[..n] {
             if *byte==b'\n' {
                 if emit && tx.send(Ok(std::mem::take(&mut line))).await.is_err() { return Ok(()); }
                 line.clear();
             } else {
-                if line.len()>=line_max { bail!("media_output_limit: helper line exceeds its bound"); }
+                if line.len()>=line_max { bail!(ErrorKind::MediaOutputLimit.context(format!("media_output_limit: helper line exceeds its bound"))); }
                 line.push(*byte);
             }
         }
@@ -43,22 +44,22 @@ pub fn command(path: &Path, max_bytes: u64) -> Command {
 /// group termination, direct-child wait/reap, and pipe-task joins on every return.
 pub async fn run(mut command: Command, workspace: &mut Workspace, limits: &MediaDownloadConfig, max_bytes: u64,
     deadline: tokio::time::Instant, token: &CancellationToken, mut progress: Option<(&Engine, &mut Job, u64)>, collect: bool) -> Result<Vec<u8>> {
-    if token.is_cancelled() { bail!("media_cancelled: cancellation requested"); }
-    if tokio::time::Instant::now()>=deadline { bail!("media_deadline: job deadline reached"); }
+    if token.is_cancelled() { bail!(ErrorKind::MediaCancelled.context(format!("media_cancelled: cancellation requested"))); }
+    if tokio::time::Instant::now()>=deadline { bail!(ErrorKind::MediaDeadline.context(format!("media_deadline: job deadline reached"))); }
     command.current_dir(&workspace.path);
-    let mut child=command.spawn().context("media_helper_failed: cannot start configured helper")?;
-    let pid=child.id().context("media_helper_failed: helper has no process identity")?;
+    let mut child=command.spawn().context(ErrorKind::MediaHelperFailed.context("media_helper_failed: cannot start configured helper"))?;
+    let pid=child.id().context(ErrorKind::MediaHelperFailed.context("media_helper_failed: helper has no process identity"))?;
     let mut group=Group(Some(pid));
     let (tx,mut rx)=mpsc::channel(8);
-    let stdout=child.stdout.take().context("media_helper_failed: stdout unavailable")?;
-    let stderr=child.stderr.take().context("media_helper_failed: stderr unavailable")?;
+    let stdout=child.stdout.take().context(ErrorKind::MediaHelperFailed.context("media_helper_failed: stdout unavailable"))?;
+    let stderr=child.stderr.take().context(ErrorKind::MediaHelperFailed.context("media_helper_failed: stderr unavailable"))?;
     let max=if collect { META_BYTES as usize } else { 512*1024 };
     let line_max=if collect { max } else { 4096 };
     let out=tokio::spawn({let tx=tx.clone(); async move {
-        if pump(stdout,tx.clone(),max,line_max,true).await.is_err() { let _=tx.send(Err(anyhow::anyhow!("media_output_limit: stdout bound reached"))).await; }
+        if pump(stdout,tx.clone(),max,line_max,true).await.is_err() { let _=tx.send(Err(anyhow::anyhow!(ErrorKind::MediaOutputLimit.context(format!("media_output_limit: stdout bound reached"))))).await; }
     }});
     let err=tokio::spawn(async move {
-        if pump(stderr,tx.clone(),1024*1024,8192,false).await.is_err() { let _=tx.send(Err(anyhow::anyhow!("media_output_limit: stderr bound reached"))).await; }
+        if pump(stderr,tx.clone(),1024*1024,8192,false).await.is_err() { let _=tx.send(Err(anyhow::anyhow!(ErrorKind::MediaOutputLimit.context(format!("media_output_limit: stderr bound reached"))))).await; }
     });
     let result=async {
         workspace.child(pid)?;
@@ -69,11 +70,11 @@ pub async fn run(mut command: Command, workspace: &mut Workspace, limits: &Media
         while status.is_none() || pipes {
             tokio::select! {
                 biased;
-                _=token.cancelled()=>bail!("media_cancelled: cancellation requested"),
-                _=tokio::time::sleep_until(deadline)=>bail!("media_deadline: job deadline reached"),
+                _=token.cancelled()=>bail!(ErrorKind::MediaCancelled.context(format!("media_cancelled: cancellation requested"))),
+                _=tokio::time::sleep_until(deadline)=>bail!(ErrorKind::MediaDeadline.context(format!("media_deadline: job deadline reached"))),
                 _=interval.tick()=>{
                     if workspace.bytes()?>max_bytes.saturating_add(META_BYTES) || workspace::free_bytes(&workspace.path)?<limits.free_space_reserve_bytes {
-                        bail!("media_budget_exceeded: sampled staging or free-space limit reached");
+                        bail!(ErrorKind::MediaBudgetExceeded.context(format!("media_budget_exceeded: sampled staging or free-space limit reached")));
                     }
                     if last.elapsed()>=Duration::from_secs(1) {
                         if let (Some((engine,job,base)),Some(line))=(progress.as_mut(),pending.take()) {
@@ -98,7 +99,7 @@ pub async fn run(mut command: Command, workspace: &mut Workspace, limits: &Media
             }
         }
         if let (Some((engine,job,base)),Some(line))=(progress.as_mut(),pending) { super::update_transfer(engine,job,&line,*base).await?; }
-        if !status.context("media_helper_failed: missing helper status")?.success() { bail!("media_helper_failed: configured helper failed; no retry or bypass"); }
+        if !status.context(ErrorKind::MediaHelperFailed.context("media_helper_failed: missing helper status"))?.success() { bail!(ErrorKind::MediaHelperFailed.context(format!("media_helper_failed: configured helper failed; no retry or bypass"))); }
         Ok(value)
     }.await;
     workspace::kill_group(pid);
@@ -107,7 +108,7 @@ pub async fn run(mut command: Command, workspace: &mut Workspace, limits: &Media
     let stopped=workspace::stopped(pid).await;
     if stopped.is_ok() {group.0=None;}
     drop(group);
-    reaped.context("media_helper_failed: cannot reap helper")?;
+    reaped.context(ErrorKind::MediaHelperFailed.context("media_helper_failed: cannot reap helper"))?;
     stopped?;
     result
 }

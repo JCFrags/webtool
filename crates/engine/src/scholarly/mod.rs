@@ -13,7 +13,7 @@ use transport::{ProviderClient, Response};
 
 const PARSER: &str = "scholarly-metadata/1";
 const CACHE_SECONDS: u64 = 86400;
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, Copy, thiserror::Error)]
 pub enum ScholarlyError {
     #[error("Use an explicit supported scholarly provider, a query of 1 to 4096 bytes, and a limit from 1 to 20.")]
     InvalidRequest,

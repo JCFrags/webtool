@@ -1,5 +1,6 @@
 //! One content selector, followed by structural conversion and verified source matching.
 use std::{collections::{HashMap,HashSet},error::Error,fmt};
+use crate::error::ErrorKind;
 use anyhow::{anyhow,bail,Result};
 use scraper::{ElementRef,Html,Selector};
 use serde_json::json;
@@ -24,7 +25,7 @@ impl fmt::Display for MissingContent {
 }
 impl Error for MissingContent {}
 
-fn selector(s:&str)->Result<Selector>{Selector::parse(s).map_err(|e|anyhow!("invalid CSS selector: {e:?}"))}
+fn selector(s:&str)->Result<Selector>{Selector::parse(s).map_err(|e|anyhow!(ErrorKind::InvalidCss.context(format!("invalid CSS selector: {e:?}"))))}
 fn normalized(s:&str)->String{s.split_whitespace().collect::<Vec<_>>().join(" ")}
 fn compact(s:&str)->String{s.chars().filter(|c|!c.is_whitespace()).collect()}
 fn text(e:ElementRef<'_>)->String{e.text().collect::<String>()}
@@ -702,7 +703,7 @@ fn parse_source(source:&str,url:&str,explicit:Option<&str>)->Result<Parsed>{
     let selected=if let Some(css)=explicit{
         p.parser="explicit-css+source-blocks/7+html-encoding/1".into();
         let found=original.select(&selector(css)?).map(|n|n.html()).collect::<Vec<_>>();
-        if found.is_empty(){bail!("CSS selector matched no elements");}found.join("\n")
+        if found.is_empty(){bail!(ErrorKind::EmptyCss.context(format!("CSS selector matched no elements")));}found.join("\n")
     }else{
         #[cfg(feature="web-extraction")]
         {
@@ -720,7 +721,7 @@ fn parse_source(source:&str,url:&str,explicit:Option<&str>)->Result<Parsed>{
             let (selection,unavailable,math)=selection_source(&original)?;
             unavailable_disclosures=unavailable;
             math_sources=math;
-            let r=rs_trafilatura::extract_with_options(&selection,&options).map_err(|e|anyhow!("HTML extraction failed: {e}"))?;
+            let r=rs_trafilatura::extract_with_options(&selection,&options).map_err(|e|anyhow!(ErrorKind::ParseFailed.context(format!("HTML extraction failed: {e}"))))?;
             readable_text=Some(r.content_text);
             if title.is_none(){if let Some(t)=&r.metadata.title{p.title=t.clone();}}
             p.metadata=json!({"extractor_estimated_quality":r.extraction_quality,"quality_estimate_is_not_validation":true,"source_title":title,"extractor_title":r.metadata.title});
@@ -732,7 +733,7 @@ fn parse_source(source:&str,url:&str,explicit:Option<&str>)->Result<Parsed>{
             ))?
         }
         #[cfg(not(feature="web-extraction"))]
-        {bail!("HTML content selection requires the web-extraction feature or an explicit selector");}
+        {bail!(ErrorKind::CapabilityUnavailable.context(format!("HTML content selection requires the web-extraction feature or an explicit selector")));}
     };
     let elements=selector(BLOCKS)?;
     let mut origins:Origins<'_>=HashMap::new();
@@ -806,7 +807,7 @@ fn parse_source(source:&str,url:&str,explicit:Option<&str>)->Result<Parsed>{
     }
     finish_inline_links(&mut p,structure.links);
     if p.blocks.is_empty(){
-        if explicit.is_some(){bail!("no readable blocks found for the explicit CSS selector");}
+        if explicit.is_some(){bail!(ErrorKind::EmptyCss.context(format!("no readable blocks found for the explicit CSS selector")));}
         return Err(MissingContent::new(
             "html_no_readable_blocks",
             "no readable blocks found; the page may require JavaScript or an explicit selector",

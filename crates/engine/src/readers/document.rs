@@ -1,4 +1,5 @@
 //! One document engine. Normalization never invents page coordinates.
+use crate::error::ErrorKind;
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use webtool_protocol::{Cell, Content, Locator, Warning};
@@ -27,17 +28,17 @@ pub async fn parse(bytes: &[u8], name: &str, config: &Config) -> Result<Parsed> 
         #[cfg(not(feature = "ocr"))]
         {
             if cfg.ocr.is_some() || cfg.force_ocr || cfg.force_ocr_pages.as_ref().is_some_and(|p|!p.is_empty()) {
-                bail!("OCR is unavailable in this server build; document_config requires OCR");
+                bail!(ErrorKind::CapabilityUnavailable.context(format!("OCR is unavailable in this server build; document_config requires OCR")));
             }
             cfg.disable_ocr = true;
         }
         let mime = super::detect(name, None, bytes);
         let input = xberg::ExtractInput::from_bytes(bytes.to_vec(), mime.as_str(), Some(name.into()));
-        let output = xberg::extract(input, &cfg).await?;
+        let output = xberg::extract(input, &cfg).await.context(ErrorKind::ParseFailed.context("document engine extraction failed"))?;
         let errors = serde_json::to_value(&output.errors)?;
-        let result = output.results.first().with_context(|| format!("document engine returned no results: {errors}"))?;
+        let result = output.results.first().with_context(|| ErrorKind::ParseFailed.context(format!("document engine returned no results: {errors}")))?;
         let mut parsed = normalize(serde_json::to_value(result)?, name)
-            .with_context(|| format!("normalize Xberg output; engine errors: {errors}"))?;
+            .with_context(|| ErrorKind::ParseFailed.context(format!("normalize Xberg output; engine errors: {errors}")))?;
         // Keep every result and envelope diagnostic, not only the first normalized result.
         parsed.metadata["upstream_output"] = serde_json::to_value(&output)?;
         if errors.as_array().is_some_and(|items| !items.is_empty()) {
@@ -51,7 +52,7 @@ pub async fn parse(bytes: &[u8], name: &str, config: &Config) -> Result<Parsed> 
     #[cfg(not(feature = "documents"))]
     {
         let _ = (bytes, name, config);
-        bail!("binary documents require a server built with --features documents; scanned images additionally require OCR models")
+        bail!(ErrorKind::CapabilityUnavailable.context(format!("binary documents require a server built with --features documents; scanned images additionally require OCR models")))
     }
 }
 
@@ -91,10 +92,10 @@ fn normalize(payload: Value, name: &str) -> Result<Parsed> {
             let Some(raw_rows) = table.get("cells").and_then(Value::as_array) else { continue; };
             let mut rows = Vec::new();
             for raw_row in raw_rows {
-                let Some(raw_cells) = raw_row.as_array() else { bail!("document table row has an unexpected shape"); };
+                let Some(raw_cells) = raw_row.as_array() else { bail!(ErrorKind::ParseFailed.context(format!("document table row has an unexpected shape"))); };
                 let mut row = Vec::new();
                 for cell in raw_cells {
-                    let text = cell.as_str().context("document table cell is not text")?;
+                    let text = cell.as_str().context(ErrorKind::ParseFailed.context("document table cell is not text"))?;
                     row.push(Cell { text: text.into(), row_span: 1, col_span: 1, header: false });
                 }
                 rows.push(row);
@@ -115,7 +116,7 @@ fn normalize(payload: Value, name: &str) -> Result<Parsed> {
     }
     if parsed.blocks.is_empty() {
         let warnings = parsed.warnings.iter().map(|w|w.message.as_str()).collect::<Vec<_>>().join("; ");
-        bail!("document contains no extracted text or nonempty table cells. Empty page objects are not readable content. {} Blank pages, scans, or extraction failures are possible; the cause is not established. {warnings}", ocr_limit());
+        bail!(ErrorKind::ParseFailed.context(format!("document contains no extracted text or nonempty table cells. Empty page objects are not readable content. {} Blank pages, scans, or extraction failures are possible; the cause is not established. {warnings}", ocr_limit())));
     }
     parsed.warnings.push(Warning::new("document_structure_partial", "Page text and tables are normalized. Full upstream structures remain in metadata. Figure export and fine-grained document element mapping are not implemented."));
     if let Some(total) = positive_number(payload.pointer("/metadata/pages/total_count")) {

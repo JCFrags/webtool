@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use crate::error::ErrorKind;
 use anyhow::{bail, Result};
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use tokio::{sync::{Mutex, Semaphore}, time::{sleep_until, timeout, timeout_at, Instant}};
@@ -65,9 +66,9 @@ impl SearchService {
 
     pub(crate) async fn search(&self, request: SearchRequest) -> Result<SearchResponse> {
         if request.query.trim().is_empty() || request.query.len() > 4096 {
-            bail!("query must contain 1 to 4096 bytes");
+            bail!(ErrorKind::InvalidSearch.context(format!("query must contain 1 to 4096 bytes")));
         }
-        if !(1..=50).contains(&request.limit) { bail!("search limit must be between 1 and 50"); }
+        if !(1..=50).contains(&request.limit) { bail!(ErrorKind::InvalidSearch.context(format!("search limit must be between 1 and 50"))); }
         let start = Instant::now();
         let deadline = start + self.timeout;
         let mut pending = FuturesUnordered::new();

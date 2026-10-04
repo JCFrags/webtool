@@ -4,6 +4,7 @@ pub mod code;
 pub mod documentation;
 pub mod external_code;
 pub mod config;
+pub mod error;
 pub mod fetch;
 pub mod jobs;
 pub mod media;
@@ -15,6 +16,7 @@ pub mod scholarly;
 pub mod sources;
 pub mod store;
 use std::{collections::HashMap,sync::{Arc,Weak},time::Instant};
+use crate::error::ErrorKind;
 use anyhow::{anyhow,bail,Context,Result};
 use chrono::Utc;
 use regex::RegexBuilder;
@@ -91,7 +93,7 @@ impl Engine {
         let deadline=tokio::time::Instant::now().checked_add(std::time::Duration::from_secs(seconds))
             .context("read deadline is out of range")?;
         tokio::time::timeout_at(deadline,self.read_inner(request,deadline,choice)).await
-            .map_err(|_|anyhow!("read_timeout: operation exceeded its {seconds}-second overall deadline"))?
+            .with_context(||ErrorKind::ReadTimeout.context(format!("read_timeout: operation exceeded its {seconds}-second overall deadline")))?
     }
     async fn read_inner(&self,request:ReadRequest,deadline:tokio::time::Instant,choice:CaptionChoice)->Result<ReadResponse>{
         let _operation=self.operation_slots.acquire().await?;
@@ -102,7 +104,7 @@ impl Engine {
             media::youtube_url(url.as_str())?
         } else { None };
         if matches!(request.renderer,Renderer::Captions) && (caption_url.is_none() || request.selector.is_some()) {
-            bail!("unsupported captions request: use a YouTube watch/youtu.be URL without a CSS selector");
+            bail!(ErrorKind::UnsupportedCaptions.context(format!("unsupported captions request: use a YouTube watch/youtu.be URL without a CSS selector")));
         }
         if caption_url.is_some() { media::validate_language(&request.language)?; }
         let mut cache_identity=json!({"url":caption_url.as_deref().unwrap_or(url.as_str()),"renderer":request.renderer,
@@ -137,8 +139,8 @@ impl Engine {
             let original=self.store.put_bytes(&pdf.bytes,"application/pdf","arxiv_pdf").await?;
             let source=Source{requested:request.url,resolved:pdf.resolved,retrieved_at:Utc::now().to_rfc3339(),status:pdf.status,version:pdf.version,original};
             let mut parsed=self.parse(pdf.bytes,format!("{}.pdf",paper.versioned_id.replace('/',"_")),"application/pdf".into(),None).await
-                .context("arxiv_full_text_failed: PDF extraction failed; metadata is not full text")?;
-            if parsed.blocks.is_empty(){bail!("arxiv_full_text_failed: PDF has no readable blocks");}
+                .context(ErrorKind::ArxivPdfFailed.context("arxiv_full_text_failed: PDF extraction failed; metadata is not full text"))?;
+            if parsed.blocks.is_empty(){bail!(ErrorKind::ArxivPdfFailed.context(format!("arxiv_full_text_failed: PDF has no readable blocks")));}
             parsed.title=paper.title.clone();
             parsed.links.push(Link{url:paper.abstract_url.clone(),text:format!("arXiv {}",paper.versioned_id)});
             parsed.metadata["arxiv"]=serde_json::to_value(&paper)?;
@@ -187,7 +189,7 @@ impl Engine {
         let http_encoding=decoded.as_ref().map(|d|d.metadata.clone());
         let encoding_warnings=decoded.as_ref().map(|d|d.warnings.clone()).unwrap_or_default();
         if (auto_web||fetched.role=="rendered_dom")&&request.selector.is_none(){
-            if let Some(reason)=evidence.blocked{bail!("read_content_blocked: source is a {reason}; not accepted as article content");}
+            if let Some(reason)=evidence.blocked{bail!(ErrorKind::ReadContentBlocked.context(format!("read_content_blocked: source is a {reason}; not accepted as article content")));}
         }
         let readme_links=github.as_ref().filter(|g|g.readme).map(|g|sources::readme_links(&fetched.bytes,g));
         let mut parsed=if let Some(details)=github.as_ref().filter(|g|g.directory) {
@@ -206,7 +208,7 @@ impl Engine {
                     "retrieved_at":retrieved_at,"artifact":original,"html_encoding":http_encoding});
                 routing["selection_reason"]=json!(reason);
                 let recovery=if self.config.lightpanda_path.is_none(){
-                    Err(anyhow!("browser_helper_missing: automatic recovery needs configured lightpanda_path; configure it or use --renderer http for HTTP-only reading"))
+                    Err(anyhow!(ErrorKind::BrowserHelperMissing.context(format!("browser_helper_missing: automatic recovery needs configured lightpanda_path; configure it or use --renderer http for HTTP-only reading"))))
                 }else{
                     routing["auto_recovery_attempted"]=json!(true);
                     tracing::info!(reason,"Auto read: one Lightpanda recovery attempt");
@@ -214,7 +216,7 @@ impl Engine {
                     let budget=deadline.saturating_duration_since(tokio::time::Instant::now())
                         .saturating_sub(std::time::Duration::from_secs(1))
                         .min(std::time::Duration::from_secs(self.config.helper_timeout_seconds));
-                    if budget.is_zero(){Err(anyhow!("browser_timeout: no recovery time remains in the read deadline"))}else{
+                    if budget.is_zero(){Err(anyhow!(ErrorKind::BrowserTimeout.context(format!("browser_timeout: no recovery time remains in the read deadline"))))}else{
                         match tokio::time::timeout(budget,async{
                             let rendered={
                                 let _network=self.network.acquire().await?;
@@ -227,16 +229,16 @@ impl Engine {
                                 "retrieved_at":timestamp,"artifact":artifact,"accepted":false});
                             let decoded=self.decode_html(rendered.bytes.clone(),"text/html".into(),rendered.content_type.clone(),true).await?;
                             let evidence=read_recovery::inspect(&decoded.text);
-                            if let Some(reason)=evidence.blocked{bail!("browser_content_unavailable: rendered source is a {reason}");}
+                            if let Some(reason)=evidence.blocked{bail!(ErrorKind::ReadContentUnavailable.context(format!("browser_content_unavailable: rendered source is a {reason}")));}
                             let base=readers::html::rendered_base(&decoded.text,&rendered.resolved);
                             let rendered_parsed=self.parse_html(decoded,base,None).await?;
                             if !read_recovery::usable(&rendered_parsed)||evidence.shell.is_some(){
-                                bail!("browser_content_unavailable: rendered page has no usable main content or still contains an application/loading shell");
+                                bail!(ErrorKind::ReadContentUnavailable.context(format!("browser_content_unavailable: rendered page has no usable main content or still contains an application/loading shell")));
                             }
                             Ok::<_,anyhow::Error>((rendered,artifact,timestamp,rendered_parsed,evidence))
                         }).await{
                             Ok(result)=>result,
-                            Err(_)=>Err(anyhow!("browser_timeout: automatic rendering exceeded the remaining read budget")),
+                            Err(error)=>Err(ErrorKind::BrowserTimeout.with_source(error).into()),
                         }
                     }
                 };
@@ -250,12 +252,12 @@ impl Engine {
                         fetched.warnings.push(Warning::new("automatic_rendering",format!("Used Lightpanda: {reason}.")));
                     },
                     Err(error)=>{
-                        let failure=format!("{error:#}");
+                        let failure=crate::error::EngineError::from_anyhow(error).to_string();
                         routing["recovery_error"]=json!(failure);
                         if parsed.as_ref().is_ok_and(read_recovery::usable){
                             fetched.warnings.push(Warning::new("javascript_recovery_failed",format!("Showing partial HTTP content. {reason}; recovery failed: {failure}. Use --refresh to retry.")));
                         }else{
-                            bail!("read_content_unavailable: {reason}; {failure}. No usable article content was accepted.");
+                            bail!(ErrorKind::ReadContentUnavailable.context(format!("read_content_unavailable: {reason}; {failure}. No usable article content was accepted.")));
                         }
                     },
                 }
@@ -264,7 +266,7 @@ impl Engine {
         let mut parsed=parsed?;
         if fetched.role=="rendered_dom" {
             if request.selector.is_none()&&(!read_recovery::usable(&parsed)||evidence.shell.is_some()){
-                bail!("browser_content_unavailable: captured DOM has no usable main content or is still loading");
+                bail!(ErrorKind::ReadContentUnavailable.context(format!("browser_content_unavailable: captured DOM has no usable main content or is still loading")));
             }
             parsed.metadata["browser"]=json!({"renderer":actual_renderer,"artifact":"rendered_dom","locations":"retained DOM snapshot"});
             if matches!(actual_renderer,Renderer::Lightpanda){
@@ -336,8 +338,8 @@ impl Engine {
     }
     pub async fn ingest(&self,bytes:Vec<u8>,name:String,library:Option<String>,actor:Option<String>,selector:Option<String>)->Result<Document>{
         let _operation=self.operation_slots.acquire().await?;
-        if bytes.len()>self.config.max_bytes{bail!("upload exceeds configured size limit");}
-        if name.is_empty()||name.len()>256||name.contains('/')||name.contains('\\'){bail!("upload name must be a filename, not a path");}
+        if bytes.len()>self.config.max_bytes{bail!(ErrorKind::SizeLimit.context(format!("upload exceeds configured size limit")));}
+        if name.is_empty()||name.len()>256||name.contains('/')||name.contains('\\'){bail!(ErrorKind::InvalidUploadName.context(format!("upload name must be a filename, not a path")));}
         if let Some(name)=&library{self.store.require_library(name).await?;}
         let mime=readers::detect(&name,None,&bytes);
         let original=self.store.put_bytes(&bytes,&mime,"upload").await?;
@@ -385,16 +387,16 @@ impl Engine {
                     (ExtractKind::Images,Content::Image{..})|(ExtractKind::Outline,Content::Heading{..}))).collect();json!(blocks)
             },
             ExtractKind::JsonPointer=>{
-                let bytes=self.store.bytes(&d.source.original).await?;let v:Value=serde_json::from_slice(&bytes).context("original is not a JSON document")?;
-                let pointer=request.expression.context("a JSON pointer expression is required")?;
+                let bytes=self.store.bytes(&d.source.original).await?;let v:Value=serde_json::from_slice(&bytes).context(ErrorKind::OriginalFormatMismatch.context("original is not a JSON document"))?;
+                let pointer=request.expression.context(ErrorKind::MissingExpression.context("a JSON pointer expression is required"))?;
                 match v.pointer(&pointer){Some(value)=>json!({"pointer":pointer,"found":true,"value":value}),None=>{
                     warnings.push(Warning::new("missing_value","The requested JSON pointer does not exist."));json!({"pointer":pointer,"found":false,"value":null})
                 }}
             },
             ExtractKind::Css=>{
-                if !matches!(d.source.original.media_type.as_str(),"text/html"|"application/xhtml+xml"){bail!("CSS extraction requires an HTML original");}
+                if !matches!(d.source.original.media_type.as_str(),"text/html"|"application/xhtml+xml"){bail!(ErrorKind::OriginalFormatMismatch.context(format!("CSS extraction requires an HTML original")));}
                 let bytes=self.store.bytes(&d.source.original).await?;
-                let css=request.expression.context("a CSS selector expression is required")?;
+                let css=request.expression.context(ErrorKind::MissingExpression.context("a CSS selector expression is required"))?;
                 let encoding=d.metadata.get("html_encoding").cloned();
                 let limit=self.config.max_bytes;
                 let permit=self.parse_slots.clone().acquire_owned().await?;
@@ -415,27 +417,29 @@ impl Engine {
             return arxiv::citation(&document,format);
         }
         let doi=doi.trim().trim_start_matches("https://doi.org/").trim_start_matches("doi:");
-        if !doi.starts_with("10.")||!doi.contains('/')||doi.chars().any(char::is_whitespace){bail!("expected a DOI such as 10.1234/example");}
-        let accept=match format{"bibtex"=>"application/x-bibtex","ris"=>"application/x-research-info-systems","csl"=>"application/vnd.citationstyles.csl+json",_=>bail!("format must be bibtex, ris, or csl")};
+        if !doi.starts_with("10.")||!doi.contains('/')||doi.chars().any(char::is_whitespace){bail!(ErrorKind::InvalidCitation.context(format!("expected a DOI such as 10.1234/example")));}
+        let accept=match format{"bibtex"=>"application/x-bibtex","ris"=>"application/x-research-info-systems","csl"=>"application/vnd.citationstyles.csl+json",_=>bail!(ErrorKind::InvalidCitation.context(format!("format must be bibtex, ris, or csl")))};
         let mut url=url::Url::parse("https://doi.org/")?;url.set_path(doi);
-        let response=self.client.get(url.clone()).header(reqwest::header::ACCEPT,accept).send().await?.error_for_status()?;
+        let response=self.client.get(url.clone()).header(reqwest::header::ACCEPT,accept).send().await.context(ErrorKind::SourceRequestFailed.error())?;
+        let status=response.status().as_u16();
+        let response=response.error_for_status().context(ErrorKind::SourceHttpStatus(status).error())?;
         use futures_util::StreamExt;
         let mut data=Vec::new();
         let mut stream=response.bytes_stream();
         while let Some(part)=stream.next().await {
-            let part=part?;
-            if data.len().saturating_add(part.len())>1024*1024 { bail!("citation response exceeds one megabyte"); }
+            let part=part.context(ErrorKind::SourceRequestFailed.error())?;
+            if data.len().saturating_add(part.len())>1024*1024 { bail!(ErrorKind::SizeLimit.context(format!("citation response exceeds one megabyte"))); }
             data.extend_from_slice(&part);
         }
-        Ok(json!({"doi":doi,"format":format,"source":url.as_str(),"text":std::str::from_utf8(&data)?}))
+        Ok(json!({"doi":doi,"format":format,"source":url.as_str(),"text":std::str::from_utf8(&data).context(ErrorKind::ParseInvalid.error())?}))
     }
 }
 
 pub fn find(document:&Document,request:&FindRequest)->Result<FindResponse>{
-    if request.query.is_empty()||request.query.len()>4096{bail!("find query must contain 1 to 4096 bytes");}
-    if !(1..=1000).contains(&request.limit){bail!("find limit must be between 1 and 1000");}
+    if request.query.is_empty()||request.query.len()>4096{bail!(ErrorKind::InvalidFind.context(format!("find query must contain 1 to 4096 bytes")));}
+    if !(1..=1000).contains(&request.limit){bail!(ErrorKind::InvalidFind.context(format!("find limit must be between 1 and 1000")));}
     let pattern=if request.regex{request.query.clone()}else{regex::escape(&request.query)};
-    let regex=RegexBuilder::new(&pattern).case_insensitive(request.ignore_case).size_limit(2*1024*1024).build().context("invalid find pattern")?;
+    let regex=RegexBuilder::new(&pattern).case_insensitive(request.ignore_case).size_limit(2*1024*1024).build().context(ErrorKind::InvalidFind.context("invalid find pattern"))?;
     let mut matches=Vec::new();let mut remaining=request.limit;let mut truncated=false;
     for b in &document.blocks{
         let text=b.content.text();let mut ranges=Vec::new();

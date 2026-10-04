@@ -1,5 +1,6 @@
 //! Bounded YouTube discovery and existing captions. No audio/video or generated text.
 use std::{future::Future, path::Path, sync::Arc, time::Duration};
+use crate::error::ErrorKind;
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use tokio::{process::Command, sync::Semaphore};
@@ -24,7 +25,7 @@ impl MediaService {
         tokio::time::timeout(Duration::from_secs(self.config.helper_timeout_seconds), async {
             let _slot = self.slots.acquire().await?;
             operation.await
-        }).await.context("media_helper_timeout: operation exceeded its deadline, including admission")?
+        }).await.context(ErrorKind::MediaHelperTimeout.context("media_helper_timeout: operation exceeded its deadline, including admission"))?
     }
     pub async fn search(&self, request: VideoSearchRequest) -> Result<VideoSearchResponse> {
         discovery::validate_search(&request)?;
@@ -41,7 +42,7 @@ impl MediaService {
     }
 }
 fn canonical(value: &str) -> Result<String> {
-    youtube_url(value)?.context("unsupported media URL; use a YouTube watch or youtu.be URL")
+    youtube_url(value)?.context(ErrorKind::UnsupportedCaptions.context("unsupported media URL; use a YouTube watch or youtu.be URL"))
 }
 fn video_id_valid(id: &str) -> bool {
     id.len() == 11 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
@@ -59,13 +60,13 @@ pub fn youtube_url(value: &str) -> Result<Option<String>> {
     };
     let Some(id) = id else { return Ok(None); };
     if !video_id_valid(&id) {
-        bail!("unsupported YouTube video ID; use a watch or youtu.be URL for one video");
+        bail!(ErrorKind::UnsupportedCaptions.context(format!("unsupported YouTube video ID; use a watch or youtu.be URL for one video")));
     }
     Ok(Some(format!("https://www.youtube.com/watch?v={id}")))
 }
 pub fn validate_language(language: &str) -> Result<()> {
     if language.is_empty() || language.len()>64 || !language.bytes().all(|b|b.is_ascii_alphanumeric() || b==b'-' || b==b'_') {
-        bail!("caption language must be a literal language code, such as en or en-US");
+        bail!(ErrorKind::InvalidLanguage.context(format!("caption language must be a literal language code, such as en or en-US")));
     }
     Ok(())
 }
@@ -80,7 +81,7 @@ pub fn executable(path: &Path) -> bool {
 }
 fn command(config: &Config) -> Result<Command> {
     let path = config.ytdlp_path.as_ref().filter(|p|executable(p))
-        .context("media_helper_missing: yt-dlp is not configured as an executable; set ytdlp_path")?;
+        .context(ErrorKind::MediaHelperMissing.context("media_helper_missing: yt-dlp is not configured as an executable; set ytdlp_path"))?;
     let mut cmd = Command::new(path);
     cmd.args(["--ignore-config", "--no-plugin-dirs", "--no-remote-components", "--no-cache-dir",
         "--no-playlist", "--skip-download", "--ignore-no-formats-error", "--no-progress",
@@ -112,16 +113,21 @@ fn diagnostic(value: &str) -> String {
     urls.replace_all(value, "[source URL]").chars().take(4000).collect()
 }
 fn helper_error(error: anyhow::Error) -> anyhow::Error {
-    let message = diagnostic(&format!("{error:#}"));
-    let lower = message.to_ascii_lowercase();
-    let code = if lower.contains("429") || lower.contains("too many requests") { "media_rate_limited" }
-    else if lower.contains("confirm you") || lower.contains("sign in") || lower.contains("403")
-        || lower.contains("not available in your country") || lower.contains("po token") || lower.contains("po_token") {
-        "media_source_blocked"
-    } else if lower.contains("deadline") { "media_helper_timeout" }
-    else if lower.contains("helper output exceeded") { "media_size_limit" }
-    else { "media_helper_failed" };
-    anyhow::anyhow!("{code}: {message}")
+    use fetch::{HelperError,HelperFailure};
+    let Some(helper)=error.downcast_ref::<HelperError>() else { return error; };
+    // yt-dlp has no structured access/rate error envelope. Interpret native
+    // exit diagnostics once, not an engine error's formatted cause chain.
+    let lower=helper.diagnostics.to_ascii_lowercase();
+    let kind=match helper.failure {
+        HelperFailure::Missing=>ErrorKind::MediaHelperMissing,
+        HelperFailure::Deadline=>ErrorKind::MediaHelperTimeout,
+        HelperFailure::OutputLimit=>ErrorKind::MediaSizeLimit,
+        HelperFailure::Exit if lower.contains("429") || lower.contains("too many requests")=>ErrorKind::MediaRateLimited,
+        HelperFailure::Exit if lower.contains("confirm you") || lower.contains("sign in") || lower.contains("403")
+            || lower.contains("not available in your country") || lower.contains("po token") || lower.contains("po_token")=>ErrorKind::MediaSourceBlocked,
+        _=>ErrorKind::MediaHelperFailed,
+    };
+    kind.with_source(error).into()
 }
 fn untranslated_vtt(track: &Value) -> bool {
     if track["ext"].as_str()!=Some("vtt") { return false; }
@@ -133,10 +139,10 @@ async fn metadata(url: &str, config: &Config, directory: &Path) -> Result<(Value
     cmd.current_dir(directory).args(["--dump-single-json", "--", url]);
     let output = fetch::helper_output(cmd, config.helper_timeout_seconds, config.max_bytes).await.map_err(helper_error)?;
     let metadata: Value = serde_json::from_slice(&output.stdout)
-        .context("media_helper_failed: yt-dlp did not return metadata JSON")?;
+        .context(ErrorKind::MediaHelperFailed.context("media_helper_failed: yt-dlp did not return metadata JSON"))?;
     let id = url.rsplit('=').next().unwrap_or("");
     if metadata["id"].as_str() != Some(id) || discovery::video(&metadata).is_none() {
-        bail!("media_identity_mismatch: helper did not return the selected video");
+        bail!(ErrorKind::MediaIdentityMismatch.context(format!("media_identity_mismatch: helper did not return the selected video")));
     }
     Ok((metadata, helper_warnings(&output.stderr)))
 }
@@ -166,7 +172,7 @@ fn select_track<'a>(metadata: &'a Value, language: &str, choice: CaptionChoice) 
             CaptionChoice::Automatic => *origin == CaptionOrigin::Automatic,
         })
         .map(|(key, origin, _, track)| (key, origin, track))
-        .context("media_captions_unavailable: no untranslated VTT track matches the exact language and requested origin; list tracks first")
+        .context(ErrorKind::MediaCaptionsUnavailable.context("media_captions_unavailable: no untranslated VTT track matches the exact language and requested origin; list tracks first"))
 }
 async fn read_inner(url: &str, language: &str, choice: CaptionChoice, config: &Config) -> Result<(Parsed,Vec<u8>,String)> {
     let temp = tempfile::tempdir().context("create caption temporary directory")?;
@@ -199,12 +205,12 @@ async fn read_inner(url: &str, language: &str, choice: CaptionChoice, config: &C
     }
     let file = temp.path().join(format!("caption.{language}.vtt"));
     let size = tokio::fs::metadata(&file).await
-        .context("media_track_download_failed: yt-dlp did not create the selected caption file")?.len();
-    if size > config.max_bytes as u64 { bail!("caption file exceeds configured byte limit"); }
+        .context(ErrorKind::MediaHelperFailed.context("media_track_download_failed: yt-dlp did not create the selected caption file"))?.len();
+    if size > config.max_bytes as u64 { bail!(ErrorKind::SizeLimit.context(format!("caption file exceeds configured byte limit"))); }
     let bytes = tokio::fs::read(file).await.context("read downloaded caption file")?;
-    let content = std::str::from_utf8(&bytes).context("media_captions_malformed: captions are not UTF-8")?;
+    let content = std::str::from_utf8(&bytes).context(ErrorKind::MediaCaptionsMalformed.context("media_captions_malformed: captions are not UTF-8"))?;
     let mut parsed = readers::captions::parse(content,"captions.vtt")
-        .context("media_captions_malformed: selected track is not valid timestamped captions")?;
+        .context(ErrorKind::MediaCaptionsMalformed.context("media_captions_malformed: selected track is not valid timestamped captions"))?;
     parsed.title=stable["title"].as_str().unwrap_or(url).into();
     parsed.parser=PARSER.into();
     parsed.metadata=stable;

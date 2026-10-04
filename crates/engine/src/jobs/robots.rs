@@ -5,6 +5,7 @@ use futures_util::StreamExt;
 use regex::Regex;
 use url::Url;
 use super::frontier::SITEMAP_LIMIT;
+use crate::error::ErrorKind;
 
 pub(super) const MAX_BYTES: usize = 512 * 1024;
 #[derive(Default)]
@@ -80,14 +81,14 @@ impl Robots {
         let mut rules=Vec::new(); let mut delay=0.5_f64;
         for g in groups.into_iter().filter(|g|g.agents.iter().any(|a|a==agent)) {
             if let Some(d)=g.delay {
-                if d>60.0 { bail!("robots.txt requests a crawl delay over 60 seconds; crawl stopped rather than shortening it"); }
+                if d>60.0 { bail!(ErrorKind::CrawlPolicyRefused.context("robots.txt requests a crawl delay over 60 seconds; crawl stopped rather than shortening it")); }
                 delay=delay.max(d);
             }
             for (allow,pattern) in g.rules {
                 let anchored=pattern.ends_with('$');
                 let raw=normalize(if anchored { &pattern[..pattern.len()-1] } else { &pattern });
                 let expression=format!("^{}{}",raw.split('*').map(regex::escape).collect::<Vec<_>>().join(".*"),if anchored { "$" } else { "" });
-                rules.push(Rule { allow,pattern:Regex::new(&expression).context("robots rule exceeds matcher bounds; crawl stopped")?,octets:raw.bytes().filter(|b|*b!=b'*').count() });
+                rules.push(Rule { allow,pattern:Regex::new(&expression).context(ErrorKind::CrawlPolicyRefused.context("robots rule exceeds matcher bounds; crawl stopped"))?,octets:raw.bytes().filter(|b|*b!=b'*').count() });
             }
         }
         Ok(Self { rules,delay:Duration::from_secs_f64(delay),sitemaps,sitemap_truncated })
@@ -104,28 +105,28 @@ impl Robots {
 /// The caller uses a same-origin redirect client. Cross-authority robots
 /// redirects are refused, not treated as a missing robots file.
 pub(super) async fn load(client: &reqwest::Client, origin: &str, max: usize) -> Result<Robots> {
-    let response=client.get(format!("{origin}/robots.txt")).header(reqwest::header::ACCEPT_ENCODING,"identity").send().await.context("retrieve robots.txt (cross-origin redirects are refused)")?;
+    let response=client.get(format!("{origin}/robots.txt")).header(reqwest::header::ACCEPT_ENCODING,"identity").send().await.context(ErrorKind::SourceRequestFailed.context("retrieve robots.txt (cross-origin redirects are refused)"))?;
     match response.status().as_u16() {
         404|410=>return Robots::parse(""),
         401|403=>return Robots::parse("User-agent: *\nDisallow: /"),
         200=>{},
-        code=>bail!("robots.txt returned HTTP {code}; crawl stopped rather than assuming permission"),
+        code=>bail!(ErrorKind::SourceHttpStatus(code).context(format!("robots.txt returned HTTP {code}; crawl stopped rather than assuming permission"))),
     }
     let bytes=bounded_identity_body(response,max.min(MAX_BYTES)).await?;
-    Robots::parse(std::str::from_utf8(&bytes).context("robots.txt must be UTF-8; crawl stopped")?)
+    Robots::parse(std::str::from_utf8(&bytes).context(ErrorKind::ParseInvalid.context("robots.txt must be UTF-8; crawl stopped"))?)
 }
 /// Used by metadata requests with automatic decompression disabled. This bounds
 /// transferred bodies and rejects gzip files instead of expanding unbounded data.
 pub(super) async fn bounded_identity_body(response: reqwest::Response, max: usize) -> Result<Vec<u8>> {
-    if response.headers().get(reqwest::header::CONTENT_ENCODING).is_some_and(|v|!v.to_str().is_ok_and(|v|v.eq_ignore_ascii_case("identity"))) { bail!("compressed crawl metadata is unsupported; request was for identity encoding"); }
-    if response.content_length().is_some_and(|n|n>max as u64) { bail!("crawl metadata exceeds {max}-byte limit"); }
+    if response.headers().get(reqwest::header::CONTENT_ENCODING).is_some_and(|v|!v.to_str().is_ok_and(|v|v.eq_ignore_ascii_case("identity"))) { bail!(ErrorKind::CrawlMetadataUnsupported.context("compressed crawl metadata is unsupported; request was for identity encoding")); }
+    if response.content_length().is_some_and(|n|n>max as u64) { bail!(ErrorKind::SizeLimit.context(format!("crawl metadata exceeds {max}-byte limit"))); }
     let mut bytes=Vec::new(); let mut stream=response.bytes_stream();
     while let Some(part)=stream.next().await {
-        let part=part?;
-        if bytes.len().saturating_add(part.len())>max { bail!("crawl metadata exceeds {max}-byte limit"); }
+        let part=part.context(ErrorKind::SourceRequestFailed.error())?;
+        if bytes.len().saturating_add(part.len())>max { bail!(ErrorKind::SizeLimit.context(format!("crawl metadata exceeds {max}-byte limit"))); }
         bytes.extend_from_slice(&part);
     }
-    if bytes.starts_with(&[0x1f,0x8b]) { bail!("gzip sitemap files are unsupported"); }
+    if bytes.starts_with(&[0x1f,0x8b]) { bail!(ErrorKind::CrawlMetadataUnsupported.context("gzip sitemap files are unsupported")); }
     Ok(bytes)
 }
 

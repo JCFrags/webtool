@@ -3,6 +3,7 @@ pub mod encoding;
 pub mod text;
 pub mod captions;
 pub mod document;
+use crate::error::ErrorKind;
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use webtool_protocol::*;
@@ -82,7 +83,7 @@ pub fn parse(bytes:&[u8], name:&str, mime:&str, selector:Option<&str>)->Result<P
         return html::parse_decoded(decoded,name,selector);
     }
     if matches!(mime,"application/rss+xml"|"application/atom+xml") {
-        let feed=feed_rs::parser::parse(bytes).context("parse RSS or Atom feed")?;
+        let feed=feed_rs::parser::parse(bytes).context(ErrorKind::ParseInvalid.context("parse RSS or Atom feed"))?;
         let title=feed.title.map(|v|v.content).unwrap_or_else(||name.into());
         let mut p=Parsed::new(&title,"feed-rs/2");
         for (i,entry) in feed.entries.into_iter().enumerate() {
@@ -94,8 +95,8 @@ pub fn parse(bytes:&[u8], name:&str, mime:&str, selector:Option<&str>)->Result<P
         p.warnings.push(Warning::new("feed_entries_only","Feed entries are not full destination articles."));
         return Ok(p);
     }
-    let s=std::str::from_utf8(bytes).context("input is not UTF-8 text; use the document reader for binary formats")?;
-    if s.contains('\0') { bail!("text input contains NUL bytes; unsupported encoding or binary format"); }
+    let s=std::str::from_utf8(bytes).context(ErrorKind::UnsupportedText.context("input is not UTF-8 text; use the document reader for binary formats"))?;
+    if s.contains('\0') { bail!(ErrorKind::UnsupportedText.context(format!("text input contains NUL bytes; unsupported encoding or binary format"))); }
     match mime {
         "text/vtt"|"application/x-subrip"|"text/x-sbv"=>captions::parse(s,name),
         "text/csv"|"text/tab-separated-values"=>text::csv(s,name,if mime=="text/csv"{b','}else{b'\t'}),
@@ -105,7 +106,7 @@ pub fn parse(bytes:&[u8], name:&str, mime:&str, selector:Option<&str>)->Result<P
         "text/markdown"=>Ok(text::markdown(s,name)),
         "application/xml"|"text/xml"=>text::xml(s,name),
         m if m.starts_with("text/")=>Ok(text::plain(s,name)),
-        _=>bail!("unsupported format {mime}; install a server built with the documents feature"),
+        _=>bail!(ErrorKind::UnsupportedFormat.context(format!("unsupported format {mime}; install a server built with the documents feature"))),
     }
 }
 pub fn is_document_format(mime:&str)->bool {

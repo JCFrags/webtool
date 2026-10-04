@@ -520,10 +520,12 @@ media resume remain unsupported. See [VIDEO.md](docs/VIDEO.md) and
 ## Shared connector foundations
 
 The HTTP API exposes generated OpenAPI at `/openapi.json`, safe bounded Problem
-errors, and Python/TypeScript client examples. The engine still uses anyhow and a
-finite server compatibility adapter, not a complete typed error model. Add newly
-introduced error prefixes explicitly rather than restoring broad substring guesses.
-See [API.md](docs/API.md).
+errors, and Python/TypeScript client examples. Engine producers select typed error
+kinds with stable codes, status intent, and fixed public messages. Anyhow retains
+internal context and causes. HTTP and batch use typed downcasts, never prefixes
+or formatted messages. Add new typed variants at the producer and preserve unknown
+internal faults as 500. See [API.md](docs/API.md) and [ERRORS.md](docs/ERRORS.md)
+for migration limits and native-helper protocol exceptions.
 
 The locked reqwest 0.12.28 client retries protocol negative acknowledgments by default. For a new
 transport with a no-retry or exact-request-budget contract, set

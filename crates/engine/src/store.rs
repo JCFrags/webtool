@@ -1,5 +1,6 @@
 //! SQLite stays on the server. No client ever opens the database file.
 use std::{path::{Path, PathBuf}, time::Duration};
+use crate::error::ErrorKind;
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -14,7 +15,7 @@ pub struct Store { root: PathBuf, database: PathBuf }
 impl Store {
     pub async fn open(root: impl AsRef<Path>) -> Result<Self> {
         let root = root.as_ref().to_path_buf();
-        tokio::fs::create_dir_all(root.join("objects")).await?;
+        tokio::fs::create_dir_all(root.join("objects")).await.context(ErrorKind::StorageFault.error())?;
         let store = Self { database: root.join("webtool.sqlite3"), root };
         store.run(|c| {
             let version: u32 = c.pragma_query_value(None, "user_version", |r| r.get(0))?;
@@ -37,7 +38,11 @@ impl Store {
             c.busy_timeout(Duration::from_secs(5))?;
             c.pragma_update(None, "foreign_keys", true)?;
             f(&mut c)
-        }).await.context("database task failed")?
+        }).await.context(ErrorKind::StorageFault.context("database task failed"))?
+            .map_err(|error| {
+                if crate::error::kind(&error).is_some() { error }
+                else { ErrorKind::StorageFault.with_source(error).into() }
+            })
     }
     pub async fn put_bytes(&self, bytes: &[u8], media_type: &str, role: &str) -> Result<Artifact> {
         let sha256 = hex::encode(Sha256::digest(bytes));
@@ -53,7 +58,7 @@ impl Store {
                 Ok::<(), std::io::Error>(())
             }.await;
             if result.is_err() { let _ = tokio::fs::remove_file(&temp).await; }
-            result?;
+            result.context(ErrorKind::StorageFault.error())?;
         }
         Ok(Artifact { sha256, media_type: media_type.into(), size: bytes.len() as u64, role: role.into() })
     }
@@ -63,17 +68,17 @@ impl Store {
         use tokio::io::AsyncReadExt;
         let mut options = tokio::fs::OpenOptions::new(); options.read(true);
         #[cfg(unix)] { options.custom_flags(nix::libc::O_NOFOLLOW); }
-        let mut input = options.open(path).await?;
-        if !input.metadata().await?.is_file() { bail!("media_validation_failed: input is not regular"); }
+        let mut input = options.open(path).await.context(ErrorKind::StorageFault.error())?;
+        if !input.metadata().await.context(ErrorKind::StorageFault.error())?.is_file() { bail!(ErrorKind::MediaValidationFailed.context(format!("media_validation_failed: input is not regular"))); }
         let temp = self.root.join("objects").join(format!(".{}.tmp", uuid::Uuid::new_v4()));
         let result = async {
             let mut output = tokio::fs::OpenOptions::new().write(true).create_new(true).open(&temp).await?;
             let mut hash = Sha256::new(); let mut size = 0u64; let mut buffer = vec![0u8;64*1024];
             loop {
-                if tokio::time::Instant::now()>=deadline {bail!("media_deadline: object copy deadline reached");}
+                if tokio::time::Instant::now()>=deadline {bail!(ErrorKind::MediaDeadline.context(format!("media_deadline: object copy deadline reached")));}
                 let n = input.read(&mut buffer).await?; if n == 0 { break; }
-                size = size.checked_add(n as u64).context("media_budget_exceeded: object size overflow")?;
-                if size > max { bail!("media_budget_exceeded: object exceeds retained-byte limit"); }
+                size = size.checked_add(n as u64).context(ErrorKind::MediaBudgetExceeded.context("media_budget_exceeded: object size overflow"))?;
+                if size > max { bail!(ErrorKind::MediaBudgetExceeded.context(format!("media_budget_exceeded: object exceeds retained-byte limit"))); }
                 hash.update(&buffer[..n]); output.write_all(&buffer[..n]).await?;
             }
             output.sync_all().await?; drop(output);
@@ -82,13 +87,16 @@ impl Store {
             match tokio::fs::hard_link(&temp, &dest).await {
                 Ok(()) => {}, Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                     let m = tokio::fs::symlink_metadata(&dest).await?;
-                    if !m.is_file() || m.file_type().is_symlink() || m.len() != size { bail!("saved artifact checksum mismatch"); }
+                    if !m.is_file() || m.file_type().is_symlink() || m.len() != size { bail!(ErrorKind::StorageFault.context(format!("saved artifact checksum mismatch"))); }
                 }, Err(e) => return Err(e.into()),
             }
             Ok(Artifact {sha256,media_type:media_type.into(),size,role:role.into()})
         }.await;
         let _ = tokio::fs::remove_file(&temp).await;
-        result
+        result.map_err(|error| {
+            if crate::error::kind(&error).is_some() { error }
+            else { ErrorKind::StorageFault.with_source(error).into() }
+        })
     }
     /// All queued/active media reservations, including jobs beyond the list display cap.
     pub async fn media_reservations(&self, excluding: Option<String>) -> Result<(u64,u64)> {
@@ -99,8 +107,8 @@ impl Store {
                 let j:Job=serde_json::from_str(&row?)?;
                 if Some(&j.id)==excluding.as_ref() { continue; }
                 if let JobRequest::Media(r)=j.request {
-                    staging=staging.checked_add(r.max_bytes.saturating_add(4*1024*1024)).context("media_budget_exceeded: reservation overflow")?;
-                    objects=objects.checked_add(r.max_bytes).context("media_budget_exceeded: reservation overflow")?;
+                    staging=staging.checked_add(r.max_bytes.saturating_add(4*1024*1024)).context(ErrorKind::MediaBudgetExceeded.context("media_budget_exceeded: reservation overflow"))?;
+                    objects=objects.checked_add(r.max_bytes).context(ErrorKind::MediaBudgetExceeded.context("media_budget_exceeded: reservation overflow"))?;
                 }
             }
             Ok((staging,objects))
@@ -108,7 +116,7 @@ impl Store {
     }
     pub fn artifact_path(&self, hash: &str) -> Result<PathBuf> {
         if hash.len() != 64 || !hash.bytes().all(|c| c.is_ascii_hexdigit()) {
-            bail!("invalid artifact identifier");
+            bail!(ErrorKind::StorageFault.context(format!("invalid artifact identifier")));
         }
         Ok(self.root.join("objects").join(hash))
     }
@@ -116,18 +124,18 @@ impl Store {
         use tokio::io::{AsyncReadExt, AsyncSeekExt};
         let mut options=tokio::fs::OpenOptions::new(); options.read(true);
         #[cfg(unix)] { options.custom_flags(nix::libc::O_NOFOLLOW); }
-        let mut file=options.open(self.artifact_path(&artifact.sha256)?).await?;
-        let m=file.metadata().await?;
-        if !m.is_file() || m.len()!=artifact.size { bail!("saved artifact checksum mismatch"); }
+        let mut file=options.open(self.artifact_path(&artifact.sha256)?).await.context(ErrorKind::StorageFault.error())?;
+        let m=file.metadata().await.context(ErrorKind::StorageFault.error())?;
+        if !m.is_file() || m.len()!=artifact.size { bail!(ErrorKind::StorageFault.context(format!("saved artifact checksum mismatch"))); }
         let mut hash=Sha256::new();let mut buffer=vec![0u8;64*1024];
-        loop {let n=file.read(&mut buffer).await?;if n==0 {break;}hash.update(&buffer[..n]);}
-        if hex::encode(hash.finalize())!=artifact.sha256 {bail!("saved artifact checksum mismatch");}
-        file.seek(std::io::SeekFrom::Start(0)).await?;
+        loop {let n=file.read(&mut buffer).await.context(ErrorKind::StorageFault.error())?;if n==0 {break;}hash.update(&buffer[..n]);}
+        if hex::encode(hash.finalize())!=artifact.sha256 {bail!(ErrorKind::StorageFault.context(format!("saved artifact checksum mismatch")));}
+        file.seek(std::io::SeekFrom::Start(0)).await.context(ErrorKind::StorageFault.error())?;
         Ok(file)
     }
     pub async fn bytes(&self, artifact: &Artifact) -> Result<Vec<u8>> {
-        let bytes = tokio::fs::read(self.artifact_path(&artifact.sha256)?).await?;
-        if hex::encode(Sha256::digest(&bytes)) != artifact.sha256 { bail!("saved artifact checksum mismatch"); }
+        let bytes = tokio::fs::read(self.artifact_path(&artifact.sha256)?).await.context(ErrorKind::StorageFault.error())?;
+        if hex::encode(Sha256::digest(&bytes)) != artifact.sha256 { bail!(ErrorKind::StorageFault.context(format!("saved artifact checksum mismatch"))); }
         Ok(bytes)
     }
     pub async fn save(&self, document: Document) -> Result<Document> {
@@ -144,7 +152,7 @@ impl Store {
         let id = id.to_owned();
         self.run(move |c| {
             let value: Option<String> = c.query_row("SELECT payload FROM documents WHERE id=?", [id], |r| r.get(0)).optional()?;
-            serde_json::from_str(&value.ok_or_else(|| anyhow!("document not found"))?).map_err(Into::into)
+            serde_json::from_str(&value.ok_or_else(|| anyhow!(ErrorKind::MissingResource.context(format!("document not found"))))?).map_err(Into::into)
         }).await
     }
     pub async fn cached(&self, key: &str, max_age: u64) -> Result<Option<Document>> {
@@ -183,7 +191,7 @@ impl Store {
         let name = name.to_owned();
         self.run(move |c| {
             let exists: bool = c.query_row("SELECT EXISTS(SELECT 1 FROM libraries WHERE name=?)", [name], |r| r.get(0))?;
-            if !exists { bail!("library not found"); } Ok(())
+            if !exists { bail!(ErrorKind::MissingResource.context(format!("library not found"))); } Ok(())
         }).await
     }
     pub async fn add(&self, library: &str, document_id: &str, actor: Option<String>) -> Result<()> {
@@ -208,7 +216,7 @@ impl Store {
     pub async fn search(&self, query: String, library: Option<String>, limit: usize) -> Result<Vec<SearchResult>> {
         // Quote tokens so a user's identifier is not silently treated as FTS syntax.
         let terms = query.split_whitespace().map(|t| format!("\"{}\"",t.replace('"',"\"\""))).collect::<Vec<_>>().join(" AND ");
-        if terms.is_empty() { bail!("search query must not be empty"); }
+        if terms.is_empty() { bail!(ErrorKind::InvalidSearch.context(format!("search query must not be empty"))); }
         self.run(move |c| {
             let mut stmt = c.prepare("SELECT d.id,d.title,d.source_url,snippet(documents_fts,1,'','', ' ... ',40),bm25(documents_fts) FROM documents_fts JOIN documents d ON d.rowid=documents_fts.rowid WHERE documents_fts MATCH ?1 AND (?2 IS NULL OR EXISTS(SELECT 1 FROM library_items i WHERE i.document_id=d.id AND i.library=?2)) ORDER BY bm25(documents_fts) LIMIT ?3")?;
             let rows = stmt.query_map(params![terms,library,limit.min(100) as i64], |r| Ok(SearchResult {
@@ -218,9 +226,9 @@ impl Store {
         }).await
     }
     pub async fn add_annotation(&self, id: &str, request: AnnotationCreate) -> Result<Annotation> {
-        if request.actor.trim().is_empty() { bail!("actor must not be empty"); }
-        if request.note.len() > 65536 { bail!("note exceeds 65536 bytes"); }
-        if request.tags.len() > 64 || request.tags.iter().any(|t| t.len() > 100) { bail!("too many or oversized tags"); }
+        if request.actor.trim().is_empty() { bail!(ErrorKind::InvalidAnnotation.context(format!("actor must not be empty"))); }
+        if request.note.len() > 65536 { bail!(ErrorKind::SizeLimit.context(format!("note exceeds 65536 bytes"))); }
+        if request.tags.len() > 64 || request.tags.iter().any(|t| t.len() > 100) { bail!(ErrorKind::InvalidAnnotation.context(format!("too many or oversized tags"))); }
         let a = Annotation { id:uuid::Uuid::new_v4().to_string(),document_id:id.into(),actor:request.actor,
             note:request.note,tags:request.tags,created_at:Utc::now().to_rfc3339() };
         let value = a.clone();
@@ -241,7 +249,7 @@ impl Store {
     pub async fn job(&self, id: &str) -> Result<Job> {
         let id=id.to_owned(); self.run(move |c| {
             let value:Option<String>=c.query_row("SELECT payload FROM jobs WHERE id=?",[id],|r|r.get(0)).optional()?;
-            Ok(serde_json::from_str(&value.ok_or_else(||anyhow!("job not found"))?)?)
+            Ok(serde_json::from_str(&value.ok_or_else(||anyhow!(ErrorKind::MissingResource.context(format!("job not found"))))?)?)
         }).await
     }
     pub async fn jobs(&self) -> Result<Vec<Job>> {
@@ -262,7 +270,7 @@ pub(crate) fn write_job(c: &Connection, job: &Job) -> Result<()> {
 
 pub fn validate_library(name:&str)->Result<()> {
     if name.is_empty() || name.len()>80 || !name.bytes().all(|c|c.is_ascii_alphanumeric()||b"-_".contains(&c)) {
-        bail!("library names must contain 1 to 80 ASCII letters, digits, hyphens, or underscores");
+        bail!(ErrorKind::InvalidLibrary.context(format!("library names must contain 1 to 80 ASCII letters, digits, hyphens, or underscores")));
     } Ok(())
 }
 #[cfg(test)] mod tests {
