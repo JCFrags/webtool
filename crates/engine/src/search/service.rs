@@ -56,6 +56,7 @@ impl SearchService {
             // JSON redirects so credentials cannot cross an origin or downgrade TLS.
             json_client: reqwest::Client::builder().user_agent(&config.user_agent)
                 .redirect(reqwest::redirect::Policy::none()).referer(false)
+                .retry(reqwest::retry::never())
                 .timeout(Duration::from_secs(20)).build()?,
             providers: Arc::new(providers),
             slots: Arc::new(Semaphore::new(config.search.concurrency)),

@@ -52,7 +52,7 @@ The initial competitor pin is current main
    source references, commands, limits, providers, transports, and cache states.
 3. Separate repeatable retained/local-source cases from live provider observations.
    A blocked provider is not proof that another tool has better result quality.
-   An unexercised material overlap keeps the gate open.
+   An unexercised material keyless overlap keeps the gate open.
 4. Compare equivalent cold and warm states. Report startup/setup separately, but
    do not hide the cost of a required daemon or helper.
 5. Retain errors, failed inputs, partial results, warnings, and provenance. A
@@ -70,12 +70,22 @@ reported variation. Count the complete Webtool CLI, daemon, and helper footprint
 not only the thin client. Report peak and idle memory, CPU time, retained storage,
 and relevant request/helper costs. Record measurement method and limits.
 
-Webtool must meet or exceed Ketch quality and wall-clock performance in overlapping
-workflows. Do not use a favorable overall average to hide a material regression.
-Slightly higher system resources are allowed only when time and quality are at
-parity or better. The numeric resource tolerance remains open and must be stated
-before accepting that exception. The provisional 10% CPU/RAM target is not an
-approved exception or a passing result.
+Webtool must meet or exceed Ketch quality and complete wall-clock performance in
+overlapping keyless workflows. Do not use a favorable overall average to hide a
+material regression. Larger binaries and higher CPU/RAM are allowed because
+Webtool does more, but resource use must not be grossly larger than needed. Check
+concrete avoidable bloat and report complete startup, idle, runtime, binary and
+stored-data costs. No fixed 10% resource ceiling applies. Higher resources do not
+waive a speed or output-quality deficit.
+
+### Keyed-provider confidence
+
+The Sprint 1 parity gate covers keyless workflows. Do not ignore implemented
+keyed adapters. Check request contracts, literal queries, selected versions,
+response and error handling, result usefulness, and source/provenance limits with
+existing source evidence and local/mock checks. Record unsupported interfaces and
+live behavior that remains unverified. These checks do not authorize credentials,
+account access, public/provider requests, paid calls, or model use.
 
 ### Quality
 

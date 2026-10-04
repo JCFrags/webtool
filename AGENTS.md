@@ -24,9 +24,12 @@ extensions, and media follow-ons. Do not start Sprint 2 or merge Sprint 1 on
 GitHub until the Ketch comparison gate passes. Compare pinned builds on the same
 inputs. Measure complete input-to-output wall clock, system resources, and result
 quality. A brand-new subagent must perform subjective quality checks with product
-identities hidden. Webtool must meet or exceed Ketch in overlapping workflows.
-Slightly higher resources are allowed only with time and quality parity or better.
-State the resource tolerance before accepting that exception.
+identities hidden. Webtool must meet or exceed Ketch quality and complete
+wall-clock performance in overlapping keyless workflows. Larger binaries and higher CPU/RAM are allowed
+because Webtool does more, but resource use must not be grossly larger than needed.
+Report complete costs and check concrete avoidable bloat. No fixed 10% ceiling
+applies. Keyed adapters remain in scope for source-contract and local/mock
+confidence checks. Record live-provider limits rather than claim untested parity.
 
 Ordinary research stays LLM-free. Optional answers remain in Sprint 2, not an
 implicit search step. Credentials, paid calls, cloud model transfer, model
