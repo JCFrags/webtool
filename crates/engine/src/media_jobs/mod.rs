@@ -3,6 +3,7 @@ mod metadata;
 mod runner;
 mod workspace;
 use std::{path::Path, time::Duration};
+use crate::error::ErrorKind;
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use serde_json::Value;
@@ -12,27 +13,27 @@ use crate::{config::{Config,MediaDownloadConfig}, Engine};
 use workspace::{Workspace,META_BYTES};
 
 pub fn limits(config: &Config) -> Result<&MediaDownloadConfig> {
-    if !cfg!(target_os="linux") { bail!("media_platform_unsupported: Linux supervision is required"); }
-    let c=config.media_download.as_ref().context("media_download_disabled: operator has not configured media budgets")?;
+    if !cfg!(target_os="linux") { bail!(ErrorKind::MediaDownloadHelpersMissing.context(format!("media_platform_unsupported: Linux supervision is required"))); }
+    let c=config.media_download.as_ref().context(ErrorKind::MediaDownloadDisabled.context("media_download_disabled: operator has not configured media budgets"))?;
     for path in [config.ytdlp_path.as_deref(),Some(c.ffmpeg_path.as_path()),Some(c.ffprobe_path.as_path())] {
-        if !path.is_some_and(|p|p.is_absolute() && crate::media::executable(p)) { bail!("media_download_helpers_missing: configure existing absolute yt-dlp, ffmpeg, and ffprobe executables"); }
+        if !path.is_some_and(|p|p.is_absolute() && crate::media::executable(p)) { bail!(ErrorKind::MediaDownloadHelpersMissing.context(format!("media_download_helpers_missing: configure existing absolute yt-dlp, ffmpeg, and ffprobe executables"))); }
     }
     Ok(c)
 }
 fn canonical(url: &str) -> Result<String> {
-    if url.len()>8192 { bail!("media_download_invalid: oversized URL"); }
-    crate::media::youtube_url(url)?.context("media_download_invalid: select one watch or youtu.be video URL")
+    if url.len()>8192 { bail!(ErrorKind::MediaDownloadInvalid.context(format!("media_download_invalid: oversized URL"))); }
+    crate::media::youtube_url(url)?.context(ErrorKind::MediaDownloadInvalid.context("media_download_invalid: select one watch or youtu.be video URL"))
 }
 fn validate(request: &MediaDownloadRequest, config: &Config) -> Result<()> {
     let c=limits(config)?; let url=canonical(&request.url)?;
     if url.rsplit('=').next()!=Some(request.video_id.as_str()) || request.max_bytes==0 || request.max_bytes>c.max_job_bytes
         || request.max_duration_seconds==0 || request.max_duration_seconds>c.max_duration_seconds
         || request.max_width.is_some_and(|n|n==0 || n>c.max_width) || request.max_height.is_some_and(|n|n==0 || n>c.max_height) {
-        bail!("media_download_invalid: supply matching video identity and finite bounds within operator ceilings");
+        bail!(ErrorKind::MediaDownloadInvalid.context(format!("media_download_invalid: supply matching video identity and finite bounds within operator ceilings")));
     }
     let ids=match &request.selection { MediaSelection::NativeAudio {audio}=>vec![audio],MediaSelection::Video {video,audio}=>std::iter::once(video).chain(audio.iter()).collect() };
     for f in ids {
-        if !metadata::token(&f.id) || f.identity.len()!=64 || !f.identity.bytes().all(|b|b.is_ascii_hexdigit()) { bail!("media_download_invalid: select exact format ID and identity from a preview"); }
+        if !metadata::token(&f.id) || f.identity.len()!=64 || !f.identity.bytes().all(|b|b.is_ascii_hexdigit()) { bail!(ErrorKind::MediaDownloadInvalid.context(format!("media_download_invalid: select exact format ID and identity from a preview"))); }
     }
     Ok(())
 }
@@ -44,7 +45,7 @@ async fn budget(engine: &Engine, excluding: Option<String>, staging: u64, object
     let total=existing.saturating_add(stage).saturating_add(reserved_objects).saturating_add(objects);
     if stage>c.staging_bytes || total>c.storage_bytes
         || workspace::free_bytes(engine.store.root())?<c.free_space_reserve_bytes.saturating_add(stage).saturating_add(reserved_objects).saturating_add(objects) {
-        bail!("media_budget_exceeded: storage reservation or free-space admission failed");
+        bail!(ErrorKind::MediaBudgetExceeded.context(format!("media_budget_exceeded: storage reservation or free-space admission failed")));
     }
     Ok(())
 }
@@ -52,7 +53,7 @@ async fn inventory(engine: &Engine, url: &str, ws: &mut Workspace, deadline: tok
     let mut cmd=metadata::helper(&engine.config,max)?;
     cmd.args(["--skip-download","--no-progress","--dump-single-json","--",url]);
     let output=runner::run(cmd,ws,limits(&engine.config)?,max,deadline,token,None,true).await?;
-    let raw:Value=serde_json::from_slice(&output).context("media_helper_failed: invalid format metadata")?;
+    let raw:Value=serde_json::from_slice(&output).context(ErrorKind::MediaHelperFailed.context("media_helper_failed: invalid format metadata"))?;
     let preview=metadata::normalize(&raw,url)?;
     Ok((raw,preview))
 }
@@ -60,7 +61,7 @@ impl Engine {
     pub async fn media_formats(&self, request: MediaFormatsRequest) -> Result<MediaFormatsResponse> {
         let c=limits(&self.config)?; let url=canonical(&request.url)?;
         let deadline=tokio::time::Instant::now()+Duration::from_secs(c.timeout_seconds.min(self.config.helper_timeout_seconds));
-        let _permit=tokio::time::timeout_at(deadline,self.media_job_slot.acquire()).await.context("media_deadline: preview admission deadline reached")??;
+        let _permit=tokio::time::timeout_at(deadline,self.media_job_slot.acquire()).await.context(ErrorKind::MediaDeadline.context("media_deadline: preview admission deadline reached"))??;
         let id=uuid::Uuid::new_v4().to_string(); let mut ws=Workspace::create(self.store.root(),&id)?;
         let result=inventory(self,&url,&mut ws,deadline,&CancellationToken::new(),c.max_job_bytes).await.map(|(_,p)|p);
         ws.clean()?;
@@ -83,7 +84,7 @@ impl Engine {
     pub async fn media_artifact(&self, id: &str, artifact_id: &str) -> Result<MediaArtifact> {
         let job=self.store.job(id).await?;
         job.media.and_then(|m|m.result).and_then(|r|r.artifacts.into_iter().find(|a|a.id==artifact_id))
-            .context("media_artifact_not_found: artifact is not retained by this job")
+            .context(ErrorKind::MediaArtifactNotFound.context("media_artifact_not_found: artifact is not retained by this job"))
     }
     pub(crate) async fn recover_media(&self, job: &mut Job) -> Result<()> {
         if let Err(_e)=workspace::recover(self.store.root(),&job.id).await {
@@ -93,7 +94,7 @@ impl Engine {
         job.updated_at=Utc::now().to_rfc3339(); self.store.put_job(job.clone()).await
     }
     pub(crate) async fn execute_media_job(&self, mut job: Job, token: CancellationToken) -> Result<()> {
-        let JobRequest::Media(request)=job.request.clone() else { bail!("media_download_invalid: not a media request"); };
+        let JobRequest::Media(request)=job.request.clone() else { bail!(ErrorKind::MediaDownloadInvalid.context(format!("media_download_invalid: not a media request"))); };
         let c=limits(&self.config)?;
         let elapsed=(Utc::now()-chrono::DateTime::parse_from_rfc3339(&job.created_at)?.with_timezone(&Utc)).num_seconds().max(0) as u64;
         let deadline=tokio::time::Instant::now()+Duration::from_secs(c.timeout_seconds.saturating_sub(elapsed));
@@ -111,17 +112,18 @@ impl Engine {
         }
     }
 }
-fn safe_error(error: &anyhow::Error) -> &str {
-    for cause in error.chain() {
-        let text=cause.to_string();
-        for (prefix,message) in [("media_cancelled:","media_cancelled: cancellation requested"),("media_deadline:","media_deadline: operation deadline reached"),
-            ("media_budget_exceeded:","media_budget_exceeded: byte or storage budget reached"),("media_format_unavailable:","media_format_unavailable: selection changed, is unsupported, or exceeds constraints"),
-            ("media_identity_mismatch:","media_identity_mismatch: selected source identity changed"),("media_validation_failed:","media_validation_failed: actual output does not match selection"),
-            ("media_output_limit:","media_output_limit: helper output bound reached"),("media_staging_unsafe:","media_staging_unsafe: ownership, file, or process checks failed")] {
-            if text.starts_with(prefix) { return message; }
-        }
+fn safe_error(error: &anyhow::Error) -> &'static str {
+    match crate::error::kind(error) {
+        Some(ErrorKind::MediaCancelled)=>"media_cancelled: cancellation requested",
+        Some(ErrorKind::MediaDeadline)=>"media_deadline: operation deadline reached",
+        Some(ErrorKind::MediaBudgetExceeded)=>"media_budget_exceeded: byte or storage budget reached",
+        Some(ErrorKind::MediaFormatUnavailable)=>"media_format_unavailable: selection changed, is unsupported, or exceeds constraints",
+        Some(ErrorKind::MediaIdentityMismatch)=>"media_identity_mismatch: selected source identity changed",
+        Some(ErrorKind::MediaValidationFailed)=>"media_validation_failed: actual output does not match selection",
+        Some(ErrorKind::MediaOutputLimit)=>"media_output_limit: helper output bound reached",
+        Some(ErrorKind::MediaStagingUnsafe)=>"media_staging_unsafe: ownership, file, or process checks failed",
+        _=>"media_helper_failed: operation failed; no retry or bypass was attempted",
     }
-    "media_helper_failed: operation failed; no retry or bypass was attempted"
 }
 async fn finish_failure(engine: &Engine, job: &mut Job, cancelled: bool, message: &str) -> Result<()> {
     let _lock=engine.submission_lock.lock().await;
@@ -129,14 +131,14 @@ async fn finish_failure(engine: &Engine, job: &mut Job, cancelled: bool, message
     engine.store.put_job(job.clone()).await
 }
 async fn stage(engine: &Engine, job: &mut Job, stage: MediaStage) -> Result<()> {
-    let p=&mut job.media.as_mut().context("media_download_invalid: no progress record")?.progress;
+    let p=&mut job.media.as_mut().context(ErrorKind::MediaDownloadInvalid.context("media_download_invalid: no progress record"))?.progress;
     p.stage=stage;p.speed_bytes_per_second=None;p.eta_seconds=None;
     job.updated_at=Utc::now().to_rfc3339();engine.store.put_job(job.clone()).await
 }
 pub(super) async fn update_transfer(engine: &Engine, job: &mut Job, line: &[u8], base: u64) -> Result<()> {
     let text=std::str::from_utf8(line).unwrap_or("");let values:Vec<_>=text.trim().split('\t').collect();
     if values.len()!=5 { return Ok(()); }
-    let p=&mut job.media.as_mut().context("media_download_invalid: no progress record")?.progress;
+    let p=&mut job.media.as_mut().context(ErrorKind::MediaDownloadInvalid.context("media_download_invalid: no progress record"))?.progress;
     if let Ok(bytes)=values[1].parse::<u64>() { p.transferred_bytes=base.saturating_add(bytes); }
     // total_bytes describes all selected inputs, not one current stream.
     // It remains unknown if any selected stream lacks an exact source size.
@@ -149,7 +151,7 @@ async fn version(engine: &Engine, ws: &mut Workspace, path: &Path, deadline: tok
     let mut cmd=runner::command(path,max);cmd.arg("-version");
     let bytes=runner::run(cmd,ws,limits(&engine.config)?,max,deadline,token,None,true).await?;
     let line=std::str::from_utf8(&bytes)?.lines().next().unwrap_or("");
-    let version=line.split_whitespace().nth(2).filter(|s|metadata::token(s)).context("media_helper_failed: helper version unavailable")?;
+    let version=line.split_whitespace().nth(2).filter(|s|metadata::token(s)).context(ErrorKind::MediaHelperFailed.context("media_helper_failed: helper version unavailable"))?;
     Ok(version.into())
 }
 async fn execute(engine: &Engine, request: &MediaDownloadRequest, job: &mut Job, ws: &mut Workspace, deadline: tokio::time::Instant, token: &CancellationToken) -> Result<()> {
@@ -165,9 +167,9 @@ async fn execute(engine: &Engine, request: &MediaDownloadRequest, job: &mut Job,
     let mut pruned=serde_json::Map::new();
     for key in fields {if let Some(value)=raw.get(key) {pruned.insert(key.into(),value.clone());}}
     let mut formats=Vec::new();
-    for f in raw["formats"].as_array().context("media_format_unavailable: no formats")? {
+    for f in raw["formats"].as_array().context(ErrorKind::MediaFormatUnavailable.context("media_format_unavailable: no formats"))? {
         if !selected.iter().any(|s|Some(s.id.as_str())==f["format_id"].as_str()) {continue;}
-        let source=f["url"].as_str().context("media_format_unavailable: direct stream URL missing")?;
+        let source=f["url"].as_str().context(ErrorKind::MediaFormatUnavailable.context("media_format_unavailable: direct stream URL missing"))?;
         crate::fetch::validated_url(source)?;
         let mut object=serde_json::Map::new();
         for key in ["format_id","url","ext","protocol","vcodec","acodec","filesize","filesize_approx","width","height","tbr","abr","vbr","asr","audio_channels","language","http_headers"] {
@@ -177,7 +179,7 @@ async fn execute(engine: &Engine, request: &MediaDownloadRequest, job: &mut Job,
     }
     pruned.insert("formats".into(),Value::Array(formats));raw=Value::Object(pruned);
     let bytes=serde_json::to_vec(&raw)?;
-    if bytes.len() as u64>META_BYTES { bail!("media_output_limit: selected private metadata exceeds limit"); }
+    if bytes.len() as u64>META_BYTES { bail!(ErrorKind::MediaOutputLimit.context(format!("media_output_limit: selected private metadata exceeds limit"))); }
     tokio::fs::write(ws.path.join("source.json"),bytes).await?;
     {let _lock=engine.submission_lock.lock().await;
      budget(engine,Some(job.id.clone()),request.max_bytes.saturating_add(META_BYTES),request.max_bytes).await?;}
@@ -209,14 +211,14 @@ async fn execute(engine: &Engine, request: &MediaDownloadRequest, job: &mut Job,
     let mut properties=Vec::new();
     for (i,name) in names.iter().enumerate() {properties.push(probe(engine,ws,name,&selected[i..i+1],request,deadline,token).await?);}
     if selected.len()==2 {properties.push(probe(engine,ws,&output,&selected,request,deadline,token).await?);names.push(output.clone());}
-    let actual=names.iter().try_fold(0u64,|n,name|->Result<u64>{Ok(n.checked_add(std::fs::metadata(ws.regular(name)?)?.len()).context("media_budget_exceeded: output size overflow")?)} )?;
-    if actual>request.max_bytes {bail!("media_budget_exceeded: actual total retained inputs and output exceeds limit");}
+    let actual=names.iter().try_fold(0u64,|n,name|->Result<u64>{Ok(n.checked_add(std::fs::metadata(ws.regular(name)?)?.len()).context(ErrorKind::MediaBudgetExceeded.context("media_budget_exceeded: output size overflow"))?)} )?;
+    if actual>request.max_bytes {bail!(ErrorKind::MediaBudgetExceeded.context(format!("media_budget_exceeded: actual total retained inputs and output exceeds limit")));}
     stage(engine,job,MediaStage::Publication).await?;
     // Cancellation and publication share submission_lock. A cancellation accepted
     // before this lock cannot produce a later complete result. Copies are streamed.
     let _lock=engine.submission_lock.lock().await;
-    if token.is_cancelled(){bail!("media_cancelled: cancellation requested");}
-    if tokio::time::Instant::now()>=deadline{bail!("media_deadline: publication deadline reached");}
+    if token.is_cancelled(){bail!(ErrorKind::MediaCancelled.context(format!("media_cancelled: cancellation requested")));}
+    if tokio::time::Instant::now()>=deadline{bail!(ErrorKind::MediaDeadline.context(format!("media_deadline: publication deadline reached")));}
     budget(engine,Some(job.id.clone()),actual,actual).await?;
     let mut artifacts=Vec::new();let mut inputs=Vec::new();
     for (i,name) in names.iter().enumerate() {
@@ -227,9 +229,9 @@ async fn execute(engine: &Engine, request: &MediaDownloadRequest, job: &mut Job,
         artifacts.push(MediaArtifact {id:id.clone(),artifact,container,duration_seconds:duration,streams,derived_from:if derived{inputs.clone()}else{vec![]}});
         if !derived {inputs.push(id);}
     }
-    if tokio::time::Instant::now()>=deadline {bail!("media_deadline: publication deadline reached");}
-    let output_id=artifacts.last().context("media_validation_failed: no output")?.id.clone();
-    let media=job.media.as_mut().context("media_download_invalid: no media progress")?;
+    if tokio::time::Instant::now()>=deadline {bail!(ErrorKind::MediaDeadline.context(format!("media_deadline: publication deadline reached")));}
+    let output_id=artifacts.last().context(ErrorKind::MediaValidationFailed.context("media_validation_failed: no output"))?.id.clone();
+    let media=job.media.as_mut().context(ErrorKind::MediaDownloadInvalid.context("media_download_invalid: no media progress"))?;
     media.result=Some(MediaResult {video_id:preview.video_id,observed_at:preview.observed_at,helper_version:preview.helper_version,
         ffmpeg_version,ffprobe_version,selected_formats:selected,artifacts,output_id});
     media.progress.stage=MediaStage::Complete;media.progress.speed_bytes_per_second=None;media.progress.eta_seconds=None;
@@ -246,25 +248,25 @@ async fn probe(engine: &Engine, ws: &mut Workspace, name: &str, selected: &[Medi
     let bytes=runner::run(cmd,ws,c,request.max_bytes,deadline,token,None,true).await?;
     let value:Value=serde_json::from_slice(&bytes)?;
     let duration=value["format"]["duration"].as_str().and_then(|s|s.parse::<f64>().ok()).filter(|n|n.is_finite() && *n>0.0 && *n<=request.max_duration_seconds as f64)
-        .context("media_validation_failed: actual duration is unknown or excessive")?;
-    let container=value["format"]["format_name"].as_str().filter(|s|s.len()<128).context("media_validation_failed: container unavailable")?.to_owned();
+        .context(ErrorKind::MediaValidationFailed.context("media_validation_failed: actual duration is unknown or excessive"))?;
+    let container=value["format"]["format_name"].as_str().filter(|s|s.len()<128).context(ErrorKind::MediaValidationFailed.context("media_validation_failed: container unavailable"))?.to_owned();
     let expected=if selected.len()==2 {"matroska"} else {match selected[0].container.as_str() {"mp4"|"m4a"=>"mov","webm"=>"matroska","opus"=>"ogg",s=>s}};
-    if !container.split(',').any(|s|s==expected) {bail!("media_validation_failed: actual container differs from selection");}
+    if !container.split(',').any(|s|s==expected) {bail!(ErrorKind::MediaValidationFailed.context(format!("media_validation_failed: actual container differs from selection")));}
     let mut streams=Vec::new();
-    for s in value["streams"].as_array().context("media_validation_failed: streams unavailable")? {
-        let kind=s["codec_type"].as_str().context("media_validation_failed: unknown stream")?;
-        let codec=s["codec_name"].as_str().filter(|s|metadata::token(s)).context("media_validation_failed: unknown codec")?;
-        if !matches!(kind,"video"|"audio") {bail!("media_validation_failed: unexpected stream kind");}
+    for s in value["streams"].as_array().context(ErrorKind::MediaValidationFailed.context("media_validation_failed: streams unavailable"))? {
+        let kind=s["codec_type"].as_str().context(ErrorKind::MediaValidationFailed.context("media_validation_failed: unknown stream"))?;
+        let codec=s["codec_name"].as_str().filter(|s|metadata::token(s)).context(ErrorKind::MediaValidationFailed.context("media_validation_failed: unknown codec"))?;
+        if !matches!(kind,"video"|"audio") {bail!(ErrorKind::MediaValidationFailed.context(format!("media_validation_failed: unexpected stream kind")));}
         let width=s["width"].as_u64().and_then(|n|u32::try_from(n).ok());let height=s["height"].as_u64().and_then(|n|u32::try_from(n).ok());
         let matches=selected.iter().any(|f|if kind=="audio" {f.audio_codec.as_ref().is_some_and(|c|metadata::probe_codec(c)==codec)}
             else {f.video_codec.as_ref().is_some_and(|c|metadata::probe_codec(c)==codec) && f.width==width && f.height==height
                 && width.is_some_and(|n|n<=request.max_width.unwrap_or(c.max_width)) && height.is_some_and(|n|n<=request.max_height.unwrap_or(c.max_height))});
-        if !matches {bail!("media_validation_failed: actual codec or dimensions differ from selection");}
+        if !matches {bail!(ErrorKind::MediaValidationFailed.context(format!("media_validation_failed: actual codec or dimensions differ from selection")));}
         streams.push(MediaStream {kind:kind.into(),codec:codec.into(),width,height});
     }
     let audio=selected.iter().any(|s|s.audio_codec.is_some());let video=selected.iter().any(|s|s.video_codec.is_some());
     if streams.len()!=usize::from(audio)+usize::from(video) || streams.iter().any(|s|s.kind=="audio")!=audio || streams.iter().any(|s|s.kind=="video")!=video {
-        bail!("media_validation_failed: required audio or video stream missing");
+        bail!(ErrorKind::MediaValidationFailed.context(format!("media_validation_failed: required audio or video stream missing")));
     }
     Ok((container,duration,streams))
 }

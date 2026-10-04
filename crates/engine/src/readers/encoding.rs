@@ -1,4 +1,5 @@
 //! Bounded HTML encoding selection. This is not the complete browser sniffing algorithm.
+use crate::error::ErrorKind;
 use anyhow::{bail, Context, Result};
 use encoding_rs::{CoderResult, Encoding, REPLACEMENT, UTF_16BE, UTF_16LE, UTF_8, WINDOWS_1252, X_USER_DEFINED};
 use scraper::{ElementRef, Html, Selector};
@@ -115,7 +116,7 @@ fn bounded(bytes: &[u8], encoding: &'static Encoding, limit: usize) -> Result<(S
         // encoding_rs requires at least four output bytes, even at the cap.
         let size = (limit - output.len()).clamp(4, scratch.len());
         let (result, consumed, written, errors) = decoder.decode_to_utf8(&bytes[read..], &mut scratch[..size], true);
-        if written > limit - output.len() { bail!("html_decoded_size_limit: decoded HTML exceeds {limit} UTF-8 bytes"); }
+        if written > limit - output.len() { bail!(ErrorKind::HtmlInputSizeLimit.context(format!("html_decoded_size_limit: decoded HTML exceeds {limit} UTF-8 bytes"))); }
         if output.capacity() - output.len() < written { output.reserve_exact(written); }
         output.push_str(std::str::from_utf8(&scratch[..written]).expect("decoder returns UTF-8"));
         read += consumed;
@@ -127,18 +128,18 @@ fn xml_declaration(bytes: &[u8]) -> Result<Option<String>> {
     if !bytes.starts_with(b"<?xml") || !bytes.get(5).is_some_and(u8::is_ascii_whitespace) { return Ok(None); }
     let prefix = &bytes[..bytes.len().min(META_LIMIT)];
     let end = prefix.windows(2).position(|pair| pair == b"?>")
-        .context("xhtml_encoding_unsupported: XML declaration exceeds 1024 bytes or is incomplete")?;
-    let declaration = std::str::from_utf8(&prefix[..end + 2]).context("xhtml_encoding_unsupported: XML declaration is not UTF-8")?;
+        .context(ErrorKind::HtmlEncodingUnsupported.context("xhtml_encoding_unsupported: XML declaration exceeds 1024 bytes or is incomplete"))?;
+    let declaration = std::str::from_utf8(&prefix[..end + 2]).context(ErrorKind::HtmlEncodingUnsupported.context("xhtml_encoding_unsupported: XML declaration is not UTF-8"))?;
     let probe = format!("{declaration}<probe/>");
-    roxmltree::Document::parse(&probe).context("xhtml_encoding_unsupported: malformed XML declaration")?;
+    roxmltree::Document::parse(&probe).context(ErrorKind::HtmlEncodingUnsupported.context("xhtml_encoding_unsupported: malformed XML declaration"))?;
     let pattern = regex::Regex::new(r#"encoding\s*=\s*(?:"([^"]*)"|'([^']*)')"#).expect("constant pattern");
     Ok(pattern.captures(declaration).and_then(|c| c.get(1).or_else(|| c.get(2))).map(|v| v.as_str().to_owned()))
 }
 
 pub fn decode(bytes: &[u8], mime: &str, content_type: Option<&str>, rendered: bool, limit: usize) -> Result<Decoded> {
-    if bytes.len() > limit { bail!("html_input_size_limit: HTML input exceeds {limit} bytes"); }
+    if bytes.len() > limit { bail!(ErrorKind::HtmlInputSizeLimit.context(format!("html_input_size_limit: HTML input exceeds {limit} bytes"))); }
     if bytes.starts_with(b"\xff\xfe\0\0") || bytes.starts_with(b"\0\0\xfe\xff") {
-        bail!("html_encoding_unsupported: UTF-32 is not supported");
+        bail!(ErrorKind::HtmlEncodingUnsupported.context(format!("html_encoding_unsupported: UTF-32 is not supported")));
     }
     let bom = Encoding::for_bom(bytes);
     let mut warnings = Vec::new();
@@ -149,17 +150,17 @@ pub fn decode(bytes: &[u8], mime: &str, content_type: Option<&str>, rendered: bo
         // strict UTF-8 until XML encodings have a separate implementation.
         if !warnings.is_empty() || declarations.iter().any(|d| d.encoding != Some(UTF_8))
             || bom.is_some_and(|(e, _)| e != UTF_8) {
-            bail!("xhtml_encoding_unsupported: XHTML requires an absent or UTF-8 transport charset and UTF-8 BOM");
+            bail!(ErrorKind::HtmlEncodingUnsupported.context(format!("xhtml_encoding_unsupported: XHTML requires an absent or UTF-8 transport charset and UTF-8 BOM")));
         }
         if let Some(label) = xml_declaration(&bytes[bom.map_or(0, |(_, n)| n)..])? {
-            if !label.eq_ignore_ascii_case("utf-8") { bail!("xhtml_encoding_unsupported: only UTF-8 XML declarations are supported"); }
+            if !label.eq_ignore_ascii_case("utf-8") { bail!(ErrorKind::HtmlEncodingUnsupported.context(format!("xhtml_encoding_unsupported: only UTF-8 XML declarations are supported"))); }
             declarations.push(declaration(&label, "xml_declaration", &mut warnings));
         }
     } else {
         declarations.extend(meta(bytes, &mut warnings));
     }
     let (encoding, selected_by) = if rendered {
-        if bom.is_some_and(|(e, _)| e != UTF_8) { bail!("rendered_encoding_invalid: captured DOM is not UTF-8"); }
+        if bom.is_some_and(|(e, _)| e != UTF_8) { bail!(ErrorKind::HtmlEncodingInvalid.context(format!("rendered_encoding_invalid: captured DOM is not UTF-8"))); }
         (UTF_8, "rendered_utf8")
     } else if xhtml {
         (UTF_8, "xhtml_utf8")
@@ -173,14 +174,14 @@ pub fn decode(bytes: &[u8], mime: &str, content_type: Option<&str>, rendered: bo
         warnings.push(Warning::new("html_encoding_fallback", "No recognized encoding declaration. Assumed windows-1252 because the HTML is not valid UTF-8; verify the retained original."));
         (WINDOWS_1252, "windows1252_fallback")
     };
-    if encoding == REPLACEMENT { bail!("html_encoding_unsupported: selected charset maps to the replacement encoding; no fallback was attempted"); }
+    if encoding == REPLACEMENT { bail!(ErrorKind::HtmlEncodingUnsupported.context(format!("html_encoding_unsupported: selected charset maps to the replacement encoding; no fallback was attempted"))); }
     if declarations.iter().any(|d| d.encoding.is_some_and(|e| e != encoding)) {
         warnings.push(Warning::new("html_encoding_conflict", format!("Charset declarations disagree with selected {} ({selected_by}); lower-priority declarations were not used.", encoding.name())));
     }
     let removed = bom.map_or(0, |(_, n)| n);
     let (text, had_errors) = bounded(&bytes[removed..], encoding, limit)?;
-    if had_errors && (rendered || xhtml) { bail!("html_encoding_invalid: captured DOM and XHTML must be valid UTF-8; no replacement decoding was accepted"); }
-    if text.contains('\0') { bail!("html_encoding_invalid: decoded HTML contains NUL characters; unsupported encoding or binary input"); }
+    if had_errors && (rendered || xhtml) { bail!(ErrorKind::HtmlEncodingInvalid.context(format!("html_encoding_invalid: captured DOM and XHTML must be valid UTF-8; no replacement decoding was accepted"))); }
+    if text.contains('\0') { bail!(ErrorKind::HtmlEncodingInvalid.context(format!("html_encoding_invalid: decoded HTML contains NUL characters; unsupported encoding or binary input"))); }
     if had_errors {
         warnings.push(Warning::new("html_encoding_replacements", "Malformed source sequences were replaced with U+FFFD. Text locations are derived, and automatic browser recovery is disabled for this input."));
     }
@@ -199,7 +200,7 @@ pub fn decode(bytes: &[u8], mime: &str, content_type: Option<&str>, rendered: bo
 /// Saved CSS operations replay the stored encoding, never today's header/meta
 /// rules. Legacy snapshots without a decision retain their strict UTF-8 view.
 pub fn restore(bytes: &[u8], record: Option<&Value>, limit: usize) -> Result<String> {
-    if bytes.len() > limit { bail!("html_input_size_limit: retained HTML exceeds {limit} bytes"); }
+    if bytes.len() > limit { bail!(ErrorKind::HtmlInputSizeLimit.context(format!("html_input_size_limit: retained HTML exceeds {limit} bytes"))); }
     let Some(record) = record else { return Ok(std::str::from_utf8(bytes).context("legacy HTML original is not UTF-8")?.to_owned()); };
     if record["version"] != VERSION { bail!("unsupported saved HTML encoding version"); }
     let encoding = record["encoding"].as_str().and_then(|label| Encoding::for_label(label.as_bytes())).context("invalid saved HTML encoding")?;

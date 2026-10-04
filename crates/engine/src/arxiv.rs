@@ -1,5 +1,6 @@
 //! Official arXiv metadata, immutable PDF identity, and offline preprint citations.
 use std::{sync::LazyLock,time::Duration};
+use crate::error::ErrorKind;
 use anyhow::{bail,Context,Result};
 use chrono::{DateTime,Datelike,NaiveDateTime};
 use regex::Regex;
@@ -28,7 +29,7 @@ pub fn identify(url:&Url)->Result<Option<Identity>>{
     if !matches!(url.host_str(),Some("arxiv.org"|"www.arxiv.org"|"export.arxiv.org")){return Ok(None);}
     let Some(path)=url.path().strip_prefix("/abs/").or_else(||url.path().strip_prefix("/pdf/")) else{return Ok(None)};
     let path=path.strip_suffix(".pdf").unwrap_or(path);
-    let c=IDS.captures(path).context("arxiv_invalid_identifier: expected a modern or legacy arXiv ID with optional vN")?;
+    let c=IDS.captures(path).context(ErrorKind::ArxivInvalidIdentifier.context("arxiv_invalid_identifier: expected a modern or legacy arXiv ID with optional vN"))?;
     Ok(Some(Identity{id:c["id"].into(),version:c.name("version").map(|v|v.as_str().into())}))
 }
 #[derive(Debug,Serialize,Deserialize)]pub struct Paper{
@@ -51,29 +52,33 @@ fn selector(css:&str)->Selector{Selector::parse(css).expect("constant selector")
 fn text(e:ElementRef<'_>)->String{e.text().collect::<String>().trim().to_owned()}
 fn one(doc:&Html,css:&str)->Result<Option<String>>{
     let values:Vec<_>=doc.select(&selector(css)).map(text).filter(|s|!s.is_empty()).collect();
-    if values.len()>1{bail!("arxiv_invalid_metadata: ambiguous {css}");}Ok(values.into_iter().next())
+    if values.len()>1{bail!(ErrorKind::ArxivInvalidMetadata.context(format!("arxiv_invalid_metadata: ambiguous {css}")));}Ok(values.into_iter().next())
 }
 fn meta(doc:&Html,name:&str)->Result<Option<String>>{
     let values:Vec<_>=doc.select(&selector("meta[name][content]")).filter(|e|e.value().attr("name")==Some(name))
         .filter_map(|e|e.value().attr("content")).map(str::trim).filter(|s|!s.is_empty()).collect();
-    if values.windows(2).any(|w|w[0]!=w[1]){bail!("arxiv_invalid_metadata: conflicting {name}");}
+    if values.windows(2).any(|w|w[0]!=w[1]){bail!(ErrorKind::ArxivInvalidMetadata.context(format!("arxiv_invalid_metadata: conflicting {name}")));}
     Ok(values.first().map(|s|s.to_string()))
 }
 fn id_from(url:&Url,value:&str)->Result<Identity>{
-    identify(&url.join(value)? )?.context("arxiv_identity_mismatch: not an arXiv paper URL")
+    identify(&url.join(value)? )?.context(ErrorKind::ArxivIdentityMismatch.context("arxiv_identity_mismatch: not an arXiv paper URL"))
 }
 fn same(selected:&Identity,other:&Identity)->Result<()>{
     if selected.id!=other.id || other.version.as_ref().is_some_and(|v|Some(v)!=selected.version.as_ref()){
-        bail!("arxiv_identity_mismatch: selected {}, conflicting {}",selected.full(),other.full());
+        bail!(ErrorKind::ArxivIdentityMismatch.context(format!("arxiv_identity_mismatch: selected {}, conflicting {}",selected.full(),other.full())));
     }Ok(())
 }
 async fn get(client:&reqwest::Client,url:&str,max:usize,phase:&str)->Result<Fetched>{
     fetch::http(client,url,max).await.map_err(|e|{
-        let message=format!("{e:#}");
-        let code=if message.contains("HTTP 429"){"arxiv_rate_limited"}
-            else if message.contains("HTTP 404")||message.contains("HTTP 410"){"arxiv_version_unavailable"}
-            else if phase=="PDF"{"arxiv_pdf_failed"}else{"arxiv_metadata_failed"};
-        anyhow::anyhow!("{code}: {phase}: {message}")
+        let kind=match crate::error::kind(&e) {
+            Some(ErrorKind::SourceHttpStatus(429))=>ErrorKind::ArxivRateLimited,
+            Some(ErrorKind::SourceHttpStatus(404|410))=>ErrorKind::ArxivVersionUnavailable,
+            Some(ErrorKind::SourceHttpStatus(_)|ErrorKind::SourceRequestFailed|ErrorKind::SizeLimit)=>
+                if phase=="PDF"{ErrorKind::ArxivPdfFailed}else{ErrorKind::ArxivInvalidMetadata},
+            // Unknown faults are not promoted to a provider or validation error.
+            _=>return e,
+        };
+        kind.with_source(e).into()
     })
 }
 pub async fn resolve(client:&reqwest::Client,wanted:&Identity,max:usize)->Result<(Paper,Fetched)>{
@@ -83,14 +88,14 @@ pub async fn resolve(client:&reqwest::Client,wanted:&Identity,max:usize)->Result
     Ok((paper,response))
 }
 pub(crate) fn parse_html(bytes:&[u8],resolved:&str,wanted:&Identity)->Result<Paper>{
-    let source=std::str::from_utf8(bytes).context("arxiv_invalid_metadata: HTML is not UTF-8")?;
+    let source=std::str::from_utf8(bytes).context(ErrorKind::ArxivInvalidMetadata.context("arxiv_invalid_metadata: HTML is not UTF-8"))?;
     let doc=Html::parse_document(source);let base=fetch::validated_url(resolved)?;
     // This article-specific row says "for this version". Neither a canonical
     // link nor an arbitrary occurrence in submission history selects a version.
     let rows:Vec<_>=doc.select(&selector("#abs .arxividv a[href]")).collect();
-    if rows.len()!=1{bail!("arxiv_invalid_metadata: missing or ambiguous selected-version row");}
+    if rows.len()!=1{bail!(ErrorKind::ArxivInvalidMetadata.context(format!("arxiv_invalid_metadata: missing or ambiguous selected-version row")));}
     let selected=id_from(&base,rows[0].value().attr("href").unwrap())?;
-    let version=selected.version.clone().context("arxiv_invalid_metadata: selected version is not explicit")?;
+    let version=selected.version.clone().context(ErrorKind::ArxivInvalidMetadata.context("arxiv_invalid_metadata: selected version is not explicit"))?;
     same(&selected,wanted)?;same(&selected,&id_from(&base,resolved)?)?;
     for e in doc.select(&selector("link[rel=canonical][href], #abs .arxivid a[href], .full-text a.download-pdf[href], .header-breadcrumbs-mobile strong")){
         let evidence=if let Some(href)=e.value().attr("href"){id_from(&base,href)?}
@@ -107,26 +112,26 @@ pub(crate) fn parse_html(bytes:&[u8],resolved:&str,wanted:&Identity)->Result<Pap
     // adjacent timestamp, never the most recent timestamp or the entire history.
     let markers:Vec<_>=doc.select(&selector(".submission-history strong")).filter(|e|e.select(&selector("a")).next().is_none() && text(*e).starts_with("[v")).collect();
     if markers.len()!=1 || text(markers[0])!=format!("[v{version}]"){
-        bail!("arxiv_identity_mismatch: history selection contradicts selected-version row");
+        bail!(ErrorKind::ArxivIdentityMismatch.context(format!("arxiv_identity_mismatch: history selection contradicts selected-version row")));
     }
     let mut date_text=String::new();
     for n in markers[0].next_siblings(){
-        if let Some(e)=ElementRef::wrap(n){if e.value().name()=="br"{break;}bail!("arxiv_invalid_metadata: unexpected selected date markup");}
+        if let Some(e)=ElementRef::wrap(n){if e.value().name()=="br"{break;}bail!(ErrorKind::ArxivInvalidMetadata.context(format!("arxiv_invalid_metadata: unexpected selected date markup")));}
         if let Some(t)=n.value().as_text(){date_text.push_str(t);}
     }
     let date_text=date_text.trim().split(" UTC").next().filter(|_|date_text.contains(" UTC"))
-        .context("arxiv_invalid_metadata: selected submission date has no UTC marker")?;
+        .context(ErrorKind::ArxivInvalidMetadata.context("arxiv_invalid_metadata: selected submission date has no UTC marker"))?;
     let date=NaiveDateTime::parse_from_str(date_text,"%a, %e %b %Y %H:%M:%S")
-        .context("arxiv_invalid_metadata: selected submission date is invalid")?.and_utc().to_rfc3339();
+        .context(ErrorKind::ArxivInvalidMetadata.context("arxiv_invalid_metadata: selected submission date is invalid"))?.and_utc().to_rfc3339();
     let mut source_dates=std::collections::BTreeMap::from([("selected_submission".into(),date.clone())]);
     for name in ["citation_date","citation_online_date"]{if let Some(v)=meta(&doc,name)?{source_dates.insert(name.into(),v);}}
     if let Some(v)=one(&doc,"#abs .dateline")?{source_dates.insert("dateline".into(),v);}
-    let title=meta(&doc,"citation_title")?.context("arxiv_invalid_metadata: missing citation title")?;
+    let title=meta(&doc,"citation_title")?.context(ErrorKind::ArxivInvalidMetadata.context("arxiv_invalid_metadata: missing citation title"))?;
     let citation_authors=doc.select(&selector("meta[name=citation_author][content]")).filter_map(|e|e.value().attr("content")).map(str::to_owned).collect::<Vec<_>>();
     let mut authors=doc.select(&selector("#abs .authors a")).map(text).filter(|s|!s.is_empty()).collect::<Vec<_>>();
     if authors.is_empty(){authors=citation_authors.clone();}
-    if authors.is_empty(){bail!("arxiv_invalid_metadata: missing authors");}
-    let abstract_text=meta(&doc,"citation_abstract")?.context("arxiv_invalid_metadata: missing citation abstract")?;
+    if authors.is_empty(){bail!(ErrorKind::ArxivInvalidMetadata.context(format!("arxiv_invalid_metadata: missing authors")));}
+    let abstract_text=meta(&doc,"citation_abstract")?.context(ErrorKind::ArxivInvalidMetadata.context("arxiv_invalid_metadata: missing citation abstract"))?;
     let subjects=one(&doc,"#abs .subjects")?.unwrap_or_default();
     let codes=Regex::new(r"\(([a-z][a-z.-]*(?:\.[A-Z]{2})?)\)").expect("constant regex");
     let categories=codes.captures_iter(&subjects).map(|c|c[1].to_owned()).collect();
@@ -138,7 +143,7 @@ pub(crate) fn parse_html(bytes:&[u8],resolved:&str,wanted:&Identity)->Result<Pap
     for value in dois{
         let value=value.trim().trim_start_matches("https://doi.org/").trim_start_matches("http://doi.org/").to_owned();
         let target=if value.to_ascii_lowercase().starts_with("10.48550/arxiv."){&mut arxiv_doi}else{&mut doi};
-        if target.as_ref().is_some_and(|s|s!=&value){bail!("arxiv_invalid_metadata: conflicting DOI identifiers");}*target=Some(value);
+        if target.as_ref().is_some_and(|s|s!=&value){bail!(ErrorKind::ArxivInvalidMetadata.context(format!("arxiv_invalid_metadata: conflicting DOI identifiers")));}*target=Some(value);
     }
     let license_evidence=doc.select(&selector(".full-text .abs-license a[href]"))
         .filter_map(|e|e.value().attr("href")).map(str::to_owned).collect();
@@ -172,14 +177,14 @@ fn reuse_decision(value:&str)->webtool_protocol::ReuseDecision {
 }
 pub async fn pdf(client:&reqwest::Client,paper:&Paper,max:usize)->Result<Fetched>{
     if paper.rights().decision!=webtool_protocol::ReuseDecision::Permitted {
-        bail!("arxiv_reuse_not_established: the selected version has no supported full-text reuse basis; use scholarly arXiv inspection for saved metadata and links");
+        bail!(ErrorKind::ArxivReuseNotEstablished.context(format!("arxiv_reuse_not_established: the selected version has no supported full-text reuse basis; use scholarly arXiv inspection for saved metadata and links")));
     }
     let mut fetched=get(client,&paper.pdf_url,max,"PDF").await?;
-    let returned=identify(&fetch::validated_url(&fetched.resolved)?)?.context("arxiv_identity_mismatch: PDF redirected outside supported paper URLs")?;
+    let returned=identify(&fetch::validated_url(&fetched.resolved)?)?.context(ErrorKind::ArxivIdentityMismatch.context("arxiv_identity_mismatch: PDF redirected outside supported paper URLs"))?;
     if returned.full()!=paper.versioned_id || !Url::parse(&fetched.resolved)?.path().starts_with("/pdf/"){
-        bail!("arxiv_identity_mismatch: PDF destination is not the requested pinned version");
+        bail!(ErrorKind::ArxivIdentityMismatch.context(format!("arxiv_identity_mismatch: PDF destination is not the requested pinned version")));
     }
-    if !fetched.bytes.starts_with(b"%PDF-"){bail!("arxiv_pdf_failed: versioned endpoint did not return PDF bytes");}
+    if !fetched.bytes.starts_with(b"%PDF-"){bail!(ErrorKind::ArxivPdfFailed.context(format!("arxiv_pdf_failed: versioned endpoint did not return PDF bytes")));}
     fetched.content_type=Some("application/pdf".into());fetched.role="arxiv_pdf".into();fetched.version=Some(paper.versioned_id.clone());Ok(fetched)
 }
 fn bib(value:&str)->String{
@@ -191,8 +196,8 @@ fn bib(value:&str)->String{
     }}out
 }
 pub fn citation(document:&webtool_protocol::Document,format:&str)->Result<Value>{
-    let metadata=document.metadata.get("arxiv").context("citation_metadata_unavailable: saved document has no supported paper metadata")?;
-    let p:Paper=serde_json::from_value(metadata.clone()).context("citation_metadata_unavailable: invalid saved arXiv metadata")?;
+    let metadata=document.metadata.get("arxiv").context(ErrorKind::CitationMetadataUnavailable.context("citation_metadata_unavailable: saved document has no supported paper metadata"))?;
+    let p:Paper=serde_json::from_value(metadata.clone()).context(ErrorKind::CitationMetadataUnavailable.context("citation_metadata_unavailable: invalid saved arXiv metadata"))?;
     let date=p.updated.as_deref().and_then(|d|DateTime::parse_from_rfc3339(d).ok());
     let text=match format{
         "csl"=>{
@@ -211,7 +216,7 @@ pub fn citation(document:&webtool_protocol::Document,format:&str)->Result<Value>
             if let Some(d)=date{fields.push(format!("year = {{{}}}",d.year()));}
             if let Some(category)=&p.primary_category{fields.push(format!("primaryClass = {{{}}}",bib(category)));}
             format!("@misc{{arxiv_{key},\n  {}\n}}",fields.join(",\n  "))
-        },_=>bail!("citation_format_unsupported: saved arXiv papers support bibtex or csl; DOI RIS behavior is unchanged"),
+        },_=>bail!(ErrorKind::CitationMetadataUnavailable.context(format!("citation_format_unsupported: saved arXiv papers support bibtex or csl; DOI RIS behavior is unchanged"))),
     };
     Ok(json!({"document_id":document.id,"format":format,"source":p.abstract_url,"version":p.versioned_id,"metadata_source":if p.metadata_origin.is_empty(){"retained legacy arXiv metadata"}else{&p.metadata_origin},"text":text}))
 }

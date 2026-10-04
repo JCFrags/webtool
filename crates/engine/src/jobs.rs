@@ -4,6 +4,7 @@ mod frontier;
 mod robots;
 mod sitemap;
 use std::{sync::Arc,time::Duration};
+use crate::error::ErrorKind;
 use anyhow::{bail,Context,Result};
 use chrono::Utc;
 use futures_util::{stream::FuturesUnordered,StreamExt,FutureExt};
@@ -37,10 +38,10 @@ impl Engine {
     pub async fn submit(&self,request:CrawlRequest)->Result<Job>{
         let _submission=self.submission_lock.lock().await;
         let base=fetch::validated_url(&request.url)?;
-        if !(1..=500).contains(&request.max_pages)||request.max_depth>8 { bail!("crawl limits are 1 to 500 pages and 0 to 8 levels"); }
-        if request.url.len()>8192 || request.sitemaps.len()>8 { bail!("crawl_invalid_request: use a URL up to 8192 bytes and at most eight sitemap roots"); }
+        if !(1..=500).contains(&request.max_pages)||request.max_depth>8 { bail!(ErrorKind::InvalidCrawlLimits.context(format!("crawl limits are 1 to 500 pages and 0 to 8 levels"))); }
+        if request.url.len()>8192 || request.sitemaps.len()>8 { bail!(ErrorKind::CrawlInvalidRequest.context(format!("crawl_invalid_request: use a URL up to 8192 bytes and at most eight sitemap roots"))); }
         for sitemap in &request.sitemaps {
-            if sitemap.len()>=2048 || fetch::validated_url(sitemap)?.origin()!=base.origin() { bail!("crawl_invalid_request: sitemap roots must be same-origin URLs under 2048 bytes"); }
+            if sitemap.len()>=2048 || fetch::validated_url(sitemap)?.origin()!=base.origin() { bail!(ErrorKind::CrawlInvalidRequest.context(format!("crawl_invalid_request: sitemap roots must be same-origin URLs under 2048 bytes"))); }
         }
         if let Some(name)=&request.library { self.store.require_library(name).await?; }
         self.require_job_capacity().await?;
@@ -55,26 +56,26 @@ impl Engine {
         Ok(job)
     }
     pub(crate) async fn require_job_capacity(&self)->Result<()> {
-        if self.shutting_down.load(std::sync::atomic::Ordering::SeqCst) { bail!("job queue is full"); }
-        if self.store.jobs().await?.iter().filter(|j|!j.state.terminal()).count()>=100 { bail!("job queue is full"); }
+        if self.shutting_down.load(std::sync::atomic::Ordering::SeqCst) { bail!(ErrorKind::QueueFull.context(format!("job queue is full"))); }
+        if self.store.jobs().await?.iter().filter(|j|!j.state.terminal()).count()>=100 { bail!(ErrorKind::QueueFull.context(format!("job queue is full"))); }
         Ok(())
     }
     pub async fn resume(&self,id:&str,request:CrawlResumeRequest)->Result<Job> {
         let _submission=self.submission_lock.lock().await;
         let mut job=self.store.job(id).await?;
-        let crawl=job.request.crawl().context("media_resume_unsupported: submit a new preview-checked media job")?.clone();
+        let crawl=job.request.crawl().context(ErrorKind::MediaResumeUnsupported.context("media_resume_unsupported: submit a new preview-checked media job"))?.clone();
         if !matches!(job.state,JobState::Interrupted|JobState::Cancelled|JobState::Partial) || self.job_tokens.lock().await.contains_key(id) {
-            bail!("crawl_not_resumable: job must be interrupted, cancelled, or partial with no active worker");
+            bail!(ErrorKind::CrawlNotResumable.context(format!("crawl_not_resumable: job must be interrupted, cancelled, or partial with no active worker")));
         }
-        let mut frontier=Frontier::load(&self.store,id).await?.context("crawl_not_resumable: historical job has no saved frontier")?;
+        let mut frontier=Frontier::load(&self.store,id).await?.context(ErrorKind::CrawlNotResumable.context("crawl_not_resumable: historical job has no saved frontier"))?;
         let max=request.max_pages.unwrap_or(crawl.max_pages);
-        if max<crawl.max_pages || max>500 { bail!("crawl_invalid_request: resume may only keep or increase the total page budget up to 500"); }
+        if max<crawl.max_pages || max>500 { bail!(ErrorKind::CrawlInvalidRequest.context(format!("crawl_invalid_request: resume may only keep or increase the total page budget up to 500"))); }
         frontier.requeue_interrupted();
         let p=frontier.progress();
         let pages=p.pending>0 && p.attempted<max;
         let maps=p.sitemap_pending>0 && p.sitemap_attempted<SITEMAP_LIMIT;
         let discovery=!frontier.sitemaps_seeded && crawl.discover_sitemaps;
-        if !pages && !maps && !discovery { bail!("crawl_not_resumable: no pending work within the budget; increase max_pages if page attempts remain"); }
+        if !pages && !maps && !discovery { bail!(ErrorKind::CrawlNotResumable.context(format!("crawl_not_resumable: no pending work within the budget; increase max_pages if page attempts remain"))); }
         self.require_job_capacity().await?;
         if let Some(name)=&crawl.library { self.store.require_library(name).await?; }
         job.request.crawl_mut().expect("crawl request checked").max_pages=max; job.state=JobState::Queued; job.error=None;
@@ -90,7 +91,7 @@ impl Engine {
             let id=job.id.clone();
             let is_media=matches!(job.request,JobRequest::Media(_));
             let result=std::panic::AssertUnwindSafe(engine.execute_job(job,token)).catch_unwind().await;
-            let error=match result { Ok(Ok(()))=>None,Ok(Err(e))=>Some(if is_media { "media_helper_failed: worker failed; staging may require operator inspection".into() } else {format!("{e:#}").chars().take(2000).collect::<String>()}),Err(_)=>Some("job worker panicked".into()) };
+            let error=match result { Ok(Ok(()))=>None,Ok(Err(e))=>Some(if is_media { "media_helper_failed: worker failed; staging may require operator inspection".into() } else {crate::error::EngineError::from_anyhow(e).to_string()}),Err(_)=>Some("job worker panicked".into()) };
             if let Some(error)=error {
                 let save=async {
                     let mut job=engine.store.job(&id).await?;
@@ -135,8 +136,8 @@ impl Engine {
     }
     async fn execute_job(&self,mut job:Job,token:CancellationToken)->Result<()> {
         if matches!(job.request,JobRequest::Media(_)) { return self.execute_media_job(job,token).await; }
-        let request=job.request.crawl().context("crawl_invalid_request: wrong job type")?.clone();
-        let mut frontier=Frontier::load(&self.store,&job.id).await?.context("crawl has no persistent frontier")?;
+        let request=job.request.crawl().context(ErrorKind::CrawlInvalidRequest.context("crawl_invalid_request: wrong job type"))?.clone();
+        let mut frontier=Frontier::load(&self.store,&job.id).await?.context(ErrorKind::StorageFault.context("crawl has no persistent frontier"))?;
         let permit=tokio::select! { result=self.job_slots.acquire()=>Some(result?),_=token.cancelled()=>None };
         let Some(_permit)=permit else { return self.cancelled(&mut frontier,&mut job).await; };
         job.state=JobState::Running; frontier.checkpoint(&self.store,&mut job,None).await?;
@@ -177,8 +178,8 @@ impl Engine {
                 r=async {
                     let _slot=self.network.acquire().await?;
                     self.pace(&origin,robots.delay).await;
-                    let response=metadata_client.get(&entry.url).header(reqwest::header::ACCEPT_ENCODING,"identity").send().await?;
-                    if !response.status().is_success() { bail!("sitemap returned HTTP {}",response.status().as_u16()); }
+                    let response=metadata_client.get(&entry.url).header(reqwest::header::ACCEPT_ENCODING,"identity").send().await.context(ErrorKind::SourceRequestFailed.error())?;
+                    if !response.status().is_success() { bail!(ErrorKind::SourceHttpStatus(response.status().as_u16()).context(format!("sitemap returned HTTP {}",response.status().as_u16()))); }
                     let resolved=response.url().clone();
                     let bytes=robots::bounded_identity_body(response,self.config.max_bytes.min(sitemap::MAX_BYTES)).await?;
                     let map=sitemap::parse(&bytes)?;
@@ -199,7 +200,7 @@ impl Engine {
                     }
                 },
                 Err(e)=>{
-                    let error=format!("{e:#}").chars().take(2000).collect::<String>();
+                    let error=crate::error::EngineError::from_anyhow(e).to_string();
                     frontier.change(i,State::Failed,Some(error.clone())); warn(&mut job,"sitemap_failed",format!("{}: {error}",entry.url));
                 },
             }
@@ -236,7 +237,7 @@ impl Engine {
             let Some((i,result))=next else { continue; };
             let entry=frontier.entries[i].clone(); let mut attachment=None;
             let document=result.and_then(|r| {
-                if r.document.blocks.is_empty() || !fetch::validated_url(&r.document.source.resolved).is_ok_and(|u|u.origin()==base.origin() && robots.allowed(&target(&u))) { bail!("empty, excluded, or out-of-scope result was not attached"); }
+                if r.document.blocks.is_empty() || !fetch::validated_url(&r.document.source.resolved).is_ok_and(|u|u.origin()==base.origin() && robots.allowed(&target(&u))) { bail!(ErrorKind::CrawlResultRejected.context("empty, excluded, or out-of-scope result was not attached")); }
                 Ok(r.document)
             });
             match document {
@@ -247,7 +248,7 @@ impl Engine {
                     for link in d.links.into_iter().take(PAGE_CANDIDATES) { admit(&mut frontier,&mut job,&base,&robots,Kind::Page,&link.url,entry.depth+1,None); }
                 },
                 Err(e)=>{
-                    let error=format!("{e:#}").chars().take(2000).collect::<String>();
+                    let error=crate::error::EngineError::from_anyhow(e).to_string();
                     frontier.change(i,State::Failed,Some(error.clone())); warn(&mut job,"crawl_read_failed",format!("{}: {error}",entry.url));
                 },
             }
@@ -266,7 +267,7 @@ impl Engine {
         frontier.checkpoint(&self.store,&mut job,None).await
     }
     pub async fn map(&self,url:&str,limit:usize)->Result<serde_json::Value>{
-        if !(1..=5000).contains(&limit){bail!("map limit must be between 1 and 5000");}
+        if !(1..=5000).contains(&limit){bail!(ErrorKind::InvalidMap.context(format!("map limit must be between 1 and 5000")));}
         let _permit=self.network.acquire().await?;
         let result=fetch::http(&self.client,url,self.config.max_bytes).await?;
         let mime=crate::readers::detect(&result.resolved,result.content_type.as_deref(),&result.bytes);
@@ -277,7 +278,7 @@ impl Engine {
             return Ok(json!({"source":result.resolved,"kind":"page_links","links":all.iter().take(limit).collect::<Vec<_>>(),
                 "truncated":all.len()>limit,"original":original,"html_encoding":decoded.metadata,"warnings":decoded.warnings}));
         }
-        let source=std::str::from_utf8(&result.bytes)?;
+        let source=std::str::from_utf8(&result.bytes).context(ErrorKind::UnsupportedText.error())?;
         if let Ok(tree)=roxmltree::Document::parse(source){
             if matches!(tree.root_element().tag_name().name(),"urlset"|"sitemapindex"){
                 let all:Vec<_>=tree.descendants().filter(|n|n.has_tag_name("loc")).filter_map(|n|n.text())

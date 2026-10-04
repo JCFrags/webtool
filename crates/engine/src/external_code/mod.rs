@@ -27,6 +27,20 @@ pub enum ExternalCodeError {
     #[error("The provider returned credential material. It was not saved or returned.")] Privacy,
 }
 impl ExternalCodeError {
+    pub fn message(self) -> &'static str { match self {
+        Self::Unconfigured => "Configure the selected provider endpoint and required server environment credential reference.",
+        Self::Invalid => "Use explicit index selections, supported filters, and bounded options.",
+        Self::Unsupported => "This index operation, filter, source type, or verification is unsupported. No fallback was used.",
+        Self::Unavailable => "The provider or selected library/version is unavailable. No substitute was selected.",
+        Self::Denied => "The provider denied access or required a paid plan. No retry or purchase was made.",
+        Self::RateLimited => "The provider or shared local request budget is in cooldown. No retry was made.",
+        Self::Redirect => "The external provider redirected the request. The redirect was not followed.",
+        Self::Identity => "The provider identity or retained source does not match the selected index result.",
+        Self::Limit => "The external index response reached its byte or result limit.",
+        Self::Timeout => "The external index deadline was reached, including queueing and pacing.",
+        Self::Upstream => "The external provider request or response failed. Provider details are withheld.",
+        Self::Privacy => "The provider returned credential material. It was not saved or returned.",
+    } }
     pub fn status(self) -> u16 { match self {
         Self::Invalid => 400, Self::Unsupported | Self::Unconfigured => 422, Self::Unavailable => 404,
         Self::RateLimited => 429, Self::Limit => 413, Self::Timeout => 504, _ => 502,

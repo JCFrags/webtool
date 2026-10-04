@@ -34,6 +34,18 @@ pub enum CodeError {
     #[error("The code/documentation operation deadline was reached.")] Timeout,
 }
 impl CodeError {
+    pub fn message(self) -> &'static str { match self {
+        Self::Invalid => "Use an explicit public repository/ref or exact docs.rs release and valid bounded options.",
+        Self::SearchUnavailable => "Authenticated GitHub code search is unavailable. Explicitly select paths or literal search instead.",
+        Self::Unavailable => "The requested public source, version, path, or documentation build is unavailable.",
+        Self::Denied => "The provider denied public access. No retry or alternate source was used.",
+        Self::RateLimited => "The public provider rate limit was reached. No retry was made.",
+        Self::Identity => "The provider response did not match the selected source identity.",
+        Self::Limit => "The operation reached its explicit byte, file, entry, or request budget.",
+        Self::Unsupported => "The source is not a supported regular UTF-8 file or documentation page.",
+        Self::Upstream => "The public provider request or response failed.",
+        Self::Timeout => "The code/documentation operation deadline was reached.",
+    } }
     pub fn status_code(self) -> u16 {
         match self { Self::Invalid => 400, Self::SearchUnavailable | Self::Unsupported => 422,
             Self::Unavailable => 404, Self::RateLimited => 429, Self::Limit => 413,

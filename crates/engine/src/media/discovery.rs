@@ -1,4 +1,5 @@
 use std::time::Instant;
+use crate::error::ErrorKind;
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use serde_json::Value;
@@ -8,10 +9,10 @@ use super::{canonical, command, helper_error, helper_warnings, metadata, selecta
 
 pub(super) fn validate_search(request: &VideoSearchRequest) -> Result<()> {
     if request.query.trim().is_empty() || request.query.len() > 4096 || request.query.contains('\0') {
-        bail!("video_invalid_query: supply a nonempty literal query of at most 4096 bytes without NUL");
+        bail!(ErrorKind::VideoInvalidQuery.context(format!("video_invalid_query: supply a nonempty literal query of at most 4096 bytes without NUL")));
     }
     if !(1..=20).contains(&request.limit) {
-        bail!("video_invalid_limit: video search limit must be between 1 and 20");
+        bail!(ErrorKind::VideoInvalidLimit.context(format!("video_invalid_limit: video search limit must be between 1 and 20")));
     }
     Ok(())
 }
@@ -38,7 +39,7 @@ pub(super) fn video(value: &Value) -> Option<VideoMetadata> {
 }
 fn results(metadata: &Value, limit: usize) -> Result<(Vec<VideoSearchResult>, Vec<Warning>)> {
     let entries = metadata["entries"].as_array()
-        .context("media_helper_failed: video search did not return a flat entries array")?;
+        .context(ErrorKind::MediaHelperFailed.context("media_helper_failed: video search did not return a flat entries array"))?;
     let mut results = Vec::new();
     let mut omitted = 0;
     for (index, entry) in entries.iter().take(limit).enumerate() {
@@ -54,7 +55,7 @@ fn results(metadata: &Value, limit: usize) -> Result<(Vec<VideoSearchResult>, Ve
         warnings.push(Warning::new("video_results_truncated", "Helper returned more entries than requested; only the requested prefix was inspected."));
     }
     if results.is_empty() && !entries.is_empty() {
-        bail!("media_helper_failed: video search returned no valid video identities");
+        bail!(ErrorKind::MediaHelperFailed.context(format!("media_helper_failed: video search returned no valid video identities")));
     }
     Ok((results, warnings))
 }
@@ -67,7 +68,7 @@ pub(super) async fn search(request: VideoSearchRequest, config: &Config) -> Resu
         .arg(request.limit.to_string()).arg("--").arg(format!("ytsearch{}:{}", request.limit, request.query));
     let output = fetch::helper_output(cmd, config.helper_timeout_seconds, config.max_bytes).await.map_err(helper_error)?;
     let metadata: Value = serde_json::from_slice(&output.stdout)
-        .context("media_helper_failed: video search did not return metadata JSON")?;
+        .context(ErrorKind::MediaHelperFailed.context("media_helper_failed: video search did not return metadata JSON"))?;
     let (results, mut warnings) = results(&metadata, request.limit)?;
     warnings.extend(helper_warnings(&output.stderr));
     Ok(VideoSearchResponse {
@@ -81,7 +82,7 @@ fn helper_version(metadata: &Value) -> Option<String> {
 pub(super) async fn tracks(url: &str, config: &Config) -> Result<CaptionTracksResponse> {
     let temp = tempfile::tempdir().context("create caption inventory temporary directory")?;
     let (metadata, mut warnings) = metadata(url, config, temp.path()).await?;
-    let video = video(&metadata).context("media_identity_mismatch: helper returned inconsistent video metadata")?;
+    let video = video(&metadata).context(ErrorKind::MediaIdentityMismatch.context("media_identity_mismatch: helper returned inconsistent video metadata"))?;
     let tracks: Vec<_> = selectable_tracks(&metadata).into_iter().map(|(_, origin, language, track)| CaptionTrack {
         language: language.into(), origin, name: text(track, "name"), format: "vtt".into(),
     }).collect();

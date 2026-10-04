@@ -11,7 +11,7 @@ use super::{response, transport::Response, ScholarlyError, CACHE_SECONDS};
 pub use citation::citation;
 const OAI_URL: &str = "https://pmc.ncbi.nlm.nih.gov/api/oai/v1/mh/";
 const METADATA_PARSER: &str = "pmc-oai-frontmatter/1";
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, Copy, thiserror::Error)]
 pub enum PmcError {
     #[error("Use pmc:PMCdigits, optionally .N, and a valid exact OAI datestamp assertion.")]
     InvalidRequest,
@@ -37,6 +37,19 @@ pub enum PmcError {
     BodyUnavailable,
 }
 impl PmcError {
+    pub fn message(self) -> &'static str { match self {
+        Self::InvalidRequest => "Use pmc:PMCdigits, optionally .N, and a valid exact OAI datestamp assertion.",
+        Self::IdentityMismatch => "PMC returned a different source identifier or contradictory version/instance.",
+        Self::VersionUnavailable => "The asserted version is not the version returned by PMC OAI. Historical version retrieval is unsupported.",
+        Self::SourceChanged => "The selected source datestamp or front matter changed. Refresh and inspect metadata before another full-text request.",
+        Self::InvalidMetadata => "PMC returned invalid or contradictory selected metadata.",
+        Self::InvalidXml => "The source is not supported UTF-8 OAI/JATS XML. DTDs and external entities are not processed.",
+        Self::SizeLimit => "The JATS node, nesting, table, or block limit was reached.",
+        Self::Unavailable => "The selected full text is unavailable, suppressed, or outside the reusable OAI set.",
+        Self::ReuseNotEstablished => "The selected article has no supported item-specific full-text reuse basis.",
+        Self::IdentityIncomplete => "The selected source has no complete supplied version/instance for full-text acceptance.",
+        Self::BodyUnavailable => "The full JATS source has no readable body. Metadata is not full text.",
+    } }
     pub fn code(&self) -> &'static str { match self {
         Self::InvalidRequest => "pmc_invalid_request", Self::IdentityMismatch => "pmc_identity_mismatch",
         Self::VersionUnavailable => "pmc_version_unavailable", Self::SourceChanged => "pmc_source_changed",

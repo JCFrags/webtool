@@ -1,3 +1,5 @@
+#[cfg(not(feature="web-search"))]
+use crate::error::ErrorKind;
 use std::collections::HashMap;
 use webtool_protocol::*;
 mod organic;
@@ -19,7 +21,7 @@ pub(crate) struct SearchService;
 impl SearchService {
     pub(crate) fn new(_: &crate::config::Config) -> anyhow::Result<Self> { Ok(Self) }
     pub(crate) async fn search(&self, _: SearchRequest) -> anyhow::Result<SearchResponse> {
-        anyhow::bail!("this server was built without web-search")
+        anyhow::bail!(ErrorKind::CapabilityUnavailable.context(format!("this server was built without web-search")))
     }
 }
 

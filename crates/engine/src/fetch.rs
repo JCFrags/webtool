@@ -1,4 +1,6 @@
-use std::{collections::HashMap,process::Stdio,time::Duration};
+use std::{error::Error,fmt,process::Stdio,time::Duration};
+#[cfg(feature="crw-browser")] use std::collections::HashMap;
+use crate::error::ErrorKind;
 use anyhow::{anyhow,bail,Context,Result};
 use futures_util::StreamExt;
 use tokio::{io::{AsyncRead,AsyncReadExt},process::Command};
@@ -12,9 +14,9 @@ pub struct Fetched {
     pub warnings:Vec<Warning>,
 }
 pub fn validated_url(value:&str)->Result<Url>{
-    let mut u=Url::parse(value).context("invalid URL")?;
-    if !matches!(u.scheme(),"http"|"https")||u.host_str().is_none(){bail!("only absolute HTTP and HTTPS URLs are accepted");}
-    if !u.username().is_empty()||u.password().is_some(){bail!("credentials embedded in URLs are not supported");}
+    let mut u=Url::parse(value).context(ErrorKind::InvalidUrl.context("invalid URL"))?;
+    if !matches!(u.scheme(),"http"|"https")||u.host_str().is_none(){bail!(ErrorKind::InvalidUrl.context(format!("only absolute HTTP and HTTPS URLs are accepted")));}
+    if !u.username().is_empty()||u.password().is_some(){bail!(ErrorKind::InvalidUrl.context(format!("credentials embedded in URLs are not supported")));}
     u.set_fragment(None);Ok(u)
 }
 pub fn client(config:&Config)->Result<reqwest::Client>{
@@ -25,17 +27,17 @@ pub fn client(config:&Config)->Result<reqwest::Client>{
 pub async fn http(client:&reqwest::Client,url:&str,max:usize)->Result<Fetched>{
     let url=validated_url(url)?;
     let _arxiv=if crate::arxiv::host(&url){Some(crate::arxiv::slot().await)}else{None};
-    let response=client.get(url).send().await.context("fetch source")?;
+    let response=client.get(url).send().await.context(ErrorKind::SourceRequestFailed.context("fetch source"))?;
     let status=response.status().as_u16();
-    if !response.status().is_success(){bail!("source returned HTTP {status}");}
-    if response.content_length().is_some_and(|n|n>max as u64){bail!("source exceeds the {max}-byte limit");}
+    if !response.status().is_success(){bail!(ErrorKind::SourceHttpStatus(status).context(format!("source returned HTTP {status}")));}
+    if response.content_length().is_some_and(|n|n>max as u64){bail!(ErrorKind::SizeLimit.context(format!("source exceeds the {max}-byte limit")));}
     let resolved=response.url().to_string();
     let content_type=response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v|v.to_str().ok()).map(str::to_owned);
     let version=response.headers().get(reqwest::header::ETAG).and_then(|v|v.to_str().ok()).map(str::to_owned);
     let mut stream=response.bytes_stream();let mut bytes=Vec::new();
     while let Some(chunk)=stream.next().await{
-        let chunk=chunk?;
-        if bytes.len().saturating_add(chunk.len())>max{bail!("source exceeds the {max}-byte limit after decompression");}
+        let chunk=chunk.context(ErrorKind::SourceRequestFailed.error())?;
+        if bytes.len().saturating_add(chunk.len())>max{bail!(ErrorKind::SizeLimit.context(format!("source exceeds the {max}-byte limit after decompression")));}
         bytes.extend_from_slice(&chunk);
     }
     Ok(Fetched{bytes,resolved,content_type,status:Some(status),version,role:"http_response".into(),warnings:vec![]})
@@ -46,31 +48,68 @@ pub async fn helper(command:Command,timeout:u64,max:usize)->Result<Vec<u8>>{
     Ok(helper_output(command,timeout,max).await?.stdout)
 }
 pub struct HelperOutput { pub stdout:Vec<u8>, pub stderr:Vec<u8> }
+#[derive(Debug,Clone,Copy,PartialEq,Eq)]
+pub(crate) enum HelperFailure { Missing, Io, Deadline, OutputLimit, Exit }
+/// Native-helper diagnostics are separate from engine error Display text.
+#[derive(Debug)]
+pub(crate) struct HelperError { pub failure:HelperFailure, pub diagnostics:String, cause:anyhow::Error }
+impl HelperError {
+    fn new(failure:HelperFailure,cause:impl Into<anyhow::Error>)->Self {
+        Self {failure,diagnostics:String::new(),cause:cause.into()}
+    }
+    fn io(error:std::io::Error)->Self {
+        let failure=if error.kind()==std::io::ErrorKind::NotFound {HelperFailure::Missing}else{HelperFailure::Io};
+        Self::new(failure,error)
+    }
+}
+impl fmt::Display for HelperError {
+    fn fmt(&self,f:&mut fmt::Formatter<'_>)->fmt::Result {f.write_str("The configured helper failed.")}
+}
+impl Error for HelperError {fn source(&self)->Option<&(dyn Error+'static)>{Some(self.cause.as_ref())}}
+fn browser_helper_error(error:anyhow::Error)->anyhow::Error {
+    let kind=match error.downcast_ref::<HelperError>() {
+        Some(e)=>match e.failure {
+            HelperFailure::Missing=>ErrorKind::BrowserHelperMissing,
+            HelperFailure::Deadline=>ErrorKind::BrowserTimeout,
+            HelperFailure::OutputLimit=>ErrorKind::BrowserSizeLimit,
+            // Lightpanda 0.3.6 supplies a timeout tag in native stderr, not a
+            // machine-readable exit code. Inspect that protocol once here.
+            HelperFailure::Exit if e.diagnostics.contains("err=Timeout")=>ErrorKind::BrowserTimeout,
+            _=>ErrorKind::BrowserNavigationFailed,
+        },
+        None=>return error,
+    };
+    kind.with_source(error).into()
+}
 pub async fn helper_output(mut command:Command,timeout:u64,max:usize)->Result<HelperOutput>{
     command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
     #[cfg(unix)]{
         use std::os::unix::process::CommandExt;
         command.as_std_mut().process_group(0);
     }
-    let mut child=command.spawn().context("launch configured helper")?;
+    let mut child=command.spawn().map_err(HelperError::io)?;
     #[cfg(unix)]let _group=ProcessGroup(child.id());
     let stdout=child.stdout.take().context("helper stdout unavailable")?;
     let stderr=child.stderr.take().context("helper stderr unavailable")?;
     let outcome=tokio::time::timeout(Duration::from_secs(timeout),async{
-        tokio::try_join!(read_limited(stdout,max),read_limited(stderr,1024*1024),async{Ok::<_,anyhow::Error>(child.wait().await?)})
+        tokio::try_join!(read_limited(stdout,max),read_limited(stderr,1024*1024),async{Ok::<_,anyhow::Error>(child.wait().await.map_err(HelperError::io)?)})
     }).await;
     match outcome{
         Ok(Ok((out,err,status)))=>{
-            if !status.success(){bail!("helper exited with {status}: {}",String::from_utf8_lossy(&err).chars().take(2000).collect::<String>());}
+            if !status.success(){
+                let diagnostics=String::from_utf8_lossy(&err).chars().take(2000).collect::<String>();
+                let cause=anyhow!("helper exited with {status}: {diagnostics}");
+                return Err(HelperError {failure:HelperFailure::Exit,diagnostics,cause}.into());
+            }
             Ok(HelperOutput { stdout:out, stderr:err })
         },
         Ok(Err(e))=>{let _=child.kill().await;let _=child.wait().await;Err(e)},
-        Err(_)=>{let _=child.kill().await;let _=child.wait().await;bail!("helper exceeded its {timeout}-second deadline")},
+        Err(error)=>{let _=child.kill().await;let _=child.wait().await;Err(HelperError::new(HelperFailure::Deadline,error).into())},
     }
 }
 async fn read_limited<R:AsyncRead+Unpin>(reader:R,max:usize)->Result<Vec<u8>>{
-    let mut bytes=Vec::new();reader.take(max as u64+1).read_to_end(&mut bytes).await?;
-    if bytes.len()>max{bail!("helper output exceeded {max} bytes");}Ok(bytes)
+    let mut bytes=Vec::new();reader.take(max as u64+1).read_to_end(&mut bytes).await.map_err(HelperError::io)?;
+    if bytes.len()>max{bail!(HelperError::new(HelperFailure::OutputLimit,anyhow!("helper output exceeded {max} bytes")));}Ok(bytes)
 }
 #[cfg(unix)]struct ProcessGroup(Option<u32>);
 #[cfg(unix)]impl Drop for ProcessGroup{
@@ -85,12 +124,12 @@ pub async fn browser(url:&str,renderer:&Renderer,config:&Config)->Result<Fetched
         #[cfg(feature="crw-browser")]
         { return crw(url, config).await; }
         #[cfg(not(feature="crw-browser"))]
-        { bail!("fastCRW requires a server built with --features crw-browser"); }
+        { bail!(ErrorKind::CapabilityUnavailable.context(format!("fastCRW requires a server built with --features crw-browser"))); }
     }
     let mut cmd=match renderer{
         Renderer::Lightpanda=>return lightpanda(url,config).await,
         Renderer::Chromium=>{
-            let path=config.chromium_path.as_ref().context("Chromium is not configured. Set chromium_path in the server config.")?;
+            let path=config.chromium_path.as_ref().context(ErrorKind::CapabilityUnavailable.context("Chromium is not configured. Set chromium_path in the server config."))?;
             let mut c=Command::new(path);
             c.args(["--headless=new","--disable-gpu","--no-first-run","--no-default-browser-check","--disable-background-networking","--dump-dom"]);
             if config.browser_no_sandbox{c.arg("--no-sandbox");}
@@ -101,8 +140,8 @@ pub async fn browser(url:&str,renderer:&Renderer,config:&Config)->Result<Fetched
     };
     let profile=tempfile::tempdir()?;
     if matches!(renderer,Renderer::Chromium){cmd.arg(format!("--user-data-dir={}",profile.path().display())).arg(url);}
-    let bytes=helper(cmd,config.helper_timeout_seconds,config.max_bytes).await?;
-    if bytes.is_empty(){bail!("browser produced an empty DOM");}
+    let bytes=helper(cmd,config.helper_timeout_seconds,config.max_bytes).await.map_err(browser_helper_error)?;
+    if bytes.is_empty(){bail!(ErrorKind::BrowserEmptyOutput.context("browser produced an empty DOM"));}
     Ok(Fetched{bytes,resolved:url.into(),content_type:Some("text/html".into()),status:None,version:None,role:"rendered_dom".into(),
         warnings:vec![Warning::new("browser_status_unavailable","CLI DOM capture does not report navigation status or final redirect URL. The saved URL is the requested URL."),
         Warning::new("browser_wait_budget","DOM capture used a fixed readiness budget. Late-loading content may be absent.")]})
@@ -116,7 +155,7 @@ fn root_navigation_failed(diagnostics:&str)->bool{
         && line.split_ascii_whitespace().any(|field|field=="type=root"))
 }
 async fn lightpanda(url:&str,config:&Config)->Result<Fetched>{
-    let path=config.lightpanda_path.as_ref().context("browser_helper_missing: configure lightpanda_path")?;
+    let path=config.lightpanda_path.as_ref().context(ErrorKind::BrowserHelperMissing.context("browser_helper_missing: configure lightpanda_path"))?;
     let mut cmd=Command::new(path);
     cmd.env("LIGHTPANDA_DISABLE_TELEMETRY","true")
         .args(["fetch","--obey-robots","--dump","html","--json",
@@ -125,47 +164,40 @@ async fn lightpanda(url:&str,config:&Config)->Result<Fetched>{
             "--http-max-response-size",&config.max_bytes.to_string(),
             "--http-timeout",&config.request_timeout_seconds.saturating_mul(1000).to_string(),url]);
     // Keep the existing stdout cap: JSON escaping/metadata also count toward it.
-    let output=helper_output(cmd,config.helper_timeout_seconds,config.max_bytes).await.map_err(|e|{
-        let message=format!("{e:#}");
-        let code=if e.downcast_ref::<std::io::Error>().is_some_and(|e|e.kind()==std::io::ErrorKind::NotFound){"browser_helper_missing"}
-            else if message.contains("deadline") || message.contains("err=Timeout"){"browser_timeout"}
-            else if message.contains("exceeded") && message.contains("bytes"){"browser_size_limit"}
-            else {"browser_navigation_failed"};
-        anyhow!("{code}: {message}")
-    })?;
+    let output=helper_output(cmd,config.helper_timeout_seconds,config.max_bytes).await.map_err(browser_helper_error)?;
     let diagnostics=String::from_utf8_lossy(&output.stderr).trim().to_string();
     // 0.3.6 can exit zero and return a synthetic "Navigation failed" DOM after
     // a root navigation error. Child-frame failures do not invalidate the page.
     if diagnostics.contains("level=fatal") || root_navigation_failed(&diagnostics)
         || output.stdout.iter().all(u8::is_ascii_whitespace){
         if diagnostics.contains("err=Timeout") || diagnostics.contains("Terminated") {
-            bail!("browser_timeout: Lightpanda navigation/readiness failed: {diagnostics}");
+            bail!(ErrorKind::BrowserTimeout.context(format!("browser_timeout: Lightpanda navigation/readiness failed: {diagnostics}")));
         }
-        if !diagnostics.is_empty(){bail!("browser_navigation_failed: {diagnostics}");}
-        bail!("browser_empty_output: Lightpanda returned no DOM envelope");
+        if !diagnostics.is_empty(){bail!(ErrorKind::BrowserNavigationFailed.context(format!("browser_navigation_failed: {diagnostics}")));}
+        bail!(ErrorKind::BrowserEmptyOutput.context(format!("browser_empty_output: Lightpanda returned no DOM envelope")));
     }
-    let value:serde_json::Value=serde_json::from_slice(&output.stdout).context("browser_invalid_output: expected Lightpanda JSON envelope")?;
+    let value:serde_json::Value=serde_json::from_slice(&output.stdout).context(ErrorKind::BrowserInvalidOutput.context("browser_invalid_output: expected Lightpanda JSON envelope"))?;
     if value.get("error").is_some_and(|e|!e.is_null()){
-        bail!("browser_navigation_failed: {}; {diagnostics}",value["error"]);
+        bail!(ErrorKind::BrowserNavigationFailed.context(format!("browser_navigation_failed: {}; {diagnostics}",value["error"])));
     }
-    if value["dump"].as_str()!=Some("html"){bail!("browser_invalid_output: expected HTML dump; {diagnostics}");}
-    let content=value["content"].as_str().context("browser_invalid_output: missing DOM content")?;
-    if content.trim().is_empty(){bail!("browser_empty_output: empty DOM; {diagnostics}");}
-    if content.len()>config.max_bytes{bail!("browser_size_limit: DOM exceeds configured bytes");}
+    if value["dump"].as_str()!=Some("html"){bail!(ErrorKind::BrowserInvalidOutput.context(format!("browser_invalid_output: expected HTML dump; {diagnostics}")));}
+    let content=value["content"].as_str().context(ErrorKind::BrowserInvalidOutput.context("browser_invalid_output: missing DOM content"))?;
+    if content.trim().is_empty(){bail!(ErrorKind::BrowserEmptyOutput.context(format!("browser_empty_output: empty DOM; {diagnostics}")));}
+    if content.len()>config.max_bytes{bail!(ErrorKind::BrowserSizeLimit.context(format!("browser_size_limit: DOM exceeds configured bytes")));}
     let status=match value.get("http_status") {
         None|Some(serde_json::Value::Null)=>None,
         Some(v) if v.as_u64()==Some(0)=>None,
         Some(v)=>Some(v.as_u64().filter(|n|(100..=599).contains(n))
-            .context("browser_invalid_output: invalid navigation status")? as u16),
+            .context(ErrorKind::BrowserInvalidOutput.context("browser_invalid_output: invalid navigation status"))? as u16),
     };
     if status.is_some_and(|s|!(200..300).contains(&s)){
-        bail!("browser_navigation_failed: source returned HTTP {}; {diagnostics}",status.unwrap());
+        bail!(ErrorKind::BrowserNavigationFailed.context(format!("browser_navigation_failed: source returned HTTP {}; {diagnostics}",status.unwrap())));
     }
     let mut warnings=vec![Warning::new("rendered_dom_snapshot","Retained original/export bytes are a Lightpanda DOM snapshot, not the HTTP response. HTML source locations refer to this snapshot."),
         Warning::new("browser_readiness_scope","Requested done quiescence and document.readyState complete within the configured wait deadline. These conditions do not establish application completeness or future updates.")];
     if status.is_none(){warnings.push(Warning::new("browser_status_unavailable","Lightpanda did not report an HTTP status; status remains null."));}
     let resolved=match value["url"].as_str().filter(|s|!s.is_empty()){
-        Some(u)=>validated_url(u).context("browser_invalid_output: invalid reported final URL")?.to_string(),
+        Some(u)=>validated_url(u).context(ErrorKind::BrowserInvalidOutput.context("browser_invalid_output: invalid reported final URL"))?.to_string(),
         None=>{warnings.push(Warning::new("browser_final_url_unavailable","No final URL was reported. The saved URL and relative-link base use the requested URL, not a confirmed redirect destination."));url.into()},
     };
     if !diagnostics.is_empty(){warnings.push(Warning::new("browser_helper_diagnostic",diagnostics));}
@@ -176,13 +208,14 @@ async fn lightpanda(url:&str,config:&Config)->Result<Fetched>{
 #[cfg(feature="crw-browser")]
 async fn crw(url:&str,config:&Config)->Result<Fetched>{
     use crw_core::{config::{RendererConfig,StealthConfig},Deadline};
-    let value=config.crw_renderer.clone().context("missing crw_renderer config")?;
+    let value=config.crw_renderer.clone().context(ErrorKind::CapabilityUnavailable.context("missing crw_renderer config"))?;
     let renderer_config:RendererConfig=serde_json::from_value(value)?;
     let r=crw_renderer::FallbackRenderer::new(&renderer_config,&config.user_agent,None,&StealthConfig::default())?;
     let deadline=Deadline::from_request_ms(config.helper_timeout_seconds*1000);
-    let result=r.fetch(url,&HashMap::new(),None,Some(config.browser_wait_ms),None,deadline).await?;
-    if result.html.len()>config.max_bytes{bail!("rendered page exceeds configured size limit");}
-    if !(200..300).contains(&result.status_code){bail!("rendered source returned HTTP {}",result.status_code);}
+    let result=r.fetch(url,&HashMap::new(),None,Some(config.browser_wait_ms),None,deadline).await
+        .context(ErrorKind::BrowserNavigationFailed.error())?;
+    if result.html.len()>config.max_bytes{bail!(ErrorKind::SizeLimit.context(format!("rendered page exceeds configured size limit")));}
+    if !(200..300).contains(&result.status_code){bail!(ErrorKind::BrowserNavigationFailed.context(format!("rendered source returned HTTP {}",result.status_code)));}
     Ok(Fetched{bytes:result.html.into_bytes(),resolved:result.final_url.unwrap_or_else(||url.into()),
         content_type:Some("text/html".into()),status:Some(result.status_code),version:None,role:"rendered_dom".into(),
         warnings:vec![Warning::new("experimental_crw_adapter","This optional adapter is compile-checked only. Runtime behavior has not been integration-tested in the delivery environment.")]})

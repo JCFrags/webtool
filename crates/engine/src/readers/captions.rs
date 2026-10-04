@@ -1,17 +1,18 @@
+use crate::error::ErrorKind;
 use anyhow::{bail,Context,Result};
 use webtool_protocol::*;
 use super::Parsed;
 
 pub fn timestamp(s:&str)->Result<u64>{
     let s=s.trim().replace(',',".");let parts:Vec<&str>=s.split(':').collect();
-    if parts.len()!=2&&parts.len()!=3{bail!("invalid caption timestamp: {s}");}
-    let (hours,minutes,seconds)=if parts.len()==3{(parts[0].parse::<u64>()?,parts[1].parse::<u64>()?,parts[2])}
-        else{(0,parts[0].parse::<u64>()?,parts[1])};
+    if parts.len()!=2&&parts.len()!=3{bail!(ErrorKind::ParseInvalid.context(format!("invalid caption timestamp: {s}")));}
+    let (hours,minutes,seconds)=if parts.len()==3{(parts[0].parse::<u64>().context(ErrorKind::ParseInvalid.error())?,parts[1].parse::<u64>().context(ErrorKind::ParseInvalid.error())?,parts[2])}
+        else{(0,parts[0].parse::<u64>().context(ErrorKind::ParseInvalid.error())?,parts[1])};
     let (seconds,fraction)=seconds.split_once('.').unwrap_or((seconds,""));
-    let seconds=seconds.parse::<u64>()?;
-    if minutes>=60||seconds>=60||fraction.len()>3||!fraction.bytes().all(|c|c.is_ascii_digit()){bail!("invalid caption timestamp");}
-    let millis=if fraction.is_empty(){0}else{format!("{fraction:0<3}").parse::<u64>()?};
-    hours.checked_mul(3600000).and_then(|v|v.checked_add(minutes*60000+seconds*1000+millis)).context("timestamp overflow")
+    let seconds=seconds.parse::<u64>().context(ErrorKind::ParseInvalid.error())?;
+    if minutes>=60||seconds>=60||fraction.len()>3||!fraction.bytes().all(|c|c.is_ascii_digit()){bail!(ErrorKind::ParseInvalid.context(format!("invalid caption timestamp")));}
+    let millis=if fraction.is_empty(){0}else{format!("{fraction:0<3}").parse::<u64>().context(ErrorKind::ParseInvalid.error())?};
+    hours.checked_mul(3600000).and_then(|v|v.checked_add(minutes*60000+seconds*1000+millis)).context(ErrorKind::ParseInvalid.context("timestamp overflow"))
 }
 pub fn parse(text:&str,name:&str)->Result<Parsed>{
     let normalized=text.trim_start_matches('\u{feff}').replace("\r\n","\n");
@@ -23,25 +24,25 @@ pub fn parse(text:&str,name:&str)->Result<Parsed>{
             if super::extension(name)=="sbv"{
                 if let Some((start,end))=lines.first().and_then(|s|s.split_once(',')){
                     let a=timestamp(start)?;let b=timestamp(end)?;
-                    if b<a{bail!("caption ends before it starts");}
+                    if b<a{bail!(ErrorKind::ParseInvalid.context(format!("caption ends before it starts")));}
                     let cue=lines[1..].join("\n");
-                    if cue.trim().is_empty(){bail!("caption cue has no text");}
+                    if cue.trim().is_empty(){bail!(ErrorKind::ParseInvalid.context(format!("caption cue has no text")));}
                     p.push(Content::Caption{text:cue},Locator::Timestamp{start_ms:a,end_ms:b});
                 }
             }
             continue;
         };
-        let (start,end)=lines[index].split_once("-->").context("missing caption arrow")?;
-        let end=end.split_whitespace().next().context("missing caption end")?;
+        let (start,end)=lines[index].split_once("-->").context(ErrorKind::ParseInvalid.context("missing caption arrow"))?;
+        let end=end.split_whitespace().next().context(ErrorKind::ParseInvalid.context("missing caption end"))?;
         let a=timestamp(start)?;let b=timestamp(end)?;
-        if b<a{bail!("caption ends before it starts");}
+        if b<a{bail!(ErrorKind::ParseInvalid.context(format!("caption ends before it starts")));}
         let source=lines[index+1..].join("\n");
-        if source.trim().is_empty(){bail!("caption cue has no text");}
+        if source.trim().is_empty(){bail!(ErrorKind::ParseInvalid.context(format!("caption cue has no text")));}
         // Preserve inline speaker tags and positioning markup, rather than silently deleting them.
         let value=html_escape::decode_html_entities(&source).into_owned();
         p.push(Content::Caption{text:value},Locator::Timestamp{start_ms:a,end_ms:b});
     }
-    if p.blocks.is_empty(){bail!("no timestamped captions found");}
+    if p.blocks.is_empty(){bail!(ErrorKind::ParseInvalid.context(format!("no timestamped captions found")));}
     Ok(p)
 }
 #[cfg(test)]mod tests{

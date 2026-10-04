@@ -1,3 +1,4 @@
+use crate::error::ErrorKind;
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -31,7 +32,7 @@ pub fn normalize(raw: &Value, url: &str) -> Result<MediaFormatsResponse> {
     let id=url.rsplit('=').next().unwrap_or("");
     if raw["id"].as_str()!=Some(id) || raw["entries"].is_array()
         || raw["_type"].as_str().is_some_and(|s|s!="video") {
-        bail!("media_identity_mismatch: expected one selected video");
+        bail!(ErrorKind::MediaIdentityMismatch.context(format!("media_identity_mismatch: expected one selected video")));
     }
     // An explicit live/upcoming state must not be masked by is_live=false.
     let not_live=match raw["live_status"].as_str() {
@@ -40,17 +41,17 @@ pub fn normalize(raw: &Value, url: &str) -> Result<MediaFormatsResponse> {
         _=>false,
     };
     if !not_live {
-        bail!("media_format_unavailable: live, upcoming, and unknown live state are unsupported");
+        bail!(ErrorKind::MediaFormatUnavailable.context(format!("media_format_unavailable: live, upcoming, and unknown live state are unsupported")));
     }
     if let Some(candidate)=raw["webpage_url"].as_str() {
-        if crate::media::youtube_url(candidate)?.as_deref()!=Some(url) { bail!("media_identity_mismatch: inconsistent selected URL"); }
+        if crate::media::youtube_url(candidate)?.as_deref()!=Some(url) { bail!(ErrorKind::MediaIdentityMismatch.context(format!("media_identity_mismatch: inconsistent selected URL"))); }
     }
-    let items=raw["formats"].as_array().context("media_format_unavailable: no supplied formats")?;
-    if items.len()>512 { bail!("media_output_limit: format inventory exceeds 512 entries"); }
+    let items=raw["formats"].as_array().context(ErrorKind::MediaFormatUnavailable.context("media_format_unavailable: no supplied formats"))?;
+    if items.len()>512 { bail!(ErrorKind::MediaOutputLimit.context(format!("media_output_limit: format inventory exceeds 512 entries"))); }
     let mut formats=Vec::new(); let mut seen=std::collections::HashSet::new();
     for item in items {
         let Some(id)=literal(&item["format_id"]) else { continue; };
-        if !seen.insert(id.clone()) { bail!("media_identity_mismatch: duplicate format identities"); }
+        if !seen.insert(id.clone()) { bail!(ErrorKind::MediaIdentityMismatch.context(format!("media_identity_mismatch: duplicate format identities"))); }
         let container=literal(&item["ext"]).unwrap_or_default();
         let protocol=literal(&item["protocol"]).unwrap_or_default();
         let mut f=MediaFormat {id,identity:String::new(),container,protocol,video_codec:codec(&item["vcodec"]),audio_codec:codec(&item["acodec"]),
@@ -72,34 +73,34 @@ pub fn normalize(raw: &Value, url: &str) -> Result<MediaFormatsResponse> {
 }
 pub fn selected(preview: &MediaFormatsResponse, request: &MediaDownloadRequest, config: &Config) -> Result<Vec<MediaFormat>> {
     let cap=super::limits(config)?;
-    if preview.video_id!=request.video_id { bail!("media_identity_mismatch: selected video changed"); }
-    if preview.duration_seconds.is_none_or(|n|n>request.max_duration_seconds as f64) { bail!("media_format_unavailable: unknown or excessive duration"); }
+    if preview.video_id!=request.video_id { bail!(ErrorKind::MediaIdentityMismatch.context(format!("media_identity_mismatch: selected video changed"))); }
+    if preview.duration_seconds.is_none_or(|n|n>request.max_duration_seconds as f64) { bail!(ErrorKind::MediaFormatUnavailable.context(format!("media_format_unavailable: unknown or excessive duration"))); }
     let find=|s:&FormatSelection|->Result<MediaFormat> {
         preview.formats.iter().find(|f|f.id==s.id && f.identity==s.identity && f.selectable).cloned()
-            .context("media_format_unavailable: selected format is absent, changed, or unsupported")
+            .context(ErrorKind::MediaFormatUnavailable.context("media_format_unavailable: selected format is absent, changed, or unsupported"))
     };
     let formats=match &request.selection {
         MediaSelection::NativeAudio {audio}=>{
             let f=find(audio)?;
-            if f.video_codec.is_some() || f.audio_codec.is_none() { bail!("media_format_unavailable: select one native audio-only stream"); }
+            if f.video_codec.is_some() || f.audio_codec.is_none() { bail!(ErrorKind::MediaFormatUnavailable.context(format!("media_format_unavailable: select one native audio-only stream"))); }
             vec![f]
         },
         MediaSelection::Video {video,audio}=>{
             let f=find(video)?;
             if f.video_codec.is_none() || f.width.is_none_or(|n|n>request.max_width.unwrap_or(cap.max_width))
-                || f.height.is_none_or(|n|n>request.max_height.unwrap_or(cap.max_height)) { bail!("media_format_unavailable: missing or excessive video dimensions"); }
+                || f.height.is_none_or(|n|n>request.max_height.unwrap_or(cap.max_height)) { bail!(ErrorKind::MediaFormatUnavailable.context(format!("media_format_unavailable: missing or excessive video dimensions"))); }
             if let Some(audio)=audio {
                 let a=find(audio)?;
-                if f.audio_codec.is_some() || a.video_codec.is_some() || a.audio_codec.is_none() { bail!("media_format_unavailable: merge requires separate video-only and audio-only streams"); }
+                if f.audio_codec.is_some() || a.video_codec.is_some() || a.audio_codec.is_none() { bail!(ErrorKind::MediaFormatUnavailable.context(format!("media_format_unavailable: merge requires separate video-only and audio-only streams"))); }
                 vec![f,a]
             } else {
-                if f.audio_codec.is_none() { bail!("media_format_unavailable: video requires supplied audio or an explicit audio stream"); }
+                if f.audio_codec.is_none() { bail!(ErrorKind::MediaFormatUnavailable.context(format!("media_format_unavailable: video requires supplied audio or an explicit audio stream"))); }
                 vec![f]
             }
         },
     };
-    let known=formats.iter().try_fold(0u64,|sum,f|sum.checked_add(f.bytes.or(f.estimated_bytes).unwrap_or(0))).context("media_budget_exceeded: source sizes overflow")?;
+    let known=formats.iter().try_fold(0u64,|sum,f|sum.checked_add(f.bytes.or(f.estimated_bytes).unwrap_or(0))).context(ErrorKind::MediaBudgetExceeded.context("media_budget_exceeded: source sizes overflow"))?;
     let retained=if formats.len()==2 { known.saturating_mul(2).saturating_add(65536) } else { known };
-    if retained>request.max_bytes { bail!("media_budget_exceeded: supplied source sizes exceed total retained-byte budget"); }
+    if retained>request.max_bytes { bail!(ErrorKind::MediaBudgetExceeded.context(format!("media_budget_exceeded: supplied source sizes exceed total retained-byte budget"))); }
     Ok(formats)
 }
