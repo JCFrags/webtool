@@ -8,7 +8,7 @@ use url::Url;
 use webtool_protocol::*;
 use super::Parsed;
 
-pub const PARSER:&str="rs-trafilatura/0.2.2+main-content/11+html-encoding/1";
+pub const PARSER:&str="rs-trafilatura/0.2.2+main-content/12+html-encoding/1";
 
 /// A stable signal that ordinary Auto reads may use for one rendered retry.
 /// Parse, encoding, network, and explicit-selector failures are not this error.
@@ -256,6 +256,23 @@ fn selection_source(original:&Html)->Result<(String,Vec<String>,MathSources,Imag
         }
     }
     for id in modals{if let Some(mut node)=selection.tree.get_mut(id){node.detach();}}
+    // The Documentation profile removes a.src, and its boilerplate filter
+    // mistakes rustdoc declaration comments for article comments. Neutralize
+    // only those class tokens in delivered main content before selection.
+    if original.select(&selector("meta[name=generator][content=rustdoc]")?).next().is_some(){
+        let protected=selection.select(&selector("a.src[href],pre.rust.item-decl > code span.comment")?)
+            .filter(|e|main_scope(*e).is_some())
+            .map(|e|(e.id(),if e.value().name()=="a"{"src"}else{"comment"})).collect::<Vec<_>>();
+        for (id,token) in protected{
+            if let Some(mut node)=selection.tree.get_mut(id){
+                if let scraper::node::Node::Element(element)=node.value(){
+                    for (name,value) in &mut element.attrs{
+                        if name.local.as_ref()=="class"{*value=value.split_whitespace().filter(|class|*class!=token).collect::<Vec<_>>().join(" ").into();}
+                    }
+                }
+            }
+        }
+    }
     // Article footers can contain qualifications. The extractor's unbounded
     // footer class filter overrides its article exception. Neutralize that
     // layout token and prose disclaimer labels only within these article footers.
@@ -416,16 +433,19 @@ fn chrome_hint(e: ElementRef<'_>) -> bool {
             .flat_map(|value| value.to_ascii_lowercase().split(|c:char| !c.is_ascii_alphanumeric()).map(str::to_owned).collect::<Vec<_>>()).collect();
         // A section about cookies, social systems, or related work is content.
         // Require widget structure as well as a label before excluding it.
+        let cookie_widget=(tokens.contains("cookie")||tokens.contains("consent"))
+            && (a.value().attr("role")==Some("dialog")||tokens.contains("banner")||tokens.contains("modal"));
+        if cookie_widget{return true;}
+        let related_widget=tokens.contains("related")
+            && (tokens.contains("posts")||tokens.contains("articles")||tokens.contains("stories"));
+        if !(tokens.contains("navbar")||tokens.contains("navigation")||tokens.contains("pagination")
+            ||tokens.contains("recommendations")||related_widget){return false;}
+        // Most main-content ancestors have no widget token. Do not rescan their
+        // entire descendant text for each block when density cannot affect this decision.
         let linked=a.select(&Selector::parse("a[href]").expect("constant selector"))
             .map(text).collect::<String>().chars().count();
         let length=text(a).chars().count().max(1);
-        let link_widget=linked.saturating_mul(2)>length;
-        let cookie_widget=(tokens.contains("cookie")||tokens.contains("consent"))
-            && (a.value().attr("role")==Some("dialog")||tokens.contains("banner")||tokens.contains("modal"));
-        let related_widget=tokens.contains("related")
-            && (tokens.contains("posts")||tokens.contains("articles")||tokens.contains("stories"));
-        cookie_widget || (link_widget && (tokens.contains("navbar")||tokens.contains("navigation")
-            ||tokens.contains("pagination")||tokens.contains("recommendations")||related_widget))
+        linked.saturating_mul(2)>length
     })
 }
 fn link_only_chrome(e: ElementRef<'_>) -> bool {
@@ -454,7 +474,14 @@ impl<'a> ReadStructure<'a>{
         }
         Self{links:InlineLinks::new(),math,images,math_spacing:HashMap::new(),original_lists,seen_items:HashSet::new()}
     }
-    fn list_item(&mut self,e:ElementRef<'_>,origin:Option<ElementRef<'_>>,p:&mut Parsed){
+    fn block_context(&mut self,e:ElementRef<'_>,origin:Option<ElementRef<'_>>,p:&mut Parsed){
+        // Use selected ancestry, not an omitted original wrapper. Quote content
+        // already renders one level, while code and other blocks need all levels.
+        let block=p.blocks.last().expect("just pushed block");
+        let depth=std::iter::once(e).chain(e.ancestors().filter_map(ElementRef::wrap))
+            .filter(|e|e.value().name()=="blockquote").count()
+            .saturating_sub(usize::from(matches!(block.content,Content::Quote{..})));
+        if depth>0{p.metadata["quote_depth"][&block.id]=json!(depth);}
         let Some(item)=std::iter::once(e).chain(e.ancestors().filter_map(ElementRef::wrap)).find(|a|a.value().name()=="li") else{return;};
         let source=origin.and_then(|e|std::iter::once(e).chain(e.ancestors().filter_map(ElementRef::wrap)).find(|a|a.value().name()=="li"))
             .or_else(||self.original_lists.get(&compact(&text(item))).filter(|items|items.len()==1).map(|items|items[0])).unwrap_or(item);
@@ -595,7 +622,7 @@ fn flush_run(e: ElementRef<'_>, run: &mut ProseRun<'_>, p: &mut Parsed, unmapped
         *unmapped += 1;
         p.push(prose(e, value), Locator::Derived { index:p.blocks.len()+1 });
         run.record(p,base,&mut structure.links);
-        structure.list_item(e,None,p);
+        structure.block_context(e,None,p);
     }
     *run=ProseRun::default();
 }
@@ -605,14 +632,14 @@ fn emit(e: ElementRef<'_>, origins: &Origins<'_>, base: Option<&Url>, filter_chr
         if let Some(url)=image_reference(base,&source.reference){
             p.push(Content::Image{url,alt:source.alt.clone()},source.locator.clone());
             if base.is_none(){p.warnings.push(Warning::new("image_base_unavailable","An image reference has no public URL base. The supplied reference is retained, not fetched."));}
-            structure.list_item(e,None,p);
+            structure.block_context(e,None,p);
         }else{p.warnings.push(Warning::new("image_reference_unavailable","A selected image has no supported HTTP(S) or relative source reference. See retained original."));}
         return Ok(());
     }
     if let Some(source)=carried_math(e,&structure.math){
         p.push(Content::Math{text:source.text.clone()},source.locator.clone());
         if source.inline{structure.math_spacing.insert(p.blocks.last().unwrap().id.clone(),(source.before.clone(),source.after.clone()));}
-        structure.list_item(e,None,p);
+        structure.block_context(e,None,p);
         return Ok(());
     }
     if !is_block(e) {
@@ -713,7 +740,7 @@ fn emit(e: ElementRef<'_>, origins: &Origins<'_>, base: Option<&Url>, filter_chr
     };
     p.push(content, locator);
     if !matches!(tag,"pre"|"table"|"img"|"math"){linked_text(e).record(p,base,&mut structure.links);}
-    structure.list_item(e,origin,p);
+    structure.block_context(e,origin,p);
     Ok(())
 }
 fn image_reference(base:Option<&Url>,value:&str)->Option<String>{
@@ -725,7 +752,10 @@ fn absolute(base:Option<&Url>,value:&str)->Option<String>{
     if !matches!(u.scheme(),"http"|"https"){return None;}Some(u.to_string())
 }
 pub fn links(source:&str,url:&str)->Vec<Link>{
-    let doc=Html::parse_document(source);let base=Url::parse(url).ok();let mut seen=HashSet::new();
+    links_from_html(&Html::parse_document(source),url)
+}
+fn links_from_html(doc:&Html,url:&str)->Vec<Link>{
+    let base=Url::parse(url).ok();let mut seen=HashSet::new();
     doc.select(&Selector::parse("a[href]").expect("constant selector")).filter_map(|e|{
         let url=absolute(base.as_ref(),e.value().attr("href")?)?;
         if !seen.insert(url.clone()){return None;}Some(Link{url,text:normalized(&text(e))})
@@ -767,13 +797,13 @@ fn parse_source(source:&str,url:&str,explicit:Option<&str>)->Result<Parsed>{
         if display_title.strip_prefix(heading).is_some_and(|suffix|suffix.is_empty() || [" - "," | "," – "," — "].iter().any(|separator|suffix.starts_with(separator))){display_title=heading.clone();}
     }
     let mut p=Parsed::new(&display_title,PARSER);
-    p.links=links(source,url);
+    p.links=links_from_html(&original,url);
     let mut readable_text:Option<String>=None;
     let mut unavailable_disclosures=Vec::new();
     let mut math_sources=MathSources::new();
     let mut image_sources=ImageSources::new();
     let selected=if let Some(css)=explicit{
-        p.parser="explicit-css+source-blocks/8+html-encoding/1".into();
+        p.parser="explicit-css+source-blocks/9+html-encoding/1".into();
         let found=original.select(&selector(css)?).map(|n|n.html()).collect::<Vec<_>>();
         if found.is_empty(){bail!(ErrorKind::EmptyCss.context(format!("CSS selector matched no elements")));}found.join("\n")
     }else{
@@ -908,6 +938,50 @@ pub fn select_original(source:&str,css:&str)->Result<Vec<serde_json::Value>>{
     const SAMPLE:&str="<html><head><title>A</title></head><body><main><h1>Title</h1><p>Exact evidence.</p><pre><code class=\"language-rust\">  let n = 0;\n</code></pre><table><tr><th>Name</th><th>N</th></tr><tr><td>x</td><td>0</td></tr></table></main></body></html>";
     #[cfg(feature="web-extraction")]
     #[test]
+    fn rustdoc_source_links_and_declaration_comments_survive_selection(){
+        let source=r#"<html><head><meta name="generator" content="rustdoc"><title>Buffer in itoa - Rust</title></head><body>
+            <main><section id="main-content" class="content"><div class="main-heading"><h1>Struct <span class="struct">Buffer</span></h1>
+            <span class="sub-heading"><a class="src" href="../src/itoa/lib.rs.html#72-74">Source</a> </span></div>
+            <pre class="rust item-decl"><code>pub struct Buffer { <span class="comment">/* private fields */</span> }</code></pre>
+            <p>A correctly sized stack allocation for the formatted integer to be written into.</p></section></main></body></html>"#;
+        let url="https://docs.rs/itoa/latest/itoa/struct.Buffer.html";
+        for explicit in [None,Some("main")]{
+            let parsed=parse(source.as_bytes(),url,explicit).unwrap();
+            let code=parsed.blocks.iter().find(|b|matches!(b.content,Content::Code{..})).unwrap();
+            assert_eq!(code.content.text(),"pub struct Buffer { /* private fields */ }");
+            assert!(matches!(code.locator,Locator::Html{..}));
+            let action=parsed.blocks.iter().find(|b|b.content.text()=="Source").unwrap();
+            assert_eq!(parsed.metadata["inline_links"][&action.id],json!([{"start":0,"end":6,"url":"https://docs.rs/itoa/latest/src/itoa/lib.rs.html#72-74"}]));
+            assert_eq!(parsed.links,links(source,url));
+        }
+    }
+    #[cfg(feature="web-extraction")]
+    #[test]
+    fn selected_quote_code_keeps_context_without_restoring_omitted_wrappers(){
+        let source=r#"<main><article><h1>Technical extraction smoke</h1>
+            <blockquote>Before quote code.<pre class="language-python"><code>  if ready:
+    print("Exact quote code")
+</code></pre>After quote code.</blockquote></article></main>"#;
+        for explicit in [None,Some("main"),Some("pre")]{
+            let parsed=parse(source.as_bytes(),"https://example.test/retained/table.html",explicit).unwrap();
+            let code=parsed.blocks.iter().find(|b|matches!(b.content,Content::Code{..})).unwrap();
+            assert_eq!(code.content.text(),"  if ready:\n    print(\"Exact quote code\")\n");
+            assert!(matches!(code.locator,Locator::Html{..}));
+            if explicit==Some("pre"){
+                assert_eq!(parsed.blocks.len(),1);
+                assert!(parsed.metadata["quote_depth"][&code.id].is_null());
+            }else{
+                assert_eq!(parsed.metadata["quote_depth"][&code.id],json!(1));
+                for label in ["Before quote code.","After quote code."]{
+                    let quote=parsed.blocks.iter().find(|b|b.content.text()==label).unwrap();
+                    assert!(matches!(quote.content,Content::Quote{..}));
+                    assert!(parsed.metadata["quote_depth"][&quote.id].is_null());
+                }
+            }
+        }
+    }
+    #[cfg(feature="web-extraction")]
+    #[test]
     fn selected_styles_and_image_references_keep_their_source(){
         let source=include_str!("../../tests/fixtures/documents/fidelity.html");
         let parsed=parse(source.as_bytes(),"https://example.test/notes",None).unwrap();
@@ -948,7 +1022,7 @@ pub fn select_original(source:&str,css:&str)->Result<Vec<serde_json::Value>>{
         assert!(parsed.warnings.iter().any(|warning|warning.code=="disclosure_content_unavailable"));
         assert_eq!(parsed.links,links(source,"https://example.com/guide"));
         let explicit=parse(source.as_bytes(),"https://example.com/guide",Some("#values")).unwrap();
-        assert_eq!(explicit.parser,"explicit-css+source-blocks/8+html-encoding/1");
+        assert_eq!(explicit.parser,"explicit-css+source-blocks/9+html-encoding/1");
         assert!(!explicit.warnings.iter().any(|warning|warning.code=="disclosure_content_unavailable"));
     }
     #[cfg(feature="web-extraction")]
