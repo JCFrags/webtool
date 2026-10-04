@@ -10,6 +10,10 @@ use url::Url;
 use webtool_protocol::*;
 use crate::{config::Config, readers::{self, Parsed}, sources::{commit_fields, endpoint, pinned}, Engine};
 
+mod github;
+mod comparison;
+mod navigation;
+
 pub const MAP_PARSER: &str = "github-bounded-map/1";
 const FILE_PARSER: &str = "github-exact-file/1";
 const API_VERSION: &str = "2022-11-28";
@@ -71,7 +75,7 @@ impl Budget {
     fn remaining(&self) -> usize { self.max_bytes.saturating_sub(self.coverage.response_bytes) }
     fn stop(&mut self, error: CodeError) { self.coverage.incomplete = true; self.coverage.stopped = Some(error.problem()); }
 }
-pub(crate) struct Response { pub bytes: Vec<u8>, pub observation: CodeObservation, pub location: Option<String> }
+pub(crate) struct Response { pub bytes: Vec<u8>, pub observation: CodeObservation, pub location: Option<String>, pub pagination: Option<String> }
 impl Response {
     fn json(&self) -> Result<Value> { serde_json::from_slice(&self.bytes).map_err(|_| CodeError::Upstream.into()) }
 }
@@ -120,6 +124,7 @@ impl Engine {
         if let Some(error) = status_error(status, remaining) { return Err(error.into()); }
         if github && (300..400).contains(&status) { return Err(CodeError::Identity.into()); }
         let location = response.headers().get("location").and_then(|v| v.to_str().ok()).map(str::to_owned);
+        let pagination = response.headers().get("link").and_then(|v| v.to_str().ok()).map(str::to_owned);
         let limit = budget.remaining().min(self.config.max_bytes);
         if response.content_length().is_some_and(|n| n > limit as u64) { return Err(CodeError::Limit.into()); }
         let mut bytes = Vec::new();
@@ -135,7 +140,7 @@ impl Engine {
         budget.coverage.response_bytes += bytes.len();
         let artifact = self.store.put_bytes(&bytes, if github { "application/json" } else { "text/html" },
             if github { "github_api_response" } else { "docs_rs_response" }).await?;
-        Ok(Response { bytes, location, observation: CodeObservation { url: url.into(), status, artifact,
+        Ok(Response { bytes, location, pagination, observation: CodeObservation { url: url.into(), status, artifact,
             rate_remaining: remaining, rate_reset_unix: reset } })
     }
     pub async fn code_discover(&self, request: RepositoryDiscoverRequest) -> Result<RepositoryDiscoverResponse> {
@@ -364,13 +369,16 @@ async fn search(e: &Engine, request: CodeSearchRequest) -> Result<CodeSearchResp
     if request.mode == CodeSearchMode::GithubCode { return Err(CodeError::SearchUnavailable.into()); }
     if request.query.is_empty() || request.query.len() > 4096 || !(1..=50).contains(&request.limit) { return Err(CodeError::Invalid.into()); }
     validate_files(&request.limits)?;
-    if request.mode == CodeSearchMode::Literal && (request.paths.is_empty() || request.paths.len() > 20 || request.paths.len() > request.limits.max_files) { return Err(CodeError::Invalid.into()); }
-    if request.mode == CodeSearchMode::Paths && !request.paths.is_empty() { return Err(CodeError::Invalid.into()); }
+    let path_mode = matches!(request.mode, CodeSearchMode::Paths | CodeSearchMode::PathGlob);
+    if !path_mode && (request.paths.is_empty() || request.paths.len() > 20 || request.paths.len() > request.limits.max_files) { return Err(CodeError::Invalid.into()); }
+    if path_mode && !request.paths.is_empty() { return Err(CodeError::Invalid.into()); }
+    let path_glob = if request.mode == CodeSearchMode::PathGlob { Some(navigation::glob(&request.query)?) } else { None };
+    if request.mode == CodeSearchMode::Regex { navigation::pattern(&request.query)?; }
     let map = saved_map(e, &request.map_id).await?;
     let mut coverage = CodeCoverage { incomplete: map.coverage.incomplete, warnings: map.coverage.warnings.clone(), ..Default::default() };
     let mut paths = Vec::new(); let mut matches = Vec::new(); let mut files = Vec::new();
-    if request.mode == CodeSearchMode::Paths {
-        for entry in map.entries.iter().filter(|v| v.path.contains(&request.query)) {
+    if path_mode {
+        for entry in map.entries.iter().filter(|v| path_glob.as_ref().map_or_else(|| v.path.contains(&request.query), |glob| glob.is_match(&v.path))) {
             if paths.len() == request.limit { coverage.incomplete = true; coverage.warnings.push(Warning::new("match_limit", "Additional admitted path matches were omitted.")); break; }
             paths.push(entry.clone());
         }
@@ -378,7 +386,9 @@ async fn search(e: &Engine, request: CodeSearchRequest) -> Result<CodeSearchResp
         let mut seen = HashSet::new();
         let selected = request.paths.iter().map(|name| {
             if !seen.insert(name) { return Err(CodeError::Invalid.into()); }
-            admitted(&map, name)
+            let entry = admitted(&map, name)?;
+            if request.mode == CodeSearchMode::Symbols { navigation::language(&entry.path)?; }
+            Ok(entry)
         }).collect::<Result<Vec<_>>>()?;
         let mut budget = file_budget(&request.limits);
         for entry in selected {
@@ -392,7 +402,14 @@ async fn search(e: &Engine, request: CodeSearchRequest) -> Result<CodeSearchResp
                     // potentially normalized parser view. Every match has exact bytes.
                     let bytes = e.store.bytes(&document.source.original).await?;
                     let text = std::str::from_utf8(&bytes).map_err(|_| CodeError::Unsupported)?;
-                    let (found, truncated) = literal_matches(text, &request.query, entry, &document.id, request.limit.saturating_sub(matches.len()));
+                    let remaining = request.limit.saturating_sub(matches.len());
+                    let (found, truncated) = if request.mode == CodeSearchMode::Literal {
+                        literal_matches(text, &request.query, entry, &document.id, remaining)
+                    } else {
+                        let permit = e.parse_slots.clone().acquire_owned().await?;
+                        let (text, query, entry, id, mode) = (text.to_owned(), request.query.clone(), entry.clone(), document.id.clone(), request.mode);
+                        tokio::task::spawn_blocking(move || { let _permit = permit; navigation::matches(&text, &query, mode, &entry, &id, remaining) }).await??
+                    };
                     matches.extend(found);
                     if truncated { budget.coverage.incomplete = true; budget.coverage.warnings.push(Warning::new("match_limit", "Additional exact literal matches were omitted.")); }
                     files.push(CodeFileOutcome { path: entry.path.clone(), document_id: Some(document.id), error: None });
@@ -408,6 +425,8 @@ async fn search(e: &Engine, request: CodeSearchRequest) -> Result<CodeSearchResp
         budget.coverage.incomplete |= coverage.incomplete;
         budget.coverage.warnings.extend(coverage.warnings);
         budget.coverage.warnings.push(Warning::new("selected_files_only", "Only explicitly selected admitted files were searched, not the whole repository."));
+        if request.mode == CodeSearchMode::Symbols { budget.coverage.warnings.push(Warning::new("lexical_declarations", "Deterministic declaration-name matches for Rust, Python, JavaScript/TypeScript, or Go. Lexical comment/string filtering is heuristic, not compiler symbol resolution, references, or complete declaration coverage.")); }
+        if request.mode == CodeSearchMode::Regex { budget.coverage.warnings.push(Warning::new("regex_scope", "Bounded case-sensitive Rust regex matching. Zero-width matches are omitted. Matches address exact retained UTF-8 file bytes.")); }
         coverage = budget.coverage;
     }
     Ok(CodeSearchResponse { map_id: request.map_id, repository: map.repository, requested_ref: map.requested_ref,

@@ -43,7 +43,7 @@ does not require a particular model or agent application.
 | `webtool_cite` | Retrieve DOI citations or cite a saved arXiv or PMC paper offline |
 | `webtool_batch_read` | Ordered per-input saved references or errors for one to five ordinary reads |
 | `webtool_archive` | Explicit capture-index lookup or selected historical read |
-| `webtool_code` | First-party public repository discover/map/search/file operations |
+| `webtool_code` | Public repository discover/map/search/file/context/compare and issue/PR/release operations |
 | `webtool_docs` | Exact first-party docs.rs release page or source read |
 | `webtool_scholarly` | Explicit scholarly discovery, Crossref DOI, arXiv version, or PMC OAI/JATS selection |
 | `webtool_external` | Explicit optional Sourcegraph/Context7 index operations and retained-file verification |
@@ -66,12 +66,23 @@ features require an explicit adapter addition rather than automatic exposure.
   0 to 3660 days. Read requires an explicitly selected `timestamp`. Both use
   `YYYYMMDDhhmmss`. An index result is not a historical page read. There is no
   live, nearby-capture, browser, or alternate-provider fallback. See [ARCHIVES.md](ARCHIVES.md).
-- `webtool_code` accepts `discover`, `map`, `search`, or `file`. Map requires a
-  public `owner/repository` and explicit `reference`. Search requires a saved
-  `map_id` and explicit `mode`: `paths`, `literal`, or the unavailable
-  `github_code`. Literal search requires exact admitted `paths`. File reads
-  use the map's pinned commit/blob. Discovery descriptions and map entries are
-  not fetched file bodies. Inspect `coverage` and each file outcome. See [CODE.md](CODE.md).
+- `webtool_code` accepts `discover`, `map`, `search`, `file`, `context`, `compare`,
+  `github_list`, or `github_read`. Map requires a public `owner/repository` and
+  explicit `reference`. Search requires saved `map_id` and explicit `mode`:
+  `paths`, `path_glob`, `literal`, `regex`, `symbols`, or unavailable `github_code`.
+  File modes require exact admitted `paths`. Symbols are deterministic lexical
+  declarations, not compiler resolution or embeddings. File reads use the map's
+  pinned commit/blob. Context uses matching saved map/file IDs, one-based `line`,
+  `before`/`after` bounds, and optional context-relative continuation `offset`.
+  It makes no provider request. Compare requires two same-repository map IDs.
+  `provider: true` opts in to one exact-SHA comparison page. Its separately saved
+  `provider_document_id` references provider patches, not complete fetched files.
+  `github_list` requires repository, `kind` (`issue`, `pull_request`, or `release`),
+  optional `state`, and `pagination` (`page`, `limit`). `github_read` selects that
+  kind and either `number` or exact release `tag`. Optional `comments` selects one
+  conversation page and returns a separate `comment_document_id`, not PR reviews.
+  No page or asset is followed automatically. Discovery metadata and map entries
+  are not fetched bodies. Inspect coverage and every outcome. See [CODE.md](CODE.md).
 - `webtool_docs` requires `crate_name`, exact `version`, `path`, and `kind`
   (`page` or `source`). It does not infer a dependency release, replace a missing
   release with latest, or establish a repository commit. Source is decoded from

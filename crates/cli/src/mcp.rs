@@ -254,7 +254,18 @@ impl FileBounds {
 }
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-enum CodeMode { Paths, Literal, GithubCode }
+enum CodeMode { Paths, Literal, PathGlob, Regex, Symbols, GithubCode }
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+enum GithubKind { Issue, PullRequest, Release }
+#[derive(Default, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+enum GithubState { Open, Closed, #[default] All }
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+struct GithubPage { page: usize, limit: usize }
+impl Default for GithubPage { fn default() -> Self { Self { page: 1, limit: 5 } } }
+fn eight() -> usize { 8 }
 #[derive(Deserialize, JsonSchema)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 enum Code {
@@ -277,6 +288,15 @@ enum Code {
         #[serde(default)] limits: FileBounds,
     },
     File { map_id: String, path: String, #[serde(default)] limits: FileBounds },
+    /// Exact retained source context. No provider request. Continuation reuses identical saved inputs.
+    Context { map_id: String, file_id: String, line: usize, #[serde(default = "three")] before: usize,
+        #[serde(default = "eight")] after: usize, #[serde(default)] offset: usize },
+    /// Offline admitted-map comparison. Provider patches require explicit opt-in.
+    Compare { base_map_id: String, head_map_id: String, #[serde(default)] provider: bool, #[serde(default)] pagination: GithubPage },
+    /// One public metadata page, not accepted object bodies. The issue list also includes PRs.
+    GithubList { repository: String, kind: GithubKind, #[serde(default)] state: GithubState, #[serde(default)] pagination: GithubPage },
+    /// Explicit issue/PR number or release tag. Optional issue-conversation comments, not reviews.
+    GithubRead { repository: String, kind: GithubKind, number: Option<u64>, tag: Option<String>, comments: Option<GithubPage> },
 }
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -412,7 +432,7 @@ fn tools() -> Vec<Tool> {
         tool::<Cite>("webtool_cite", "Get a citation from a DOI, or cite a saved arXiv or PMC paper offline. No bibliography inference or LLM is used.", true, false, true),
         tool::<Batch>("webtool_batch_read", "Read one to five ordinary sources. Return one ordered saved-ID/cache reference or safe error per input, without full documents. Continue saved successes with webtool_document. No jobs, retries, or automatic refresh are added.", false, false, true),
         tool::<Archive>("webtool_archive", "Explicit Wayback lookup or read at a selected original URL and UTC capture time. Lookup is index data, not a read. Read returns a saved historical passage. No live, nearby-capture, browser, or alternate-archive fallback.", false, false, true),
-        tool::<Code>("webtool_code", "Discover public repositories, map an explicit ref, search admitted paths or selected files, or read one pinned regular UTF-8 file. Saved index pages are not fetched file evidence. Keep coverage and per-file failures visible. No authentication, code execution, or external code provider.", false, false, true),
+        tool::<Code>("webtool_code", "Discover public repositories, map an explicit ref, search admitted paths or explicitly selected files, read pinned UTF-8 files and saved context, compare saved maps with opt-in provider patches, or list/read public issue/PR/release snapshots. Symbols are deterministic lexical declarations, not compiler resolution or embeddings. Lists are discovery. Keep caps, unknown rights, revisions and partial outcomes visible. No credentials, whole-repo scan, execution, or external index provider.", false, false, true),
         tool::<Docs>("webtool_docs", "Read an exact first-party docs.rs crate release page or source. Return a saved passage. Choose page/source explicitly. No latest/range substitution, repository-commit inference, or browser fallback.", false, false, true),
         tool::<Scholar>("webtool_scholarly", "Search explicit arXiv/OpenAlex metadata, inspect one Crossref DOI or exact arXiv version, or select PMC OAI metadata and permitted JATS. PMC version/datestamp assertions do not select history. Return saved content-state counts, partial warnings and full-text errors. Metadata and abstracts are not paper bodies.", false, false, true),
         tool::<External>("webtool_external", "Explicit optional Sourcegraph/Context7 index operations with server-owned endpoints, credentials and budgets. Status makes no probe. Saved snippets remain third-party index claims. Verify selected saved Sourcegraph lines against a matching ordinary GitHub map/file without network. Context7 requires saved listed-version or tracked selection and uses fast=true. No source-link fetch, provider fallback, configuration write or model action.", false, false, true),
@@ -721,6 +741,39 @@ impl Bridge {
                         json!({"map_id": map_id, "path": path, "limits": limits})).await?)?;
                     document_page_context(response.document, View::Markdown, 0, None,
                         json!({"evidence_kind": "pinned_repository_file", "map_id": map_id, "coverage": response.coverage}))
+                }
+                Code::Context { map_id, file_id, line, before, after, offset } => {
+                    document_id(&map_id)?; document_id(&file_id)?;
+                    let response: webtool_protocol::CodeContextResponse = decode(self.post("/v1/code/context",
+                        json!({"map_id": map_id, "file_id": file_id, "line": line, "before": before, "after": after})).await?)?;
+                    passage(&response.text, offset, json!({"evidence_kind":"retained_file_context", "map_id":map_id,"file_id":file_id,
+                        "repository":response.repository,"requested_ref":response.requested_ref,"resolved_commit":response.resolved_commit,
+                        "path":response.path,"blob_sha":response.blob_sha,"url":response.url,"start_line":response.start_line,"end_line":response.end_line,
+                        "original_byte_range":response.byte_range,"coverage":response.coverage,
+                        "evidence_note":"Exact saved-file substring verified against this map's blob. Passage offsets are context-relative UTF-8 bytes, not original offsets. No network."}))
+                }
+                Code::Compare { base_map_id, head_map_id, provider, pagination } => {
+                    document_id(&base_map_id)?; document_id(&head_map_id)?;
+                    let response: webtool_protocol::CodeCompareResponse = decode(self.post("/v1/code/compare",
+                        json!({"base_map_id":base_map_id,"head_map_id":head_map_id,"provider":provider,"pagination":pagination})).await?)?;
+                    self.saved_page(&response.document_id, View::Json, None, json!({"evidence_kind":"admitted_map_comparison",
+                        "base_commit":response.base_commit,"head_commit":response.head_commit,"coverage":response.coverage,"next_provider_page":response.next_page,
+                        "provider_document_id":response.provider_document.map(|doc| doc.id),
+                        "evidence_note":"Map entries only, with unknown missing admissions kept explicit. Continue the optional separately saved provider document for JSON-pointer patch evidence, not complete fetched file bodies."})).await
+                }
+                Code::GithubList { repository, kind, state, pagination } => {
+                    let response: webtool_protocol::GitHubListResponse = decode(self.post("/v1/code/github/list",
+                        json!({"repository":repository,"kind":kind,"state":state,"pagination":pagination})).await?)?;
+                    self.saved_page(&response.document_id, View::Markdown, None, json!({"evidence_kind":"github_object_discovery",
+                        "next_page":response.next_page,"observed_at":response.observed_at,"coverage":response.coverage,
+                        "evidence_note":"One mutable discovery page. Select an object explicitly for accepted body evidence. No page, source link or asset was followed."})).await
+                }
+                Code::GithubRead { repository, kind, number, tag, comments } => {
+                    let response: webtool_protocol::GitHubReadResponse = decode(self.post("/v1/code/github/read",
+                        json!({"repository":repository,"kind":kind,"number":number,"tag":tag,"comments":comments})).await?)?;
+                    document_page_context(response.document, View::Markdown, 0, None, json!({"evidence_kind":"github_object_snapshot",
+                        "comment_document_id":response.comments.map(|doc| doc.id),"next_comment_page":response.next_comment_page,"coverage":response.coverage,
+                        "evidence_note":"Retained public API body with JSON-pointer locators. Mutable observation, not commit-pinned conversation history, PR reviews or downloaded release assets. Optional comments use their separate saved ID."}))
                 }
             },
             "webtool_docs" => {

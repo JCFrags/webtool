@@ -119,6 +119,101 @@ fails validation before file requests rather than pretending the file was search
 search is not configured or called. There is no hidden fallback to literal file
 search, no token environment lookup, and no inherited `gh` access.
 
+### Deterministic declaration and context navigation
+
+```sh
+webtool code search MAP_ID '**/*.rs' --mode path-glob --limit 10
+webtool code search MAP_ID 'Buffer|Integer' --mode regex --path src/lib.rs --limit 5
+webtool code search MAP_ID Buffer --mode symbols --path src/lib.rs --limit 5
+webtool code context MAP_ID FILE_ID 58 --before 3 --after 8
+```
+
+Path globs search only admitted names. `*` and `?` do not cross a slash. `**`
+crosses directories, and `**/` also permits zero directories. Character classes
+and backslash escapes are unsupported. Regex uses bounded Rust regex syntax,
+case-sensitive matching, and no zero-width results. Both file modes require exact
+selected paths and the existing file/request/byte budgets. Invalid patterns fail
+before provider requests.
+
+`symbols` searches declaration names by a literal substring. It uses deterministic
+lexical comment/string filtering and line-start declaration patterns for Rust,
+Python, JavaScript/TypeScript, and Go. This is not compiler symbol resolution,
+reference analysis, embeddings, or a complete declaration index. Macros, Unicode
+identifiers, complex declarations, JavaScript regex literals, and language-specific
+syntax can exceed this heuristic. Unsupported file extensions fail locally. Match
+name ranges, lines, and excerpts still address exact retained UTF-8 bytes.
+
+`context` requires the saved map and saved file IDs. It verifies repository, path,
+blob identity, regular Git mode, and retained size against that map. It makes no
+provider request and does not resolve the ref again. The returned text is the
+exact original substring, with one-based start/end lines and a half-open byte
+range. Before/after accept zero through 20 lines each. A context is at most 64 KiB.
+It uses the selected map's revision even when the identical file snapshot retains
+an earlier requested-ref observation. No adjacent file is fetched automatically.
+
+### Public issues, pull requests, and releases
+
+```sh
+webtool code github list JCFrags/webtool --kind issue --state all --page 1 --limit 5
+webtool code github list JCFrags/webtool --kind pull-request --state closed --limit 5
+webtool code github issue JCFrags/webtool 23 --comments --comment-page 1 --comment-limit 5
+webtool code github pr JCFrags/webtool 24
+webtool code github release JCFrags/webtool v0.1.0-alpha.1
+```
+
+These operations use unauthenticated public REST requests only. They do not inherit
+`gh` access, tokens, or accounts. Lists fetch exactly one explicit page of 1 through
+20 native items, with page numbers 1 through 1,000. `next_page` is metadata for a
+later explicit selection, not automatic pagination. List originals retain native
+JSON, including absent/null values. Displayed titles and metadata are discovery,
+not accepted object bodies. GitHub's issue list includes PR records. Their actual
+kind remains explicit. No filtering/refill request is hidden.
+
+Read selects one issue/PR number or one exact release tag. Its heading and verbatim
+Markdown body have JSON-pointer locators in the exact retained API original.
+Missing body and explicit null body have different warnings. State, user/order,
+labels, timestamps, PR base/head refs and SHAs, release target/asset metadata, and
+unknown native fields remain available in saved metadata and original JSON.
+Public visibility does not establish a reuse license. Release `target_commitish`
+is not resolved to a commit, and release assets are not downloaded.
+
+An optional single issue-conversation comment page is a separate saved document,
+with its own original, locators, and next-page metadata. PR reviews, inline review
+comments, timelines, checks, and changed-file lists are not included. Parent and
+comment reads are separate mutable observations, not a transaction-consistent
+historical conversation. A comment transport/budget failure retains the accepted
+body and exposes `coverage.stopped`. No retry, extra page, or HTML fallback is used.
+An object plus comments consumes at most two requests and 4 MiB. A discovery page
+consumes one request and 2 MiB. The general source-byte limit and deadline can
+reduce these bounds. Issue/PR/release snapshots are saved observations, not
+immutable Git objects or complete-repository evidence.
+
+### Pinned revision comparison
+
+```sh
+webtool code compare BASE_MAP_ID HEAD_MAP_ID
+webtool code compare BASE_MAP_ID HEAD_MAP_ID --provider --page 1 --limit 5
+```
+
+The maps must describe the same public repository and starting directory. Offline
+comparison makes no provider request. It reports exact object/mode changes among
+admitted paths. Missing entries in an incomplete map are `not_admitted_in_base` or
+`not_admitted_in_head`, not confirmed additions/removals. It does not infer renames
+or compare file bodies. The saved original is a derived comparison manifest that
+references both saved maps, their requested refs, exact commits, and coverage.
+
+`--provider` opts in to one GitHub comparison request using those two immutable
+commit SHAs. It does not resolve mutable refs again. The caller selects one commit
+page and result count with the same 1 through 1,000 and 1 through 20 bounds. At
+most 4 MiB of response JSON is admitted. Its separately saved document retains
+native status, merge-base, commit metadata, and file patches with JSON-pointer
+locators. Patches are provider excerpts, not independently verified complete code
+files. GitHub's comparison uses merge-base semantics, which can differ from a
+direct base-to-head tree comparison. Changed files occur only on page one and
+are capped upstream at 300. Missing patches and later/remaining pages keep
+coverage incomplete. A provider request failure keeps the accepted offline map
+comparison and exposes the stop reason. No asset or source link is followed.
+
 ### Provider behavior
 
 The GitHub adapter uses REST API version `2022-11-28` and a descriptive service
@@ -179,7 +274,7 @@ user's compiler, target, or selected features.
 
 ## HTTP routes
 
-All five routes use the same generated OpenAPI contract and safe `Problem` error
+All nine routes use the same generated OpenAPI contract and safe `Problem` error
 boundary. JSON request fields match `crates/protocol/src/code.rs`.
 
 | Route | Purpose |
@@ -189,6 +284,10 @@ boundary. JSON request fields match `crates/protocol/src/code.rs`.
 | `POST /v1/code/search` | Explicit admitted-path or selected-file search |
 | `POST /v1/code/file` | Read one admitted file at the saved commit/blob |
 | `POST /v1/docs/read` | Read one explicit docs.rs release page/source |
+| `POST /v1/code/github/list` | One explicit public issue/PR/release discovery page |
+| `POST /v1/code/github/read` | One object body and optional separate comment page |
+| `POST /v1/code/compare` | Offline map comparison and opt-in exact-SHA provider page |
+| `POST /v1/code/context` | Exact nearby lines in a saved map/file selection |
 
 Domain errors have fixed, bounded public text. Typical codes include
 `code_invalid_request`, `code_search_unavailable`, `code_source_unavailable`,
@@ -203,8 +302,11 @@ Explicit optional Context7 and Sourcegraph adapters are described in
 [EXTERNAL-CODE.md](EXTERNAL-CODE.md). Both default to unconfigured. Their indexed
 snippets do not replace this first-party workflow or establish exact publisher
 source. The adapters have synthetic proof, not live authenticated acceptance.
-Symbol navigation, regex/glob search, revision comparison, issue/PR/release reads,
-complete-repository ingestion, and exact crate archive source are not implemented.
+Compiler-resolved symbols/references, complete-repository ingestion, authenticated
+code search, PR review/timeline APIs, asset downloads, and exact crate archive
+source are not implemented. Deterministic declaration search has the lexical
+limits above. Public issue/PR/release snapshots and explicit provider patches do
+not establish complete history, immutable conversation state, or file rights.
 No universal index coverage, extraction accuracy, redistribution permission, or
 performance advantage is claimed.
 
