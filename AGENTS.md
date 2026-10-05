@@ -1,5 +1,14 @@
 # Agent handoff
 
+## Current direction: preserved project
+
+Development is paused after the final Sprint 1 evaluation. The user chose Ketch
+for a separate new project. Do not add Ketch here, migrate data, start Sprint 2,
+or activate the unaccepted candidate. Keep the accepted core, published alpha,
+research data, configuration, helpers, meaningful tests, and recovery evidence.
+Read [the closeout record](docs/CLOSEOUT.md) before new work. Earlier implementation
+approvals below are historical and do not authorize resumed development.
+
 ## Project intent
 
 Build a Rust-centered, shared research service with a conventional text CLI.

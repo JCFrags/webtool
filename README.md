@@ -6,6 +6,13 @@ There is no TUI, alternate screen, browser-control interface, or default LLM wor
 
 ## Delivery status
 
+Development is paused. The user chose Ketch for a separate new project. Webtool
+remains preserved for records and possible later work. The Sprint 1 candidate is
+archived as unaccepted source, not merged into the runtime or activated. The
+accepted core remains `d961aeb0407607fa3e414b5ebafc08b6c6191fe0`, apart from
+closeout documentation. Read [the closeout record](docs/CLOSEOUT.md) for the final
+evaluation, source snapshots, recovery, and remaining limits.
+
 [v0.1.0-alpha.1](https://github.com/JCFrags/webtool/releases/tag/v0.1.0-alpha.1)
 is published from build/source `33ad146a9d456d4f653da00c2ae298446cdf4f31`.
 Its tags and assets remain unchanged. See [alpha notes](docs/ALPHA.md),
@@ -13,15 +20,13 @@ Its tags and assets remain unchanged. See [alpha notes](docs/ALPHA.md),
 and [artifact evidence](docs/STATUS.md). Distribution requires the documented
 source-access and availability conditions. This is not general legal clearance.
 
-The approved [delivery plan](docs/DELIVERY-PLAN.md) expands the Rust-centered core:
+The preserved [delivery plan](docs/DELIVERY-PLAN.md) covers the Rust-centered core:
 web search/reading, app connectors, code and scholarly research, durable crawls,
-historical sources, and bounded media work. Optional configurable cloud/local LLM
-answers are the final milestone, after accepted remote/local core delivery.
-The core source is implemented and locally accepted with the limits below.
-The user approved normal checked delivery through [PR #24](https://github.com/JCFrags/webtool/pull/24)
-and activation of the accepted core. This README is not proof of current service
-health or installation. See the [roadmap](docs/ROADMAP.md) and
-[verified status](docs/STATUS.md).
+historical sources, and bounded media work. [PR #24](https://github.com/JCFrags/webtool/pull/24)
+delivered the accepted core. Optional LLM answers and Sprint 2 did not start.
+The plan and [roadmap](docs/ROADMAP.md) are historical, not permission to resume
+development. This README is not proof of current service health or installation.
+See the [verified status](docs/STATUS.md).
 
 [Search ad exclusion](docs/SEARCH.md) remains unchanged. Recognized paid and
 sponsored results are excluded before ranking and output. This does not guarantee
