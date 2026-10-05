@@ -1,6 +1,14 @@
 # Research service delivery plan
 
-## Approved direction
+## Current position
+
+This plan is preserved for possible later work. Development is paused. The user
+chose Ketch for a separate project, not a replacement inside this repository.
+The final Sprint 1 candidate was not accepted for integration or activation.
+See [the closeout record](CLOSEOUT.md). The milestones and approvals below are
+historical plans, not permission to resume them.
+
+## Preserved direction
 
 Build a Rust-centered research service that competes with Ketch on useful workflows,
 source fidelity, and measured end-to-end speed. Keep the existing Rust server,

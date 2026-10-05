@@ -1,5 +1,16 @@
 # Implementation and validation status
 
+## Preserved project closeout, October 5, 2026
+
+Development is paused. The user chose Ketch for a separate new project. The final
+Sprint 1 candidate is retained as unaccepted source. It did not pass the complete
+comparison gate and was not merged into the runtime or activated. The accepted
+core remains `d961aeb0407607fa3e414b5ebafc08b6c6191fe0`, apart from closeout
+documentation. Published alpha assets, research data, configuration, helpers,
+meaningful tests, original inputs, and recovery evidence remain preserved.
+See [CLOSEOUT.md](CLOSEOUT.md) for the final result, archive identities, and limits.
+Earlier dated results below are historical and do not establish current health.
+
 Imported snapshot date: September 9, 2026.
 Bootstrap verified: September 10, 2026 UTC (September 9 local).
 

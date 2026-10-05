@@ -1,8 +1,14 @@
 # Roadmap
 
-## Active work: full research service delivery
+## Current position: development paused
 
-The user approved the complete Rust-centered research roadmap, with parallel work
+The user chose Ketch for a separate project. Webtool remains preserved for records
+and possible later work. Do not resume the roadmap or activate the unaccepted
+Sprint 1 candidate without a new scope decision. See [the closeout record](CLOSEOUT.md).
+
+## Preserved plan: full research service delivery
+
+The user previously approved the complete Rust-centered research roadmap, with parallel work
 on independent parts. The [delivery plan](DELIVERY-PLAN.md) defines the stages:
 quality/performance comparison, web foundations and connectors, code and scholarly
 research, durable crawling and archives, and bounded media work. After the core
